@@ -2,13 +2,17 @@ package state
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/events"
+	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/reference"
 	"github.com/go-logr/logr"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/xenitab/spegel/internal/store"
 )
@@ -21,7 +25,7 @@ const (
 	EventTopicDelete = "/images/delete"
 )
 
-// TODO: explore issues when image is removed with a shared layer
+// TODO: issues will most likely occur when removing and image that shares layers with another
 func Track(ctx context.Context, containerdClient *containerd.Client, store store.Store) error {
 	log := logr.FromContextOrDiscard(ctx)
 
@@ -100,7 +104,6 @@ func all(ctx context.Context, containerdClient *containerd.Client, store store.S
 	return imageCache, nil
 }
 
-// TODO: Skip image if it has tag and digest and image already exists.
 func update(ctx context.Context, containerdClient *containerd.Client, store store.Store, name string) error {
 	img, err := containerdClient.GetImage(ctx, name)
 	if err != nil {
@@ -118,27 +121,23 @@ func update(ctx context.Context, containerdClient *containerd.Client, store stor
 }
 
 func imageLayers(ctx context.Context, containerdClient *containerd.Client, img containerd.Image) ([]string, error) {
-	ref, err := reference.Parse(img.Name())
-	if err != nil {
-		return nil, nil
-		//return nil, err
-	}
 	layers := []string{}
 
-	// Add image name and digest
-	layers = append(layers, ref.String())
-	layers = append(layers, img.Target().Digest.String())
-
-	// Add rootfs digests
-	dgsts, err := img.RootFS(ctx)
+	// Layers will never be referenced by both tag and digest. The image name is only needed together with a tag.
+	// The name will only be added with the tag if the image reference is a tag and digest or a tag.
+	// It will be skipped all together when referencing with a digest as resolving the name is not needed.
+	ref, err := reference.Parse(img.Name())
 	if err != nil {
 		return nil, err
 	}
-	for _, dgst := range dgsts {
-		layers = append(layers, dgst.String())
+	tag, _, _ := strings.Cut(ref.Object, "@")
+	if tag != "" {
+		ref.Object = tag
+		layers = append(layers, ref.String())
 	}
+	layers = append(layers, img.Target().Digest.String())
 
-	// Add manifest layers and config digest
+	// Add image config digest and image layers
 	manifest, err := images.Manifest(ctx, img.ContentStore(), img.Target(), img.Platform())
 	if err != nil {
 		return nil, err
@@ -147,5 +146,26 @@ func imageLayers(ctx context.Context, containerdClient *containerd.Client, img c
 	for _, layer := range manifest.Layers {
 		layers = append(layers, layer.Digest.String())
 	}
+
+	// If manifest is of list or index type it needs to be parsed separatly to add the manifest digest for the specific architecture.
+	// This is because when the images manifest is fetched through containerd the plaform specific manifest is immediatly returned.
+	if img.Metadata().Target.MediaType == images.MediaTypeDockerSchema2ManifestList || img.Metadata().Target.MediaType == ocispec.MediaTypeImageIndex {
+		b, err := content.ReadBlob(ctx, containerdClient.ContentStore(), img.Target())
+		if err != nil {
+			return nil, err
+		}
+		var idx ocispec.Index
+		if err := json.Unmarshal(b, &idx); err != nil {
+			return nil, err
+		}
+		for _, manifest := range idx.Manifests {
+			if !img.Platform().Match(*manifest.Platform) {
+				continue
+			}
+			layers = append(layers, manifest.Digest.String())
+			break
+		}
+	}
+
 	return layers, nil
 }
