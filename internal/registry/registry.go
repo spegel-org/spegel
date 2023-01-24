@@ -45,6 +45,7 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 		store:            store,
 	}
 	router.GET("/healthz", registryHandler.readyHandler)
+	router.GET("/debug", registryHandler.debugHandler)
 	router.Any("/v2/*params", registryHandler.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
@@ -76,7 +77,15 @@ type RegistryHandler struct {
 }
 
 func (r *RegistryHandler) readyHandler(c *gin.Context) {
-	c.Status(200)
+	c.Status(http.StatusOK)
+}
+
+func (r *RegistryHandler) debugHandler(c *gin.Context) {
+	data, err := r.store.Dump(c)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	}
+	c.JSON(http.StatusOK, data)
 }
 
 func (r *RegistryHandler) registryHandler(c *gin.Context) {
