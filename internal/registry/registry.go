@@ -37,7 +37,7 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 	}
 	log := logr.FromContextOrDiscard(ctx)
 
-	router := pkggin.Default(log, "")
+	router := pkggin.Default(log, "registry")
 	registryHandler := &RegistryHandler{
 		log:              log,
 		registryPort:     registryPort,
@@ -45,7 +45,6 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 		store:            store,
 	}
 	router.GET("/healthz", registryHandler.readyHandler)
-	router.GET("/debug/layers", registryHandler.debugLayersHandler)
 	router.Any("/v2/*params", registryHandler.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
@@ -80,21 +79,13 @@ func (r *RegistryHandler) readyHandler(c *gin.Context) {
 	c.Status(200)
 }
 
-func (r *RegistryHandler) debugLayersHandler(c *gin.Context) {
-	data, err := r.store.Dump(c)
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-	c.JSON(http.StatusOK, data)
-}
-
 func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	// Only deal with GET and HEAD requests.
 	if !(c.Request.Method == "GET" || c.Request.Method == "HEAD") {
 		c.Status(http.StatusNotFound)
 		return
 	}
+
 	// Quickly return 200 for /v2/ to indicate that registry supports v2.
 	if path.Clean(c.Request.URL.Path) == "/v2" {
 		if c.Request.Method != "GET" {
@@ -157,6 +148,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+
 	key := ref.Digest().String()
 	if key == "" {
 		key = ref.String()

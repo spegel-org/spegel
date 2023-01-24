@@ -3,6 +3,19 @@ kind: Service
 metadata:
   name: spegel
 spec:
+  selector:
+    name: spegel
+  ports:
+    - name: metrics
+      protocol: TCP
+      port: 9090
+      targetPort: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spegel-headless
+spec:
   clusterIP: "None"
   selector:
     name: spegel

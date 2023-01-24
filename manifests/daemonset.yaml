@@ -21,10 +21,9 @@ spec:
           - "--pod-ip"
           - "$(POD_IP)"
           - "--service-name"
-          - "spegel.spegel.svc.cluster.local"
+          - "spegel-headless.spegel.svc.cluster.local"
           - "--redis-endpoints"
           - "redis.spegel.svc.cluster.local:6379"
-          - "--containerd-mirror-remove=false"
         env:
           - name: POD_IP
             valueFrom:
@@ -35,6 +34,8 @@ spec:
             containerPort: 5000
             hostPort: 5000
             hostIP: "127.0.0.1"
+          - name: metrics
+            containerPort: 9090
         readinessProbe:
           httpGet:
             path: /healthz
