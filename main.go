@@ -31,6 +31,7 @@ type arguments struct {
 	ServiceName                  string    `arg:"--service-name,required"`
 	RedisEndpoints               []string  `arg:"--redis-endpoints,required"`
 	MirrorRegistries             []url.URL `arg:"--mirror-registries,required"`
+	ImageFilter                  string    `arg:"--image-filter"`
 	RegistryAddr                 string    `arg:"--registry-addr" default:":5000"`
 	MetricsAddr                  string    `arg:"--metrics-addr" default:":9090"`
 	ContainerdSock               string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock"`
@@ -89,7 +90,7 @@ func main() {
 		os.Exit(1)
 	}
 	g.Go(func() error {
-		return state.Track(ctx, containerdClient, store)
+		return state.Track(ctx, containerdClient, store, args.ImageFilter)
 	})
 
 	// Configure mirrors

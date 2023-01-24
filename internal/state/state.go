@@ -27,12 +27,16 @@ const (
 )
 
 // TODO: issues will most likely occur when removing and image that shares layers with another
-func Track(ctx context.Context, containerdClient *containerd.Client, store store.Store) error {
+func Track(ctx context.Context, containerdClient *containerd.Client, store store.Store, imageFilter string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
 	// Subscribe to image events before doing the initial sync to catch any changes which may occur inbetween.
-	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, `topic~="/images/*"`)
-	imageCache, err := all(ctx, containerdClient, store)
+	eventFilters := []string{`topic~="/images/*"`}
+	if imageFilter != "" {
+		eventFilters = append(eventFilters, fmt.Sprintf(`event.name~="%s"`, imageFilter))
+	}
+	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilters...)
+	imageCache, err := all(ctx, containerdClient, store, imageFilter)
 	if err != nil {
 		return err
 	}
@@ -94,9 +98,13 @@ func Track(ctx context.Context, containerdClient *containerd.Client, store store
 	}
 }
 
-func all(ctx context.Context, containerdClient *containerd.Client, store store.Store) (map[string][]string, error) {
+func all(ctx context.Context, containerdClient *containerd.Client, store store.Store, imageFilter string) (map[string][]string, error) {
+	imageFilters := []string{}
+	if imageFilter != "" {
+		imageFilters = append(imageFilters, fmt.Sprintf(`name~=%s`, imageFilter))
+	}
 	imageCache := map[string][]string{}
-	imgs, err := containerdClient.ListImages(ctx)
+	imgs, err := containerdClient.ListImages(ctx, imageFilters...)
 	if err != nil {
 		return nil, err
 	}
@@ -133,17 +141,9 @@ func update(ctx context.Context, containerdClient *containerd.Client, store stor
 func imageLayers(ctx context.Context, containerdClient *containerd.Client, img containerd.Image) ([]string, error) {
 	layers := []string{}
 
-	// Layers will never be referenced by both tag and digest. The image name is only needed together with a tag.
-	// The name will only be added with the tag if the image reference is a tag and digest or a tag.
-	// It will be skipped all together when referencing with a digest as resolving the name is not needed.
-	ref, err := reference.Parse(img.Name())
-	if err != nil {
-		return nil, err
-	}
-	tag, _, _ := strings.Cut(ref.Object, "@")
-	if tag != "" {
-		ref.Object = tag
-		layers = append(layers, ref.String())
+	name := getNameWithTag(ctx, img)
+	if name != "" {
+		layers = append(layers, name)
 	}
 	layers = append(layers, img.Target().Digest.String())
 
@@ -178,4 +178,23 @@ func imageLayers(ctx context.Context, containerdClient *containerd.Client, img c
 	}
 
 	return layers, nil
+}
+
+func getNameWithTag(ctx context.Context, img containerd.Image) string {
+	// Layers will never be referenced by both tag and digest. The image name is only needed together with a tag.
+	// The name will only be added with the tag if the image reference is a tag and digest or a tag.
+	// It will be skipped all together when referencing with a digest as resolving the name is not needed.
+	ref, err := reference.Parse(img.Name())
+	// It is possible for an image to have an invalid name according to containerd reference spec.
+	// This is ok all that this happens but it means the image name cannot be resolved by the mirror.
+	if err != nil {
+		logr.FromContextOrDiscard(ctx).Info("ignoring unparseable reference", "name", img.Name())
+		return ""
+	}
+	tag, _, _ := strings.Cut(ref.Object, "@")
+	if tag == "" {
+		return ""
+	}
+	ref.Object = tag
+	return ref.String()
 }
