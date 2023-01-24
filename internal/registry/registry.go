@@ -106,14 +106,14 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	}
 
 	// Always expect remoteRegistry header to be passed in request.
-	remoteRegistry, err := GetRemoteRegistry(c.Request.Header)
+	remoteRegistry, err := getRemoteRegistry(c.Request.Header)
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 
 	// Requests coming from localhost are meant to be mirrored.
-	if IsMirrorRequest(c.Request.Header) {
+	if isMirrorRequest(c.Request.Header) {
 		r.handleMirror(c, remoteRegistry, r.registryPort)
 		return
 	}
