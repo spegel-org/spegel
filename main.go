@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/alexflint/go-arg"
@@ -50,7 +51,7 @@ func main() {
 	log := zapr.NewLogger(zapLog)
 	ctx := logr.NewContext(context.Background(), log)
 
-	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
 	defer cancel()
 	g, ctx := errgroup.WithContext(ctx)
 
