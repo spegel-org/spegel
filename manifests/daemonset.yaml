@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: spegel
+spec:
+  selector:
+    matchLabels:
+      name: spegel
+  template:
+    metadata:
+      labels:
+        name: spegel
+    spec:
+      containers:
+      - name: registry
+        image: xenitab/spegel:dev
+        imagePullPolicy: Never
+        args:
+          - "--mirror-registries"
+          - "https://docker.io"
+          - "--pod-ip"
+          - "$(POD_IP)"
+          - "--service-name"
+          - "spegel.spegel.svc.cluster.local"
+          - "--redis-endpoints"
+          - "redis.spegel.svc.cluster.local:6379"
+          - "--containerd-mirror-remove=false"
+        env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+        ports:
+          - name: registry
+            containerPort: 5000
+            hostPort: 5000
+            hostIP: "127.0.0.1"
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: registry
+        volumeMounts:
+          - name: containerd-sock
+            mountPath: "/run/containerd/containerd.sock"
+          - name: containerd-config
+            mountPath: "/etc/containerd/certs.d"
+      volumes:
+        - name: containerd-sock
+          hostPath:
+            path: "/run/containerd/containerd.sock"
+        - name: containerd-config
+          hostPath:
+            path: "/etc/containerd/certs.d"
+            type: DirectoryOrCreate
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
