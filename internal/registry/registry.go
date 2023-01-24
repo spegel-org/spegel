@@ -224,6 +224,10 @@ func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
 	c.Header("Content-Type", "application/octet-stream")
 	c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
 	c.Header("Docker-Content-Digest", ref.Digest().String())
+	if c.Request.Method == "HEAD" {
+		c.Status(http.StatusOK)
+		return
+	}
 	ra, err := r.containerdClient.ContentStore().ReaderAt(c, ocispec.Descriptor{Digest: info.Digest})
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
