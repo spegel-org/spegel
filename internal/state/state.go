@@ -13,6 +13,7 @@ import (
 	"github.com/containerd/containerd/reference"
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"go.uber.org/multierr"
 
 	"github.com/xenitab/spegel/internal/store"
 )
@@ -38,7 +39,16 @@ func Track(ctx context.Context, containerdClient *containerd.Client, store store
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			// Clean up all layers written to the store before exiting.
+			errs := []error{}
+			for k, v := range imageCache {
+				log.Info("cleaning up store image layers", "image", k)
+				err := store.Remove(ctx, v)
+				if err != nil {
+					errs = append(errs, err)
+				}
+			}
+			return multierr.Combine(errs...)
 		case e := <-envelopeCh:
 			switch e.Topic {
 			case EventTopicCreate:

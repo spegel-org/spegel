@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/rueian/rueidis"
+	"go.uber.org/multierr"
 )
 
 type RedisStore struct {
@@ -40,15 +41,15 @@ func (r *RedisStore) Add(ctx context.Context, layers []string) error {
 	return nil
 }
 func (r *RedisStore) Remove(ctx context.Context, layers []string) error {
+	errs := []error{}
 	for _, layer := range layers {
 		key := getKey(r.podIP, layer)
-		// TODO: Fix delete
-		err := r.client.Do(ctx, r.client.B().Set().Key(key).Value("").Build()).Error()
+		err := r.client.Do(ctx, r.client.B().Del().Key(key).Build()).Error()
 		if err != nil {
-			return err
+			errs = append(errs)
 		}
 	}
-	return nil
+	return multierr.Combine(errs...)
 }
 func (r *RedisStore) Get(ctx context.Context, layer string) ([]string, error) {
 	peers, err := r.peer.GetPeers(ctx)

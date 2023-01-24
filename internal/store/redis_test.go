@@ -32,4 +32,12 @@ func TestRedisStore(t *testing.T) {
 	for _, d := range data {
 		require.Contains(t, []string{fmt.Sprintf("layer:%s:foo", pp[1]), fmt.Sprintf("layer:%s:bar", pp[1]), fmt.Sprintf("layer:%s:baz", pp[1])}, d)
 	}
+
+	err = registryStore.Remove(context.TODO(), layers)
+	require.NoError(t, err)
+	for _, layer := range layers {
+		ips, err := registryStore.Get(context.TODO(), layer)
+		require.NoError(t, err)
+		require.Empty(t, ips)
+	}
 }
