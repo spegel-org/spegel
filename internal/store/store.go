@@ -12,10 +12,9 @@ type Store interface {
 	Start() error
 	Ready() error
 	Stop() error
-	Add(ctx context.Context, layers []string) error
+	Set(ctx context.Context, layers []string) error
 	Remove(ctx context.Context, layers []string) error
 	Get(ctx context.Context, layer string) ([]string, error)
-	ResetExpiration(ctx context.Context, layers []string) error
 	Dump(ctx context.Context) ([]string, error)
 }
 

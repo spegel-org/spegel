@@ -64,9 +64,8 @@ func Track(ctx context.Context, containerdClient *containerd.Client, s store.Sto
 			return nil
 		case <-expirationTicker.C:
 			log.Info("updating layer expiration")
-			// TODO: This will not work if the cache loses data, in that situation we should write again.
 			for _, v := range imageCache {
-				err := s.ResetExpiration(ctx, v)
+				err := s.Set(ctx, v)
 				if err != nil {
 					return err
 				}
@@ -131,7 +130,7 @@ func all(ctx context.Context, containerdClient *containerd.Client, s store.Store
 		if err != nil {
 			return nil, err
 		}
-		err = s.Add(ctx, layers)
+		err = s.Set(ctx, layers)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +148,7 @@ func update(ctx context.Context, containerdClient *containerd.Client, s store.St
 	if err != nil {
 		return err
 	}
-	err = s.Add(ctx, layers)
+	err = s.Set(ctx, layers)
 	if err != nil {
 		return err
 	}

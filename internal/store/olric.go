@@ -34,7 +34,6 @@ func newOlricStore(ctx context.Context, env string, d discover.Discover, podIP s
 	cfg.LogOutput = io.Discard
 	cfg.Peers = peers
 	cfg.MaxJoinAttempts = 60
-
 	readyCtx, cancel := context.WithCancel(ctx)
 	cfg.Started = func() {
 		defer cancel()
@@ -76,11 +75,11 @@ func (o *OlricStore) Stop() error {
 	return o.db.Shutdown(shutdownCtx)
 }
 
-func (o *OlricStore) Add(ctx context.Context, layers []string) error {
+func (o *OlricStore) Set(ctx context.Context, layers []string) error {
 	errs := []error{}
 	for _, layer := range layers {
 		key := getKey(o.podIP, layer)
-		err := o.dm.Put(ctx, key, o.podIP, olric.EX(KeyExpiration))
+		err := o.dm.Put(ctx, key, nil, olric.EX(KeyExpiration))
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -113,32 +112,16 @@ func (o *OlricStore) Get(ctx context.Context, layer string) ([]string, error) {
 			continue
 		}
 		key := getKey(peer, layer)
-		resp, err := o.dm.Get(ctx, key)
+		_, err := o.dm.Get(ctx, key)
 		if err != nil && errors.Is(err, olric.ErrKeyNotFound) {
 			continue
 		}
 		if err != nil {
 			return nil, err
 		}
-		ip, err := resp.String()
-		if err != nil {
-			return nil, err
-		}
-		ips = append(ips, ip)
+		ips = append(ips, peer)
 	}
 	return ips, nil
-}
-
-func (o *OlricStore) ResetExpiration(ctx context.Context, layers []string) error {
-	errs := []error{}
-	for _, layer := range layers {
-		key := getKey(o.podIP, layer)
-		err := o.dm.Expire(ctx, key, KeyExpiration)
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return multierr.Combine(errs...)
 }
 
 func (o *OlricStore) Dump(ctx context.Context) ([]string, error) {

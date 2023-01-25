@@ -44,7 +44,7 @@ func (r *RedisStore) Stop() error {
 	return nil
 }
 
-func (r *RedisStore) Add(ctx context.Context, layers []string) error {
+func (r *RedisStore) Set(ctx context.Context, layers []string) error {
 	expirationSeconds := int64(KeyExpiration.Seconds())
 	errs := []error{}
 	for _, layer := range layers {
@@ -90,19 +90,6 @@ func (r *RedisStore) Get(ctx context.Context, layer string) ([]string, error) {
 		ips = append(ips, ip)
 	}
 	return ips, nil
-}
-
-func (r *RedisStore) ResetExpiration(ctx context.Context, layers []string) error {
-	expirationSeconds := int64(KeyExpiration.Seconds())
-	errs := []error{}
-	for _, layer := range layers {
-		key := getKey(r.podIP, layer)
-		err := r.client.Do(ctx, r.client.B().Expire().Key(key).Seconds(expirationSeconds).Build()).Error()
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return multierr.Combine(errs...)
 }
 
 func (r *RedisStore) Dump(ctx context.Context) ([]string, error) {
