@@ -94,6 +94,7 @@ func main() {
 	})
 
 	// Configure mirrors
+	// TODO: Wait to write mirror configuration until registry is up and running.
 	if args.ContainerdMirrorAdd {
 		fs := afero.NewOsFs()
 		err := mirror.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.RegistryAddr, args.MirrorRegistries)
