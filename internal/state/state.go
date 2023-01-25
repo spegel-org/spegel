@@ -39,7 +39,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, s store.Sto
 	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilters...)
 	imageCache, err := all(ctx, containerdClient, s, imageFilter)
 	if err != nil {
-		return err
+		return fmt.Errorf("initial tracking failed: %w", err)
 	}
 
 	// Clean up all layers written to the store before exiting.

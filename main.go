@@ -99,7 +99,7 @@ func main() {
 		return store.Stop()
 	})
 	log.Info("waiting for store to be ready")
-	err = store.Ready(ctx)
+	err = store.Ready()
 	if err != nil {
 		log.Error(err, "failed waiting for store to be ready")
 		os.Exit(1)

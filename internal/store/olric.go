@@ -34,7 +34,7 @@ func newOlricStore(ctx context.Context, env string, d discover.Discover, podIP s
 	cfg.LogOutput = io.Discard
 	cfg.Peers = peers
 	cfg.MaxJoinAttempts = 60
-	cfg.DMaps.MaxInuse = 104857600 // 100MB
+
 	readyCtx, cancel := context.WithCancel(ctx)
 	cfg.Started = func() {
 		defer cancel()
@@ -59,14 +59,9 @@ func (o *OlricStore) Start() error {
 	return nil
 }
 
-func (o *OlricStore) Ready(ctx context.Context) error {
+func (o *OlricStore) Ready() error {
 	<-o.readyCtx.Done()
 	e := o.db.NewEmbeddedClient()
-	members, err := e.Members(ctx)
-	if err != nil {
-		return err
-	}
-	logr.FromContextOrDiscard(ctx).Info("olric store ready", "members", len(members))
 	dm, err := e.NewDMap("data")
 	if err != nil {
 		return err

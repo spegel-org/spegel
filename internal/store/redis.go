@@ -36,7 +36,7 @@ func (r *RedisStore) Start() error {
 	return nil
 }
 
-func (r *RedisStore) Ready(ctx context.Context) error {
+func (r *RedisStore) Ready() error {
 	return nil
 }
 
