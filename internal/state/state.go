@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/events"
@@ -13,7 +14,6 @@ import (
 	"github.com/containerd/containerd/reference"
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"go.uber.org/multierr"
 
 	"github.com/xenitab/spegel/internal/store"
 )
@@ -26,8 +26,9 @@ const (
 	EventTopicDelete = "/images/delete"
 )
 
+// TODO: There is a chance that keys are not cleaned up when the app crashes. If a new Pod on a different Node receives the same IP it will be asked to serve data it may not have until the key expires.
 // TODO: issues will most likely occur when removing and image that shares layers with another
-func Track(ctx context.Context, containerdClient *containerd.Client, store store.Store, imageFilter string) error {
+func Track(ctx context.Context, containerdClient *containerd.Client, s store.Store, imageFilter string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
 	// Subscribe to image events before doing the initial sync to catch any changes which may occur inbetween.
@@ -36,23 +37,39 @@ func Track(ctx context.Context, containerdClient *containerd.Client, store store
 		eventFilters = append(eventFilters, fmt.Sprintf(`event.name~="%s"`, imageFilter))
 	}
 	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilters...)
-	imageCache, err := all(ctx, containerdClient, store, imageFilter)
+	imageCache, err := all(ctx, containerdClient, s, imageFilter)
 	if err != nil {
 		return err
 	}
+
+	// Clean up all layers written to the store before exiting.
+	defer func() {
+		for k, v := range imageCache {
+			log.Info("cleaning up store image layers", "image", k)
+			err := s.Remove(ctx, v)
+			if err != nil {
+				log.Error(err, "could not remove layers", "layers", v)
+			}
+		}
+	}()
+
+	// Setup expiration ticker to update key expiration before they expire
+	interval := store.KeyExpiration - time.Minute
+	expirationTicker := time.NewTicker(interval)
+	defer expirationTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
-			// Clean up all layers written to the store before exiting.
-			errs := []error{}
-			for k, v := range imageCache {
-				log.Info("cleaning up store image layers", "image", k)
-				err := store.Remove(ctx, v)
+			return nil
+		case <-expirationTicker.C:
+			log.Info("updating layer expiration")
+			for _, v := range imageCache {
+				err := s.ResetExpiration(ctx, v)
 				if err != nil {
-					errs = append(errs, err)
+					return err
 				}
 			}
-			return multierr.Combine(errs...)
 		case e := <-envelopeCh:
 			switch e.Topic {
 			case EventTopicCreate:
@@ -61,7 +78,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, store store
 				if err != nil {
 					return err
 				}
-				err = update(ctx, containerdClient, store, image.Name)
+				err = update(ctx, containerdClient, s, image.Name)
 				if err != nil {
 					return err
 				}
@@ -71,7 +88,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, store store
 				if err != nil {
 					return err
 				}
-				err = update(ctx, containerdClient, store, image.Name)
+				err = update(ctx, containerdClient, s, image.Name)
 				if err != nil {
 					return err
 				}
@@ -86,7 +103,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, store store
 					log.Error(fmt.Errorf("%s not found", image.Name), "failed removing image layers")
 					continue
 				}
-				err = store.Remove(ctx, layers)
+				err = s.Remove(ctx, layers)
 				if err != nil {
 					return err
 				}
@@ -98,7 +115,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, store store
 	}
 }
 
-func all(ctx context.Context, containerdClient *containerd.Client, store store.Store, imageFilter string) (map[string][]string, error) {
+func all(ctx context.Context, containerdClient *containerd.Client, s store.Store, imageFilter string) (map[string][]string, error) {
 	imageFilters := []string{}
 	if imageFilter != "" {
 		imageFilters = append(imageFilters, fmt.Sprintf(`name~=%s`, imageFilter))
@@ -113,7 +130,7 @@ func all(ctx context.Context, containerdClient *containerd.Client, store store.S
 		if err != nil {
 			return nil, err
 		}
-		err = store.Add(ctx, layers)
+		err = s.Add(ctx, layers)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +139,7 @@ func all(ctx context.Context, containerdClient *containerd.Client, store store.S
 	return imageCache, nil
 }
 
-func update(ctx context.Context, containerdClient *containerd.Client, store store.Store, name string) error {
+func update(ctx context.Context, containerdClient *containerd.Client, s store.Store, name string) error {
 	img, err := containerdClient.GetImage(ctx, name)
 	if err != nil {
 		return err
@@ -131,7 +148,7 @@ func update(ctx context.Context, containerdClient *containerd.Client, store stor
 	if err != nil {
 		return err
 	}
-	err = store.Add(ctx, layers)
+	err = s.Add(ctx, layers)
 	if err != nil {
 		return err
 	}
