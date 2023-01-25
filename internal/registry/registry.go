@@ -88,6 +88,8 @@ func (r *RegistryHandler) debugHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, data)
 }
 
+// TODO: Explore using leases to make sure resources are not deleted mid request.
+// https://github.com/containerd/containerd/blob/main/docs/garbage-collection.md
 func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	// Only deal with GET and HEAD requests.
 	if !(c.Request.Method == "GET" || c.Request.Method == "HEAD") {
@@ -146,7 +148,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 // TODO: Retry multiple endoints
 func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryPort string) {
 	// Disable mirroring so we dont end with an infinite loop
-	c.Request.Header[MirrorHeader] = []string{"false"}
+	c.Set(MirrorHeader, "false")
 
 	ref, ok, err := AnyReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
