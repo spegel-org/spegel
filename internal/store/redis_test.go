@@ -8,6 +8,8 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/cilium/fake"
 	"github.com/stretchr/testify/require"
+
+	"github.com/xenitab/spegel/internal/discover"
 )
 
 func TestRedisStore(t *testing.T) {
@@ -15,22 +17,22 @@ func TestRedisStore(t *testing.T) {
 	defer s.Close()
 
 	layers := []string{"foo", "bar", "baz"}
-	peers := NewMock([]string{fake.IP(fake.WithIPv4()), fake.IP(fake.WithIPv4())})
-	pp, err := peers.GetPeers(context.TODO())
-	mirrorStore, err := NewRedisStore(pp[0], peers, []string{s.Addr()})
+	d := discover.NewMock([]string{fake.IP(fake.WithIPv4()), fake.IP(fake.WithIPv4())})
+	peers, err := d.GetPeers(context.TODO())
+	mirrorStore, err := NewRedisStore(peers[0], d, s.Addr())
 	require.NoError(t, err)
-	registryStore, err := NewRedisStore(pp[1], peers, []string{s.Addr()})
+	registryStore, err := NewRedisStore(peers[1], d, s.Addr())
 	require.NoError(t, err)
 
 	err = registryStore.Add(context.TODO(), layers)
 	require.NoError(t, err)
 	ips, err := mirrorStore.Get(context.TODO(), layers[1])
 	require.Len(t, ips, 1)
-	require.Equal(t, pp[1], ips[0])
+	require.Equal(t, peers[1], ips[0])
 	data, err := mirrorStore.Dump(context.TODO())
 	require.NoError(t, err)
 	for _, d := range data {
-		require.Contains(t, []string{fmt.Sprintf("layer:%s:foo", pp[1]), fmt.Sprintf("layer:%s:bar", pp[1]), fmt.Sprintf("layer:%s:baz", pp[1])}, d)
+		require.Contains(t, []string{fmt.Sprintf("layer:%s:foo", peers[1]), fmt.Sprintf("layer:%s:bar", peers[1]), fmt.Sprintf("layer:%s:baz", peers[1])}, d)
 	}
 
 	err = registryStore.Remove(context.TODO(), layers)

@@ -6,15 +6,17 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/rueian/rueidis"
 	"go.uber.org/multierr"
+
+	"github.com/xenitab/spegel/internal/discover"
 )
 
 type RedisStore struct {
 	podIP  string
-	peer   Peers
+	d      discover.Discover
 	client rueidis.Client
 }
 
-func NewRedisStore(podIP string, peer Peers, redisAddr string) (Store, error) {
+func NewRedisStore(podIP string, d discover.Discover, redisAddr string) (Store, error) {
 	opts := rueidis.ClientOption{
 		DisableCache: true,
 		InitAddress:  []string{redisAddr},
@@ -25,7 +27,7 @@ func NewRedisStore(podIP string, peer Peers, redisAddr string) (Store, error) {
 	}
 	return &RedisStore{
 		podIP:  podIP,
-		peer:   peer,
+		d:      d,
 		client: client,
 	}, nil
 }
@@ -53,7 +55,7 @@ func (r *RedisStore) Remove(ctx context.Context, layers []string) error {
 	return multierr.Combine(errs...)
 }
 func (r *RedisStore) Get(ctx context.Context, layer string) ([]string, error) {
-	peers, err := r.peer.GetPeers(ctx)
+	peers, err := r.d.GetPeers(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/xenitab/spegel/internal/discover"
 	"github.com/xenitab/spegel/internal/mirror"
 	"github.com/xenitab/spegel/internal/registry"
 	"github.com/xenitab/spegel/internal/state"
@@ -84,7 +85,7 @@ func main() {
 	})
 
 	// Setup and run store
-	store, err := store.NewRedisStore(args.PodIP, store.NewDNS(args.ServiceName), args.RedisAddr)
+	store, err := store.NewRedisStore(args.PodIP, discover.NewDNS(args.ServiceName), args.RedisAddr)
 	if err != nil {
 		log.Error(err, "could not create store")
 		os.Exit(1)

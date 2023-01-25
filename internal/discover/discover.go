@@ -1,11 +1,11 @@
-package store
+package discover
 
 import (
 	"context"
 	"net"
 )
 
-type Peers interface {
+type Discover interface {
 	GetPeers(ctx context.Context) ([]string, error)
 }
 
@@ -13,7 +13,7 @@ type DNS struct {
 	serviceName string
 }
 
-func NewDNS(serviceName string) Peers {
+func NewDNS(serviceName string) Discover {
 	return DNS{serviceName: serviceName}
 }
 
@@ -35,7 +35,7 @@ type Mock struct {
 	peers []string
 }
 
-func NewMock(peers []string) Peers {
+func NewMock(peers []string) Discover {
 	return Mock{peers: peers}
 }
 
