@@ -29,11 +29,11 @@ import (
 type arguments struct {
 	PodIP                        string    `arg:"--pod-ip,required"`
 	ServiceName                  string    `arg:"--service-name,required"`
-	RedisEndpoints               []string  `arg:"--redis-endpoints,required"`
-	MirrorRegistries             []url.URL `arg:"--mirror-registries,required"`
-	ImageFilter                  string    `arg:"--image-filter"`
 	RegistryAddr                 string    `arg:"--registry-addr" default:":5000"`
 	MetricsAddr                  string    `arg:"--metrics-addr" default:":9090"`
+	RedisAddr                    string    `arg:"--redis-addr, required"`
+	MirrorRegistries             []url.URL `arg:"--mirror-registries,required"`
+	ImageFilter                  string    `arg:"--image-filter"`
 	ContainerdSock               string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock"`
 	ContainerdNamespace          string    `arg:"--containerd-namespace" default:"k8s.io"`
 	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d"`
@@ -84,7 +84,7 @@ func main() {
 	})
 
 	// Setup and run store
-	store, err := store.NewRedisStore(args.PodIP, store.NewDNS(args.ServiceName), args.RedisEndpoints)
+	store, err := store.NewRedisStore(args.PodIP, store.NewDNS(args.ServiceName), args.RedisAddr)
 	if err != nil {
 		log.Error(err, "could not create store")
 		os.Exit(1)

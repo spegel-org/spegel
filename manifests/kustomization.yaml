@@ -1,8 +1,0 @@
-namespace: spegel
-resources:
-- namespace.yaml
-- daemonset.yaml
-- service.yaml
-- redis.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization

@@ -14,10 +14,10 @@ type RedisStore struct {
 	client rueidis.Client
 }
 
-func NewRedisStore(podIP string, peer Peers, redisEndpoints []string) (Store, error) {
+func NewRedisStore(podIP string, peer Peers, redisAddr string) (Store, error) {
 	opts := rueidis.ClientOption{
 		DisableCache: true,
-		InitAddress:  redisEndpoints,
+		InitAddress:  []string{redisAddr},
 	}
 	client, err := rueidis.NewClient(opts)
 	if err != nil {

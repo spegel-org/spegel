@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "spegel.fullname" . }}
+  labels:
+    {{- include "spegel.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "spegel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "spegel.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: registry
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+          - --pod-ip=$(POD_IP)
+          - --service-name={{ include "spegel.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local.
+          - --registry-addr=:{{ .Values.service.registry.port }}
+          - --metrics-addr=:{{ .Values.service.metrics.port }}
+          - --redis-addr={{ required "Redis Address is required" .Values.spegel.redisAddr }}
+          - --containerd-sock={{ .Values.spegel.containerdSock }}
+          - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
+          - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
+          - --containerd-mirror-add={{ .Values.spegel.containerdMirrorAdd }}
+          - --containerd-mirror-remove={{ .Values.spegel.containerdMirrorRemove }}
+          {{- with .Values.spegel.imageFilter }}
+          - --image-filter
+          - {{ . | quote }}
+          {{- end }}
+          {{- with .Values.spegel.mirrorRegistries }}
+          - --mirror-registries
+          {{- range . }}
+          - {{ . | quote }}
+          {{- end }}    
+          {{- end }}
+        env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+        ports:
+          - name: registry
+            containerPort: {{ .Values.service.registry.port }}
+            hostPort: {{ .Values.service.registry.port }}
+            hostIP: "127.0.0.1"
+            protocol: TCP
+          - name: metrics
+            containerPort: {{ .Values.service.metrics.port }}
+            protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: registry
+        volumeMounts:
+          - name: containerd-sock
+            mountPath: "/run/containerd/containerd.sock"
+          - name: containerd-config
+            mountPath: "/etc/containerd/certs.d"
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      volumes:
+        - name: containerd-sock
+          hostPath:
+            path: "/run/containerd/containerd.sock"
+        - name: containerd-config
+          hostPath:
+            path: "/etc/containerd/certs.d"
+            type: DirectoryOrCreate
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
