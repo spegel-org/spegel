@@ -32,16 +32,29 @@ func NewRedisStore(podIP string, d discover.Discover, redisAddr string) (Store, 
 	}, nil
 }
 
+func (r *RedisStore) Start() error {
+	return nil
+}
+
+func (r *RedisStore) Ready(ctx context.Context) error {
+	return nil
+}
+
+func (r *RedisStore) Stop() error {
+	return nil
+}
+
 func (r *RedisStore) Add(ctx context.Context, layers []string) error {
 	expirationSeconds := int64(KeyExpiration.Seconds())
+	errs := []error{}
 	for _, layer := range layers {
 		key := getKey(r.podIP, layer)
 		err := r.client.Do(ctx, r.client.B().Set().Key(key).Value(r.podIP).ExSeconds(expirationSeconds).Build()).Error()
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return multierr.Combine(errs...)
 }
 func (r *RedisStore) Remove(ctx context.Context, layers []string) error {
 	errs := []error{}
@@ -81,22 +94,23 @@ func (r *RedisStore) Get(ctx context.Context, layer string) ([]string, error) {
 
 func (r *RedisStore) ResetExpiration(ctx context.Context, layers []string) error {
 	expirationSeconds := int64(KeyExpiration.Seconds())
+	errs := []error{}
 	for _, layer := range layers {
 		key := getKey(r.podIP, layer)
 		err := r.client.Do(ctx, r.client.B().Expire().Key(key).Seconds(expirationSeconds).Build()).Error()
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return multierr.Combine(errs...)
 }
 
 func (r *RedisStore) Dump(ctx context.Context) ([]string, error) {
 	data := []string{}
 	var scan rueidis.ScanEntry
-	var err error
 	for more := true; more; more = scan.Cursor != 0 {
-		if scan, err = r.client.Do(ctx, r.client.B().Scan().Cursor(scan.Cursor).Match("layer:*").Build()).AsScanEntry(); err != nil {
+		scan, err := r.client.Do(ctx, r.client.B().Scan().Cursor(scan.Cursor).Match("layer:*").Build()).AsScanEntry()
+		if err != nil {
 			return nil, err
 		}
 		data = append(data, scan.Elements...)

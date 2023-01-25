@@ -29,10 +29,10 @@ import (
 
 type arguments struct {
 	PodIP                        string    `arg:"--pod-ip,required"`
-	ServiceName                  string    `arg:"--service-name,required"`
+	RegistryService              string    `arg:"--registry-service,required"`
+	MemberlistService            string    `arg:"--memberlist-service,required"`
 	RegistryAddr                 string    `arg:"--registry-addr" default:":5000"`
 	MetricsAddr                  string    `arg:"--metrics-addr" default:":9090"`
-	RedisAddr                    string    `arg:"--redis-addr, required"`
 	MirrorRegistries             []url.URL `arg:"--mirror-registries,required"`
 	ImageFilter                  string    `arg:"--image-filter"`
 	ContainerdSock               string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock"`
@@ -85,11 +85,27 @@ func main() {
 	})
 
 	// Setup and run store
-	store, err := store.NewRedisStore(args.PodIP, discover.NewDNS(args.ServiceName), args.RedisAddr)
+	d := discover.NewDNS(args.RegistryService)
+	store, err := store.NewOlricLanStore(ctx, d, args.PodIP, args.MemberlistService)
 	if err != nil {
 		log.Error(err, "could not create store")
 		os.Exit(1)
 	}
+	g.Go(func() error {
+		return store.Start()
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		return store.Stop()
+	})
+	log.Info("waiting for store to be ready")
+	err = store.Ready(ctx)
+	if err != nil {
+		log.Error(err, "failed waiting for store to be ready")
+		os.Exit(1)
+	}
+
+	// Track containerd state changes
 	g.Go(func() error {
 		return state.Track(ctx, containerdClient, store, args.ImageFilter)
 	})

@@ -31,10 +31,10 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
           - --pod-ip=$(POD_IP)
-          - --service-name={{ include "spegel.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local.
+          - --registry-service={{ include "spegel.fullname" . }}-registry.{{ .Release.Namespace }}.svc.cluster.local
+          - --memberlist-service=_memberlist._tcp.{{ include "spegel.fullname" . }}-memberlist.{{ .Release.Namespace }}.svc.cluster.local
           - --registry-addr=:{{ .Values.service.registry.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
-          - --redis-addr={{ required "Redis Address is required" .Values.spegel.redisAddr }}
           - --containerd-sock={{ .Values.spegel.containerdSock }}
           - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
@@ -61,9 +61,23 @@ spec:
             hostPort: {{ .Values.service.registry.port }}
             hostIP: "127.0.0.1"
             protocol: TCP
+          - name: olric
+            containerPort: 3320
+            protocol: TCP
+          - name: memberlist
+            containerPort: 3322
+            protocol: TCP
           - name: metrics
             containerPort: {{ .Values.service.metrics.port }}
             protocol: TCP
+        # Startup may take a bit longer on bootsrap as Pods need to find each other.
+        # This is why the startup proben is a bit more forgiving, while hitting the endpoint more often.
+        startupProbe:
+          periodSeconds: 1
+          failureThreshold: 60
+          httpGet:
+            path: /healthz
+            port: registry
         readinessProbe:
           httpGet:
             path: /healthz

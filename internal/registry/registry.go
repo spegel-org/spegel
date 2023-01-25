@@ -148,7 +148,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 // TODO: Retry multiple endoints
 func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryPort string) {
 	// Disable mirroring so we dont end with an infinite loop
-	c.Set(MirrorHeader, "false")
+	c.Request.Header[MirrorHeader] = []string{"false"}
 
 	ref, ok, err := AnyReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {

@@ -47,7 +47,6 @@ tolerations:
 affinity: {}
 
 spegel:
-  redisAddr: ""
   mirrorRegistries:
     - https://docker.io
     - https://ghcr.io

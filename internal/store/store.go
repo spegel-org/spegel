@@ -9,6 +9,9 @@ import (
 const KeyExpiration = 5 * time.Minute
 
 type Store interface {
+	Start() error
+	Ready(ctx context.Context) error
+	Stop() error
 	Add(ctx context.Context, layers []string) error
 	Remove(ctx context.Context, layers []string) error
 	Get(ctx context.Context, layer string) ([]string, error)
