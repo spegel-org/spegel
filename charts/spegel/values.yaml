@@ -7,6 +7,13 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+serviceAccount:
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
 podAnnotations: {}
 
 podSecurityContext: {}
@@ -23,6 +30,8 @@ securityContext: {}
 service:
   registry:
     port: 5000
+  router:
+    port: 5001
   metrics:
     port: 9090
 
@@ -57,3 +66,4 @@ spegel:
   containerdRegistryConfigPath: "/etc/containerd/certs.d"
   containerdMirrorAdd: true
   containerdMirrorRemove: true
+  kubeconfigPath: ""

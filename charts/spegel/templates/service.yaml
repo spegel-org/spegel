@@ -12,38 +12,3 @@ spec:
       port: {{ .Values.service.metrics.port }}
       targetPort: metrics
       protocol: TCP
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "spegel.fullname" . }}-registry
-  labels:
-    {{- include "spegel.labels" . | nindent 4 }}
-spec:
-  clusterIP: "None"
-  selector:
-    {{- include "spegel.selectorLabels" . | nindent 4 }}
-  ports:
-    - name: registry
-      port: {{ .Values.service.registry.port }}
-      targetPort: registry
-      protocol: TCP
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "spegel.fullname" . }}-memberlist
-  labels:
-    {{- include "spegel.labels" . | nindent 4 }}
-spec:
-  # We want to publish not read addressses for memberlist discovery.
-  # If we do not we end up in a catch 22 on bootstrap where none of the peers will find each other.
-  publishNotReadyAddresses: true
-  clusterIP: "None"
-  selector:
-    {{- include "spegel.selectorLabels" . | nindent 4 }}
-  ports:
-    - name: memberlist
-      port: 3322
-      targetPort: memberlist
-      protocol: TCP

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -23,33 +22,33 @@ import (
 	"github.com/valyala/fastjson"
 	pkggin "github.com/xenitab/pkg/gin"
 
-	"github.com/xenitab/spegel/internal/store"
+	"github.com/xenitab/spegel/internal/routing"
 )
 
 type Registry struct {
 	srv *http.Server
 }
 
-func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.Client, store store.Store) (*Registry, error) {
+func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.Client, router routing.Router) (*Registry, error) {
 	_, registryPort, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
 	}
 	log := logr.FromContextOrDiscard(ctx)
 
-	router := pkggin.Default(log, "registry")
+	app := pkggin.Default(log, "registry")
 	registryHandler := &RegistryHandler{
 		log:              log,
 		registryPort:     registryPort,
 		containerdClient: containerdClient,
-		store:            store,
+		router:           router,
 	}
-	router.GET("/healthz", registryHandler.readyHandler)
-	router.GET("/debug", registryHandler.debugHandler)
-	router.Any("/v2/*params", registryHandler.registryHandler)
+	app.GET("/healthz", registryHandler.readyHandler)
+	app.GET("/debug", registryHandler.debugHandler)
+	app.Any("/v2/*params", registryHandler.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: router,
+		Handler: app,
 	}
 	return &Registry{
 		srv: srv,
@@ -73,7 +72,7 @@ type RegistryHandler struct {
 	log              logr.Logger
 	registryPort     string
 	containerdClient *containerd.Client
-	store            store.Store
+	router           routing.Router
 }
 
 func (r *RegistryHandler) readyHandler(c *gin.Context) {
@@ -81,11 +80,11 @@ func (r *RegistryHandler) readyHandler(c *gin.Context) {
 }
 
 func (r *RegistryHandler) debugHandler(c *gin.Context) {
-	data, err := r.store.Dump(c)
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-	}
-	c.JSON(http.StatusOK, data)
+	// data, err := r.store.Dump(c)
+	// if err != nil {
+	// 	c.AbortWithError(http.StatusInternalServerError, err)
+	// }
+	// c.JSON(http.StatusOK, data)
 }
 
 // TODO: Explore using leases to make sure resources are not deleted mid request.
@@ -164,18 +163,17 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 	if key == "" {
 		key = ref.String()
 	}
-	ips, err := r.store.Get(logr.NewContext(c, r.log), key)
+	ip, ok, err := r.router.Resolve(c, key)
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
-	if len(ips) == 0 {
+	if !ok {
 		r.log.Info("could not find node to forward", "ref", ref.String())
 		c.Status(http.StatusNotFound)
 		return
 	}
-	idx := rand.Intn(len(ips))
-	url, err := url.Parse(fmt.Sprintf("http://%s:%s", ips[idx], registryPort))
+	url, err := url.Parse(fmt.Sprintf("http://%s:%s", ip, registryPort))
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
 		return

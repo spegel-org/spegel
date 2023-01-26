@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/containerd/containerd"
@@ -15,7 +16,7 @@ import (
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
-	"github.com/xenitab/spegel/internal/store"
+	"github.com/xenitab/spegel/internal/routing"
 )
 
 type EventTopic string
@@ -23,12 +24,9 @@ type EventTopic string
 const (
 	EventTopicCreate = "/images/create"
 	EventTopicUpdate = "/images/update"
-	EventTopicDelete = "/images/delete"
 )
 
-// TODO: There is a chance that keys are not cleaned up when the app crashes. If a new Pod on a different Node receives the same IP it will be asked to serve data it may not have until the key expires.
-// TODO: issues will most likely occur when removing and image that shares layers with another
-func Track(ctx context.Context, containerdClient *containerd.Client, s store.Store, imageFilter string) error {
+func Track(ctx context.Context, containerdClient *containerd.Client, router routing.Router, imageFilter string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
 	// Subscribe to image events before doing the initial sync to catch any changes which may occur inbetween.
@@ -37,38 +35,23 @@ func Track(ctx context.Context, containerdClient *containerd.Client, s store.Sto
 		eventFilters = append(eventFilters, fmt.Sprintf(`event.name~="%s"`, imageFilter))
 	}
 	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilters...)
-	imageCache, err := all(ctx, containerdClient, s, imageFilter)
-	if err != nil {
-		return fmt.Errorf("initial tracking failed: %w", err)
-	}
-
-	// Clean up all layers written to the store before exiting.
-	defer func() {
-		for k, v := range imageCache {
-			log.Info("cleaning up store image layers", "image", k)
-			err := s.Remove(ctx, v)
-			if err != nil {
-				log.Error(err, "could not remove layers", "layers", v)
-			}
-		}
-	}()
 
 	// Setup expiration ticker to update key expiration before they expire
-	interval := store.KeyExpiration - time.Minute
-	expirationTicker := time.NewTicker(interval)
+	immediate := make(chan time.Time, 1)
+	immediate <- time.Now()
+	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
 	defer expirationTicker.Stop()
+	ticker := merge(immediate, expirationTicker.C)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-expirationTicker.C:
+		case <-ticker:
 			log.Info("updating layer expiration")
-			for _, v := range imageCache {
-				err := s.Set(ctx, v)
-				if err != nil {
-					return err
-				}
+			err := all(ctx, containerdClient, router, imageFilter)
+			if err != nil {
+				return fmt.Errorf("failed to update layer expiration: %w", err)
 			}
 		case e := <-envelopeCh:
 			switch e.Topic {
@@ -78,7 +61,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, s store.Sto
 				if err != nil {
 					return err
 				}
-				err = update(ctx, containerdClient, s, image.Name)
+				err = update(ctx, containerdClient, router, image.Name)
 				if err != nil {
 					return err
 				}
@@ -88,26 +71,10 @@ func Track(ctx context.Context, containerdClient *containerd.Client, s store.Sto
 				if err != nil {
 					return err
 				}
-				err = update(ctx, containerdClient, s, image.Name)
+				err = update(ctx, containerdClient, router, image.Name)
 				if err != nil {
 					return err
 				}
-			case EventTopicDelete:
-				image := events.ImageDelete{}
-				err := image.Unmarshal(e.Event.Value)
-				if err != nil {
-					return err
-				}
-				layers, ok := imageCache[image.Name]
-				if !ok {
-					log.Error(fmt.Errorf("%s not found", image.Name), "failed removing image layers")
-					continue
-				}
-				err = s.Remove(ctx, layers)
-				if err != nil {
-					return err
-				}
-				delete(imageCache, image.Name)
 			}
 		case err := <-errCh:
 			return err
@@ -115,31 +82,29 @@ func Track(ctx context.Context, containerdClient *containerd.Client, s store.Sto
 	}
 }
 
-func all(ctx context.Context, containerdClient *containerd.Client, s store.Store, imageFilter string) (map[string][]string, error) {
+func all(ctx context.Context, containerdClient *containerd.Client, router routing.Router, imageFilter string) error {
 	imageFilters := []string{}
 	if imageFilter != "" {
 		imageFilters = append(imageFilters, fmt.Sprintf(`name~=%s`, imageFilter))
 	}
-	imageCache := map[string][]string{}
 	imgs, err := containerdClient.ListImages(ctx, imageFilters...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, img := range imgs {
 		layers, err := imageLayers(ctx, containerdClient, img)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		err = s.Set(ctx, layers)
+		err = router.Advertise(ctx, layers)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		imageCache[img.Name()] = layers
 	}
-	return imageCache, nil
+	return nil
 }
 
-func update(ctx context.Context, containerdClient *containerd.Client, s store.Store, name string) error {
+func update(ctx context.Context, containerdClient *containerd.Client, router routing.Router, name string) error {
 	img, err := containerdClient.GetImage(ctx, name)
 	if err != nil {
 		return err
@@ -148,7 +113,7 @@ func update(ctx context.Context, containerdClient *containerd.Client, s store.St
 	if err != nil {
 		return err
 	}
-	err = s.Set(ctx, layers)
+	err = router.Advertise(ctx, layers)
 	if err != nil {
 		return err
 	}
@@ -214,4 +179,26 @@ func getNameWithTag(ctx context.Context, img containerd.Image) string {
 	}
 	ref.Object = tag
 	return ref.String()
+}
+
+func merge(cs ...<-chan time.Time) <-chan time.Time {
+	var wg sync.WaitGroup
+	out := make(chan time.Time)
+
+	output := func(c <-chan time.Time) {
+		for n := range c {
+			out <- n
+		}
+		wg.Done()
+	}
+	wg.Add(len(cs))
+	for _, c := range cs {
+		go output(c)
+	}
+
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+	return out
 }

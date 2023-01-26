@@ -21,6 +21,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      serviceAccountName: {{ include "spegel.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -30,16 +31,19 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
-          - --pod-ip=$(POD_IP)
-          - --registry-service={{ include "spegel.fullname" . }}-registry.{{ .Release.Namespace }}.svc.cluster.local
-          - --memberlist-service=_memberlist._tcp.{{ include "spegel.fullname" . }}-memberlist.{{ .Release.Namespace }}.svc.cluster.local
           - --registry-addr=:{{ .Values.service.registry.port }}
+          - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
           - --containerd-sock={{ .Values.spegel.containerdSock }}
           - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
           - --containerd-mirror-add={{ .Values.spegel.containerdMirrorAdd }}
           - --containerd-mirror-remove={{ .Values.spegel.containerdMirrorRemove }}
+          {{- with .Values.spegel.kubeconfigPath }}
+          - --kubeconfig-path={{ . }}
+          {{- end }}
+          - --leader-election-namespace={{ .Release.Namespace }}
+          - --leader-election-name={{ .Release.Namespace }}-leader-election
           {{- with .Values.spegel.imageFilter }}
           - --image-filter
           - {{ . | quote }}
@@ -61,11 +65,8 @@ spec:
             hostPort: {{ .Values.service.registry.port }}
             hostIP: "127.0.0.1"
             protocol: TCP
-          - name: olric
-            containerPort: 3320
-            protocol: TCP
-          - name: memberlist
-            containerPort: 3322
+          - name: router
+            containerPort: {{ .Values.service.router.port }}
             protocol: TCP
           - name: metrics
             containerPort: {{ .Values.service.metrics.port }}

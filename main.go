@@ -20,26 +20,27 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/xenitab/spegel/internal/discover"
+	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
 	"github.com/xenitab/spegel/internal/mirror"
 	"github.com/xenitab/spegel/internal/registry"
+	"github.com/xenitab/spegel/internal/routing"
 	"github.com/xenitab/spegel/internal/state"
-	"github.com/xenitab/spegel/internal/store"
 )
 
 type arguments struct {
-	PodIP                        string    `arg:"--pod-ip,required"`
-	RegistryService              string    `arg:"--registry-service,required"`
-	MemberlistService            string    `arg:"--memberlist-service,required"`
-	RegistryAddr                 string    `arg:"--registry-addr" default:":5000"`
-	MetricsAddr                  string    `arg:"--metrics-addr" default:":9090"`
 	MirrorRegistries             []url.URL `arg:"--mirror-registries,required"`
 	ImageFilter                  string    `arg:"--image-filter"`
+	RegistryAddr                 string    `arg:"--registry-addr" default:":5000"`
+	RouterAddr                   string    `arg:"--router-addr" default:":5001"`
+	MetricsAddr                  string    `arg:"--metrics-addr" default:":9090"`
 	ContainerdSock               string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock"`
 	ContainerdNamespace          string    `arg:"--containerd-namespace" default:"k8s.io"`
 	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d"`
 	ContainerdMirrorAdd          bool      `arg:"--containerd-mirror-add" default:"true"`
 	ContainerdMirrorRemove       bool      `arg:"--containerd-mirror-remove" default:"true"`
+	KubeconfigPath               string    `arg:"--kubeconfig-path"`
+	LeaderElectionNamespace      string    `arg:"--leader-election-namespace" default:"spegel"`
+	LeaderElectionName           string    `arg:"--leader-election-name" default:"spegel-leader-election"`
 }
 
 func main() {
@@ -64,6 +65,13 @@ func main() {
 	}
 	defer containerdClient.Close()
 
+	// Run leader election
+	cs, err := pkgkubernetes.GetKubernetesClientset(args.KubeconfigPath)
+	if err != nil {
+		log.Error(err, "could not create Kubernetes client")
+		os.Exit(1)
+	}
+
 	// Start metrics server
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -85,29 +93,20 @@ func main() {
 	})
 
 	// Setup and run store
-	d := discover.NewDNS(args.RegistryService)
-	store, err := store.NewOlricLanStore(ctx, d, args.PodIP, args.MemberlistService)
+	bootstrapper := routing.NewKubernetesBootstrapper(cs, args.LeaderElectionNamespace, args.LeaderElectionName)
+	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper)
 	if err != nil {
-		log.Error(err, "could not create store")
+		log.Error(err, "could not create router")
 		os.Exit(1)
 	}
-	g.Go(func() error {
-		return store.Start()
-	})
 	g.Go(func() error {
 		<-ctx.Done()
-		return store.Stop()
+		return router.Close()
 	})
-	log.Info("waiting for store to be ready")
-	err = store.Ready()
-	if err != nil {
-		log.Error(err, "failed waiting for store to be ready")
-		os.Exit(1)
-	}
 
 	// Track containerd state changes
 	g.Go(func() error {
-		return state.Track(ctx, containerdClient, store, args.ImageFilter)
+		return state.Track(ctx, containerdClient, router, args.ImageFilter)
 	})
 
 	// Configure mirrors
@@ -129,7 +128,7 @@ func main() {
 	}
 
 	// Setup and run registry
-	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, containerdClient, store)
+	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, containerdClient, router)
 	if err != nil {
 		log.Error(err, "could not create registry")
 		os.Exit(1)
