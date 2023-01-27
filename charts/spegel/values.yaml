@@ -60,6 +60,8 @@ spegel:
     - https://docker.io
     - https://ghcr.io
     - https://quay.io
+    - https://mcr.microsoft.com
+    - https://public.ecr.aws
   imageFilter: ""
   containerdSock: "/run/containerd/containerd.sock"
   containerdNamespace: "k8s.io"
