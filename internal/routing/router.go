@@ -32,6 +32,8 @@ type P2PRouter struct {
 }
 
 func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, error) {
+	log := logr.FromContextOrDiscard(ctx)
+
 	h, p, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -41,46 +43,62 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, err
 	}
 	multiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", h, p))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not create host multi address: %w", err)
 	}
 	host, err := libp2p.New(libp2p.ListenAddrs(multiAddr))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not create host: %w", err)
 	}
-	// TODO: Implement bootstrap peers func in case of total failure.
-	kdht, err := dht.New(ctx, host, dht.Mode(dht.ModeServer), dht.ProtocolPrefix("/spegel"), dht.DisableValues(), dht.MaxRecordAge(KeyTTL))
+	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().Pretty())
+	err = b.Run(ctx, self)
 	if err != nil {
 		return nil, err
 	}
+	dhtOpts := []dht.Option{dht.Mode(dht.ModeServer), dht.ProtocolPrefix("/spegel"), dht.DisableValues(), dht.MaxRecordAge(KeyTTL)}
+	bootstrapPeerOpt := dht.BootstrapPeersFunc(func() []peer.AddrInfo {
+		addrInfo, err := b.GetAddress()
+		if err != nil {
+			log.Error(err, "could not get bootstrap addresses")
+		}
+		if addrInfo.ID == host.ID() {
+			return nil
+		}
+		return []peer.AddrInfo{*addrInfo}
+	})
+	dhtOpts = append(dhtOpts, bootstrapPeerOpt)
+	kdht, err := dht.New(ctx, host, dhtOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("could not create distributed hash table: %w", err)
+	}
 	if err = kdht.Bootstrap(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not boostrap distributed hash table: %w", err)
 	}
 	rd := routing.NewRoutingDiscovery(kdht)
 
-	// Get bootstrap addr
-	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().Pretty())
-	bootstrapAddr, err := b.GetAddress(ctx, self)
-	if err != nil {
-		return nil, err
-	}
-
-	// Connect to bootstrap node if it is not us.
-	if bootstrapAddr != self {
-		log := logr.FromContextOrDiscard(ctx)
-		log.Info("connecting to bootstrap node", "addr", bootstrapAddr)
-		bootstrapMultiAddr, err := multiaddr.NewMultiaddr(bootstrapAddr)
+	// TODO: Check if bootstrap func would be enough to solve initial joining.
+	// Connect to bootstrap node.
+	retryCount := 0
+	for {
+		addrInfo, err := b.GetAddress()
 		if err != nil {
 			return nil, err
 		}
-		info, err := peer.AddrInfoFromP2pAddr(bootstrapMultiAddr)
-		if err != nil {
+		if addrInfo.ID == host.ID() {
+			log.Info("leader is self skipping connection to bootstrap node")
+			break
+		}
+		log.Info("attempting to connect to bootstrap node", "id", addrInfo.ID)
+		err = host.Connect(ctx, *addrInfo)
+		if err != nil && retryCount == 10 {
 			return nil, err
 		}
-		err = host.Connect(ctx, *info)
 		if err != nil {
-			return nil, err
+			log.Error(err, "could not connect to bootstrap node", "id", addrInfo.ID)
+			time.Sleep(1 * time.Second)
+			continue
 		}
-		log.Info("established connection with bootstrap node", "info", info)
+		log.Info("established connection with bootstrap node", "id", addrInfo.ID)
+		break
 	}
 
 	return &P2PRouter{
