@@ -54,9 +54,5 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create the name of the service account to use
 */}}
 {{- define "spegel.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
 {{- default (include "spegel.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
 {{- end }}
