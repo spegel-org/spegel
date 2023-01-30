@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"path"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -36,19 +37,30 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 	}
 	log := logr.FromContextOrDiscard(ctx)
 
-	app := pkggin.Default(log, "registry")
+	cfg := pkggin.Config{
+		LogConfig: pkggin.LogConfig{
+			Logger:          log,
+			PathFilter:      regexp.MustCompile("/healthz"),
+			IncludeLatency:  true,
+			IncludeClientIP: true,
+		},
+		MetricsConfig: pkggin.MetricsConfig{
+			HandlerID: "registry",
+		},
+	}
+	engine := pkggin.NewEngine(cfg)
 	registryHandler := &RegistryHandler{
 		log:              log,
 		registryPort:     registryPort,
 		containerdClient: containerdClient,
 		router:           router,
 	}
-	app.GET("/healthz", registryHandler.readyHandler)
-	app.GET("/debug", registryHandler.debugHandler)
-	app.Any("/v2/*params", registryHandler.registryHandler)
+	engine.GET("/healthz", registryHandler.readyHandler)
+	engine.GET("/debug", registryHandler.debugHandler)
+	engine.Any("/v2/*params", registryHandler.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: app,
+		Handler: engine,
 	}
 	return &Registry{
 		srv: srv,
