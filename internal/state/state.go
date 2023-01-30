@@ -15,6 +15,8 @@ import (
 	"github.com/containerd/containerd/reference"
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/xenitab/spegel/internal/routing"
 )
@@ -24,7 +26,18 @@ type EventTopic string
 const (
 	EventTopicCreate = "/images/create"
 	EventTopicUpdate = "/images/update"
+	EventTopicDelete = "/images/delete"
 )
+
+var advertisedImages = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "spegel_advertised_images",
+	Help: "Number of images advertised to be availible.",
+})
+
+var advertisedLayers = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "spegel_advertised_layers",
+	Help: "Number of layers advertised to be availible.",
+})
 
 func Track(ctx context.Context, containerdClient *containerd.Client, router routing.Router, imageFilter string) error {
 	log := logr.FromContextOrDiscard(ctx)
@@ -91,6 +104,7 @@ func all(ctx context.Context, containerdClient *containerd.Client, router routin
 	if err != nil {
 		return err
 	}
+	layerCount := 0
 	for _, img := range imgs {
 		layers, err := imageLayers(ctx, containerdClient, img)
 		if err != nil {
@@ -100,7 +114,10 @@ func all(ctx context.Context, containerdClient *containerd.Client, router routin
 		if err != nil {
 			return err
 		}
+		layerCount = layerCount + len(layers)
 	}
+	advertisedImages.Set(float64(len(imgs)))
+	advertisedLayers.Set(float64(layerCount))
 	return nil
 }
 
