@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestImageLayers(t *testing.T) {
+func TestGetAllImageDigests(t *testing.T) {
 	tests := []struct {
 		name     string
 		image    string
@@ -18,7 +18,6 @@ func TestImageLayers(t *testing.T) {
 			name:  "only tag",
 			image: "docker.io/library/alpine:3.17.1",
 			expected: []string{
-				"docker.io/library/alpine:3.17.1",
 				"sha256:f271e74b17ced29b915d351685fd4644785c6d1559dd1f2d4189a5e851ef753a",
 				"sha256:042a816809aac8d0f7d7cacac7965782ee2ecac3f21bcf9f24b1de1a7387b769",
 				"sha256:8921db27df2831fa6eaa85321205a2470c669b855f3ec95d5a3c2b46de0442c9",
@@ -39,7 +38,6 @@ func TestImageLayers(t *testing.T) {
 			name:  "tag and digest",
 			image: "docker.io/library/alpine:3.17.1@sha256:f271e74b17ced29b915d351685fd4644785c6d1559dd1f2d4189a5e851ef753a",
 			expected: []string{
-				"docker.io/library/alpine:3.17.1",
 				"sha256:f271e74b17ced29b915d351685fd4644785c6d1559dd1f2d4189a5e851ef753a",
 				"sha256:042a816809aac8d0f7d7cacac7965782ee2ecac3f21bcf9f24b1de1a7387b769",
 				"sha256:8921db27df2831fa6eaa85321205a2470c669b855f3ec95d5a3c2b46de0442c9",
@@ -53,11 +51,13 @@ func TestImageLayers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			_, err := containerdClient.Pull(context.TODO(), tt.image)
+			require.NoError(t, err)
 			img, err := containerdClient.GetImage(context.TODO(), tt.image)
 			require.NoError(t, err)
-			layers, err := imageLayers(context.TODO(), containerdClient, img)
+			dgsts, err := getAllImageDigests(context.TODO(), containerdClient, img)
 			require.NoError(t, err)
-			require.Equal(t, tt.expected, layers)
+			require.Equal(t, tt.expected, dgsts)
 		})
 	}
 }
