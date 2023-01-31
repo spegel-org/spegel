@@ -117,24 +117,37 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string) (string, bool, erro
 	if err != nil {
 		return "", false, err
 	}
-	ch := r.rd.FindProvidersAsync(ctx, c, 1)
+	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := r.rd.FindProvidersAsync(cancelCtx, c, 0)
 	for {
 		select {
 		case <-ctx.Done():
 			return "", false, ctx.Err()
-		case info := <-ch:
-			if len(info.Addrs) == 0 {
-				return "", false, fmt.Errorf("invalid node found with empty address list")
+		case info, ok := <-ch:
+			// Channel is closed means no provider is found.
+			if !ok {
+				return "", false, fmt.Errorf("key not found %s", key)
 			}
-			addr := info.Addrs[0]
-			v, err := addr.ValueForProtocol(multiaddr.P_IP4)
-			if err != nil {
-				return "", false, err
+			// Ignore responses that come from self.
+			if info.ID == r.host.ID() {
+				continue
 			}
-			if v == "" {
-				return "", false, fmt.Errorf("unexpected empty ip address")
+			for _, addr := range info.Addrs {
+				v, err := addr.ValueForProtocol(multiaddr.P_IP4)
+				if err != nil {
+					return "", false, err
+				}
+				// Protect against empty values beeing returned.
+				if v == "" {
+					continue
+				}
+				// There are two IPs being advertised, one is localhost which is not useful.
+				if v == "127.0.0.1" {
+					continue
+				}
+				return v, true, nil
 			}
-			return v, true, nil
 		}
 	}
 }

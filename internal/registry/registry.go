@@ -175,7 +175,9 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 	if key == "" {
 		key = ref.String()
 	}
-	ip, ok, err := r.router.Resolve(c, key)
+	timeoutCtx, cancel := context.WithTimeout(c, 5*time.Second)
+	defer cancel()
+	ip, ok, err := r.router.Resolve(timeoutCtx, key)
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
 		return
