@@ -109,23 +109,6 @@ func run(log logr.Logger, args *arguments) error {
 		return state.Track(ctx, containerdClient, router, args.ImageFilter)
 	})
 
-	// TODO: Wait to write mirror configuration until registry is up and running.
-	if args.ContainerdMirrorAdd {
-		fs := afero.NewOsFs()
-		err := mirror.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.RegistryAddr, args.MirrorRegistries)
-		if err != nil {
-			log.Error(err, "could not configure containerd mirror")
-			os.Exit(1)
-		}
-		// TODO: Validate clean up is run if error occurs before start.
-		if args.ContainerdMirrorRemove {
-			g.Go(func() error {
-				<-ctx.Done()
-				return mirror.RemoveMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.MirrorRegistries)
-			})
-		}
-	}
-
 	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, containerdClient, router)
 	if err != nil {
 		return err
@@ -137,6 +120,20 @@ func run(log logr.Logger, args *arguments) error {
 		<-ctx.Done()
 		return reg.Shutdown()
 	})
+
+	if args.ContainerdMirrorAdd {
+		fs := afero.NewOsFs()
+		defer func() {
+			err := mirror.RemoveMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.MirrorRegistries)
+			if err != nil {
+				log.Error(err, "failed to remove mirror configuration")
+			}
+		}()
+		err := mirror.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.RegistryAddr, args.MirrorRegistries)
+		if err != nil {
+			return err
+		}
+	}
 
 	log.Info("running registry", "addr", args.RegistryAddr)
 	err = g.Wait()

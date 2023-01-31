@@ -10,6 +10,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/spf13/afero"
 	"github.com/xenitab/spegel/internal/registry"
+	"go.uber.org/multierr"
 )
 
 // AddMirrorConfiguration sets up registry configuration to direct pulls through mirror.
@@ -46,15 +47,17 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath, addr s
 
 // RemoveMirrorConfiguration removes all mirror configuration for all registries passed in the list.
 func RemoveMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs []url.URL) error {
+	errs := []error{}
 	for _, registryURL := range registryURLs {
 		dp := path.Join(configPath, registryURL.Host)
 		err := fs.RemoveAll(dp)
 		if err != nil {
-			return err
+			errs = append(errs, err)
+			continue
 		}
 		logr.FromContextOrDiscard(ctx).Info("removed containerd mirror configuration", "registry", registryURL.String(), "path", dp)
 	}
-	return nil
+	return multierr.Combine(errs...)
 }
 
 func hostsFileContent(registryURL url.URL, mirrorURL url.URL) string {
