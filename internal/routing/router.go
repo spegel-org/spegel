@@ -112,6 +112,7 @@ func (r *P2PRouter) Close() error {
 }
 
 func (r *P2PRouter) Resolve(ctx context.Context, key string) (string, bool, error) {
+	logr.FromContextOrDiscard(ctx).V(10).Info("resolving key", "host", r.host.ID().Pretty(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
 		return "", false, err
@@ -139,6 +140,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string) (string, bool, erro
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
+	logr.FromContextOrDiscard(ctx).V(10).Info("advertising keys", "host", r.host.ID().Pretty(), "keys", keys)
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {
