@@ -52,27 +52,31 @@ func main() {
 		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
 	}
 	log := zapr.NewLogger(zapLog)
-	ctx := logr.NewContext(context.Background(), log)
 
+	err = run(log, args)
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+	log.Info("gracefully shutdown")
+}
+
+func run(log logr.Logger, args *arguments) error {
+	cs, err := pkgkubernetes.GetKubernetesClientset(args.KubeconfigPath)
+	if err != nil {
+		return err
+	}
+	containerdClient, err := containerd.New(args.ContainerdSock, containerd.WithDefaultNamespace(args.ContainerdNamespace))
+	if err != nil {
+		return fmt.Errorf("could not create containerd client: %w", err)
+	}
+	defer containerdClient.Close()
+
+	ctx := logr.NewContext(context.Background(), log)
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
 	defer cancel()
 	g, ctx := errgroup.WithContext(ctx)
 
-	containerdClient, err := containerd.New(args.ContainerdSock, containerd.WithDefaultNamespace(args.ContainerdNamespace))
-	if err != nil {
-		log.Error(err, "could not create containerd client")
-		os.Exit(1)
-	}
-	defer containerdClient.Close()
-
-	// Run leader election
-	cs, err := pkgkubernetes.GetKubernetesClientset(args.KubeconfigPath)
-	if err != nil {
-		log.Error(err, "could not create Kubernetes client")
-		os.Exit(1)
-	}
-
-	// Start metrics server
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	srv := &http.Server{
@@ -92,24 +96,19 @@ func main() {
 		return srv.Shutdown(shutdownCtx)
 	})
 
-	// Setup and run store
 	bootstrapper := routing.NewKubernetesBootstrapper(cs, args.LeaderElectionNamespace, args.LeaderElectionName)
 	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper)
 	if err != nil {
-		log.Error(err, "could not create router")
-		os.Exit(1)
+		return err
 	}
 	g.Go(func() error {
 		<-ctx.Done()
 		return router.Close()
 	})
-
-	// Track containerd state changes
 	g.Go(func() error {
 		return state.Track(ctx, containerdClient, router, args.ImageFilter)
 	})
 
-	// Configure mirrors
 	// TODO: Wait to write mirror configuration until registry is up and running.
 	if args.ContainerdMirrorAdd {
 		fs := afero.NewOsFs()
@@ -127,11 +126,9 @@ func main() {
 		}
 	}
 
-	// Setup and run registry
 	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, containerdClient, router)
 	if err != nil {
-		log.Error(err, "could not create registry")
-		os.Exit(1)
+		return err
 	}
 	g.Go(func() error {
 		return reg.ListenAndServe(ctx)
@@ -144,8 +141,7 @@ func main() {
 	log.Info("running registry", "addr", args.RegistryAddr)
 	err = g.Wait()
 	if err != nil {
-		log.Error(err, "exiting with error")
-		os.Exit(1)
+		return err
 	}
-	log.Info("gracefully shutdown registry")
+	return nil
 }
