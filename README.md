@@ -10,6 +10,20 @@ already pulled the required images. It is already cached locally no dependencies
 all Nodes in a Kubernetes cluster to share locally cached images with each other, as long as one Node in the cluster has an image stored locally all other Nodes will be able to fetch their copy from within the cluster, skipping
 internet egressing traffic all together.
 
+## Prerequisite
+
+Spegel relies on [containerd registry mirroring](https://github.com/containerd/containerd/blob/main/docs/hosts.md#cri) to route requests to the correct destination. It is capable of writing the mirror configuration on startup, as it is loaded on the fly by containerd.
+It is however not capable of setting the registry mirror `config_path` in the containerd configuration as it requires a restart of containerd for the change to be picked up.
+
+Spegel has been verified with AKS and EKS as they come with the expected configuration out of the box. Any other Kuberentes deployment should make the following configuration change to containerd.
+
+```toml
+version = 2
+
+[plugins."io.containerd.grpc.v1.cri".registry]
+   config_path = "/etc/containerd/certs.d"
+```
+
 ## Installation
 
 Easiest method to install Spegel is with the [Helm Chart](./charts/spegel).
