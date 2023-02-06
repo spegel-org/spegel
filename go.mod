@@ -19,7 +19,7 @@ require (
 	github.com/spf13/afero v1.9.3
 	github.com/stretchr/testify v1.8.1
 	github.com/valyala/fastjson v1.6.4
-	github.com/xenitab/pkg/gin v0.0.3
+	github.com/xenitab/pkg/gin v0.0.4
 	github.com/xenitab/pkg/kubernetes v0.0.2
 	go.uber.org/multierr v1.9.0
 	go.uber.org/zap v1.24.0

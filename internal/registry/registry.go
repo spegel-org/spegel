@@ -43,6 +43,7 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 			PathFilter:      regexp.MustCompile("/healthz"),
 			IncludeLatency:  true,
 			IncludeClientIP: true,
+			IncludeKeys:     []string{"handler"},
 		},
 		MetricsConfig: pkggin.MetricsConfig{
 			HandlerID: "registry",
@@ -123,7 +124,6 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	}
 
 	// Serve registry endpoints.
-	r.log.Info("serving registry request", "path", c.Request.URL.Path)
 	ref, ok, err := ManifestReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
@@ -149,6 +149,8 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 
 // TODO: Retry multiple endoints
 func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryPort string) {
+	c.Set("handler", "mirror")
+
 	// Disable mirroring so we dont end with an infinite loop
 	c.Request.Header[MirrorHeader] = []string{"false"}
 
@@ -158,7 +160,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 		return
 	}
 	if !ok {
-		c.AbortWithStatus(http.StatusNotFound)
+		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not parse reference"))
 		return
 	}
 
@@ -174,8 +176,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 		return
 	}
 	if !ok {
-		r.log.Info("could not find node to forward", "ref", ref.String())
-		c.Status(http.StatusNotFound)
+		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find node with ref: %s", ref.String()))
 		return
 	}
 	url, err := url.Parse(fmt.Sprintf("http://%s:%s", ip, registryPort))
@@ -183,12 +184,14 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
-	r.log.Info("forwarding request", "path", c.Request.URL.Path, "url", url.String())
+	r.log.V(5).Info("forwarding request", "path", c.Request.URL.Path, "url", url.String())
 	proxy := httputil.NewSingleHostReverseProxy(url)
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
 
 func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
+	c.Set("handler", "manifest")
+
 	dgst := ref.Digest()
 	// Reference is tag so need to resolve digest
 	if dgst == "" {
@@ -230,6 +233,8 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 }
 
 func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
+	c.Set("handler", "blob")
+
 	info, err := r.containerdClient.ContentStore().Info(c, ref.Digest())
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
