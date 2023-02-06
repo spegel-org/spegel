@@ -27,8 +27,5 @@ func getRemoteRegistry(header http.Header) (string, error) {
 // isMirrorRequest returns true if mirror header is present.
 func isMirrorRequest(header http.Header) bool {
 	mirror := header.Get(MirrorHeader)
-	if mirror == "true" {
-		return true
-	}
-	return false
+	return mirror == "true"
 }

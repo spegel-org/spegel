@@ -113,6 +113,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	// Always expect remoteRegistry header to be passed in request.
 	remoteRegistry, err := getRemoteRegistry(c.Request.Header)
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
@@ -126,6 +127,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	// Serve registry endpoints.
 	ref, ok, err := ManifestReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
@@ -135,6 +137,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	}
 	ref, ok, err = BlobReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
@@ -156,10 +159,12 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 
 	ref, ok, err := AnyReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 	if !ok {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not parse reference"))
 		return
 	}
@@ -172,15 +177,18 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 	defer cancel()
 	ip, ok, err := r.router.Resolve(timeoutCtx, key)
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 	if !ok {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find node with ref: %s", ref.String()))
 		return
 	}
 	url, err := url.Parse(fmt.Sprintf("http://%s:%s", ip, registryPort))
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
@@ -197,6 +205,7 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	if dgst == "" {
 		image, err := r.containerdClient.ImageService().Get(c, ref.String())
 		if err != nil {
+			//nolint:errcheck // ignore
 			c.AbortWithError(http.StatusNotFound, err)
 			return
 		}
@@ -204,16 +213,19 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	}
 	info, err := r.containerdClient.ContentStore().Info(c, dgst)
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 	b, err := content.ReadBlob(c, r.containerdClient.ContentStore(), ocispec.Descriptor{Digest: info.Digest})
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 	mediaType := fastjson.GetString(b, "mediaType")
 	if mediaType == "" {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find media type in manifest %s", dgst))
 		return
 	}
@@ -226,6 +238,7 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	}
 	_, err = c.Writer.Write(b)
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
@@ -237,6 +250,7 @@ func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
 
 	info, err := r.containerdClient.ContentStore().Info(c, ref.Digest())
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
@@ -249,12 +263,14 @@ func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
 	}
 	ra, err := r.containerdClient.ContentStore().ReaderAt(c, ocispec.Descriptor{Digest: info.Digest})
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 	defer ra.Close()
 	_, err = io.Copy(c.Writer, content.NewReader(ra))
 	if err != nil {
+		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}

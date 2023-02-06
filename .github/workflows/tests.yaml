@@ -1,0 +1,50 @@
+name: tests
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.x
+          check-latest: true
+          cache: true
+      - name: Setup golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          args: --timeout 3m0s
+  unit:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.x
+          check-latest: true
+          cache: true
+      - name: Run tests
+        run: make test
+  e2e:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.x
+          check-latest: true
+          cache: true
+      - name: Run e2e
+        run: make e2e
