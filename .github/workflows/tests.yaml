@@ -16,6 +16,8 @@ jobs:
           go-version: 1.19.x
           check-latest: true
           cache: true
+      - name: Setup golangci-lint
+        uses: golangci/golangci-lint-action@v3
       - name: Run fmt
         run: make fmt
       - name: Check if working tree is dirty
