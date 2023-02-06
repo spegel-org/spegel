@@ -14,6 +14,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.19.x
+          check-latest: true
+          cache: true
       - name: Run fmt
         run: make fmt
       - name: Check if working tree is dirty
@@ -36,6 +38,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.19.x
+          check-latest: true
+          cache: true
       - name: Run test
         run: make test
   e2e:
@@ -48,5 +52,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.19.x
+          check-latest: true
+          cache: true
       - name: Run e2e
         run: make e2e
