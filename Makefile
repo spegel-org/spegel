@@ -1,19 +1,14 @@
 TAG = $$(git rev-parse --short HEAD)
 IMG ?= ghcr.io/xenitab/spegel:$(TAG)
 
-all: fmt vet lint
+all: lint
+
 
 lint:
 	golangci-lint run ./...
 
-fmt:
-	go fmt ./...
-
-vet:
-	go vet ./...
-
-test: fmt vet
-	go test --cover ./...
+test:
+	go test ./...
 
 docker-build:
 	docker build -t ${IMG} .
@@ -47,4 +42,4 @@ e2e: docker-build
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait deployment/nginx-tag-and-digest --for condition=available
 
 	# Delete cluster
-	#kind delete cluster
+	kind delete cluster

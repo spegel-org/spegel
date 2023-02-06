@@ -5,27 +5,6 @@ on:
     branches:
       - main
 jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Setup Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.19.x
-          check-latest: true
-          cache: true
-      - name: Run fmt
-        run: make fmt
-      - name: Check if working tree is dirty
-        run: |
-          if [[ $(git diff --stat) != '' ]]; then
-            echo 'run make fmt and commit changes'
-            exit 1
-          fi
-      - name: Run vet
-        run: make vet
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -42,7 +21,7 @@ jobs:
         with:
           args: --timeout 3m0s
   unit:
-    needs: [validate, lint]
+    needs: lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -53,10 +32,10 @@ jobs:
           go-version: 1.19.x
           check-latest: true
           cache: true
-      - name: Run test
+      - name: Run tests
         run: make test
   e2e:
-    needs: [validate, lint]
+    needs: lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
