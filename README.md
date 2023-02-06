@@ -1,14 +1,18 @@
 # Spegel
 
-Spegel, mirror in Swedish, is a stateless distributed mirror registry built of Kubernetes.
+Spegel, mirror in Swedish, is a stateless cluster local OCI registry mirror.
 
 ## Background
 
-OCI registries are critical for the operation of a Kuberentes cluster. A lot of people may not think about registry up time or image pull speed. Others may just neglect it as doing something about it requires a lot of effort.
-Spegel is a simple solution for a lot of the common issues fased with depending on public registries while requiring little operational effort. The experience with Kubernetes is great when a Pod is scheduled on a Node that has
-already pulled the required images. It is already cached locally no dependencies on external resources. The question is why this experience can't be offered on all Nodes in a cluster. Spegel solves this problem by enabling
-all Nodes in a Kubernetes cluster to share locally cached images with each other, as long as one Node in the cluster has an image stored locally all other Nodes will be able to fetch their copy from within the cluster, skipping
-internet egressing traffic all together.
+Kubernetes does a great job at distributing workloads on multiple nodes. Allowing node failures to occur without affecting uptime. A critical component for this to work is that each node has to be able to pull the workload images before they can start. Each replica running on a node will incur a pull operation. The images may be pulled from geographically close registries within the cloud provider, public registries, or self-hosted registries. This process has a flaw in that each node has to make this round trip separately. Why can't the nodes share the image among themselves?
+
+<p align="center">
+  <img src="./assets/overview.jpg">
+</p>
+
+Spegel enables all nodes in a Kubernetes cluster to act as a local registry mirror, allowing nodes to share images between themselves. Any image already pulled by a node will be available for any other node in the cluster to pull.
+
+This has the benefit of reducing workload startup times and egress traffic as images will be stored locally within the cluster. On top of that it allows the scheduling of new workloads even when external registries are down.
 
 ## Prerequisite
 
@@ -35,22 +39,15 @@ helm upgrade --install --version <version> spegel oci://ghcr.io/xenitab/helm-cha
 
 ## Architecture
 
-In its core Spegel is a pull only OCI registry which runs locally on every Node in the Kubernetes cluster. Containerd is configured to use the local registry as a mirror, which would serve the image from within the cluster or from the source registry.
+Spegel can run as a stateless application by exploiting the fact that an image pulled by a node is not immediately garbage collected. Spegel is deployed as a Daemonset on each node which acts as both the registry and mirror. Each instance is reachable both locally through a host port and a Service. This enables Containerd to be configured to use the localhost interface as a registry mirror and for Spegel instances to forward requests to each other.
 
 <p align="center">
-  <img src="./assets/basic.jpg">
+  <img src="./assets/architecture.jpg">
 </p>
 
-An image pull with spegel is completed with the following steps.
+Images are composed of multiple layers which are stored as individual files on the node disk. Each layer has a digest which is its identifier. Every node advertises the digests which are stored locally on disk. Kademlia is used to enable a distributed advertisement and lookup of digests. An image pull consists of multiple HTTP requests with one request per digest. The request is first sent to Spegel when an image is pulled if it is configured to act as the mirror for the registry. Spegel will lookup the digest within the cluster to see if any node has advertised that they have it. If a node is found the request will be forwarded to that Spegel instance which will serve the file with the specified digest. If a node is not found a 404 response will be returned and Containerd will fallback to using the actual remote registry.
 
-1. Containerd needs to pull an image.
-2. Starts making requests for each component of the image.
-3. Mirror configuration routes the requests to the local Spegel instance.
-4. Spegel receives the request and will try to find another Node which already has the requested component.
-5. If no Node is found 404 is returned, causing containerd to make the request to the original registry.
-6. If a Node is found the request is forwarded to the Nodes Spegel instance.
-7. Spegel will see the request is external and serve the image component as a image pull request.
-8. All components are fetched completing the image pull.
+In its core Spegel is a pull only OCI registry which runs locally on every Node in the Kubernetes cluster. Containerd is configured to use the local registry as a mirror, which would serve the image from within the cluster or from the source registry.
 
 ## License
 
