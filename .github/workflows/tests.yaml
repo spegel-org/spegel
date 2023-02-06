@@ -39,8 +39,10 @@ jobs:
           cache: true
       - name: Setup golangci-lint
         uses: golangci/golangci-lint-action@v3
+        with:
+          args: --timeout 3m0s
   unit:
-    needs: validate
+    needs: [validate, lint]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -54,7 +56,7 @@ jobs:
       - name: Run test
         run: make test
   e2e:
-    needs: validate
+    needs: [validate, lint]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
