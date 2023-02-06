@@ -28,7 +28,7 @@ import (
 )
 
 type arguments struct {
-	MirrorRegistries             []url.URL `arg:"--mirror-registries,required", help:"list of registries to mirror."`
+	MirrorRegistries             []url.URL `arg:"--mirror-registries,required" help:"list of registries to mirror."`
 	ImageFilter                  string    `arg:"--image-filter" help:"inclusive image name filter."`
 	RegistryAddr                 string    `arg:"--registry-addr" default:":5000" help:"address to server image registry."`
 	RouterAddr                   string    `arg:"--router-addr" default:":5001" help:"address to serve router."`
