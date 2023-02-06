@@ -28,19 +28,19 @@ import (
 )
 
 type arguments struct {
-	MirrorRegistries             []url.URL `arg:"--mirror-registries,required"`
-	ImageFilter                  string    `arg:"--image-filter"`
-	RegistryAddr                 string    `arg:"--registry-addr" default:":5000"`
-	RouterAddr                   string    `arg:"--router-addr" default:":5001"`
-	MetricsAddr                  string    `arg:"--metrics-addr" default:":9090"`
-	ContainerdSock               string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock"`
-	ContainerdNamespace          string    `arg:"--containerd-namespace" default:"k8s.io"`
-	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d"`
-	ContainerdMirrorAdd          bool      `arg:"--containerd-mirror-add" default:"true"`
-	ContainerdMirrorRemove       bool      `arg:"--containerd-mirror-remove" default:"true"`
-	KubeconfigPath               string    `arg:"--kubeconfig-path"`
-	LeaderElectionNamespace      string    `arg:"--leader-election-namespace" default:"spegel"`
-	LeaderElectionName           string    `arg:"--leader-election-name" default:"spegel-leader-election"`
+	MirrorRegistries             []url.URL `arg:"--mirror-registries,required", help:"list of registries to mirror."`
+	ImageFilter                  string    `arg:"--image-filter" help:"inclusive image name filter."`
+	RegistryAddr                 string    `arg:"--registry-addr" default:":5000" help:"address to server image registry."`
+	RouterAddr                   string    `arg:"--router-addr" default:":5001" help:"address to serve router."`
+	MetricsAddr                  string    `arg:"--metrics-addr" default:":9090" help:"address to serve metrics."`
+	ContainerdSock               string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
+	ContainerdNamespace          string    `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
+	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
+	ContainerdMirrorAdd          bool      `arg:"--containerd-mirror-add" default:"true" help:"Will add containerd mirror configuration if true."`
+	ContainerdMirrorRemove       bool      `arg:"--containerd-mirror-remove" default:"true" help:"Will remove containerd mirror configuration if true."`
+	KubeconfigPath               string    `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
+	LeaderElectionNamespace      string    `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
+	LeaderElectionName           string    `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
 }
 
 func main() {
