@@ -1,0 +1,52 @@
+name: tests
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.x
+      - name: Run fmt
+        run: make fmt
+      - name: Check if working tree is dirty
+        run: |
+          if [[ $(git diff --stat) != '' ]]; then
+            echo 'run make fmt and commit changes'
+            exit 1
+          fi
+      - name: Run vet
+        run: make vet
+      - name: Run lint
+        run: make lint
+  unit:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.x
+      - name: Run test
+        run: make test
+  e2e:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.x
+      - name: Run e2e
+        run: make e2e
