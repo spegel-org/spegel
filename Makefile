@@ -29,6 +29,12 @@ e2e: docker-build
 	docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b
 	docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd
 
+	# Remove default route to disable internet access
+	docker exec kind-control-plane ip route del default
+	docker exec kind-worker ip route del default
+	docker exec kind-worker2 ip route del default
+	docker exec kind-worker3 ip route del default
+
 	# Deploy Spegel
 	kind load docker-image ${IMG}
 	kubectl --kubeconfig $$KIND_KUBECONFIG create namespace spegel
