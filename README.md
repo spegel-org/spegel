@@ -39,15 +39,67 @@ helm upgrade --install --version <version> spegel oci://ghcr.io/xenitab/helm-cha
 
 ## Architecture
 
-Spegel can run as a stateless application by exploiting the fact that an image pulled by a node is not immediately garbage collected. Spegel is deployed as a Daemonset on each node which acts as both the registry and mirror. Each instance is reachable both locally through a host port and a Service. This enables Containerd to be configured to use the localhost interface as a registry mirror and for Spegel instances to forward requests to each other.
+Spegel depends on being able to pull the Spegel image for it to work. When a new node is created in the cluster a Spegel Pod will be scheduled resulting in the node pulling the image.
+This has a drawback in that Spegel will not be able to start on a new node if the registry it is pulled from is not available. The simplest solution to this problem is to pre-pull the image when building the machine image. That way the Spegel image will always be present on every new node.
+The downside is that a new machine image needs to be built for every new Spegel version. Additionally, it requires the Kubernetes cluster to support custom machine images, something that is not possible on all cloud providers.
+
+Spegel offers an alternative solution to the static nature of pre-pulling the image, by configuring a temporary mirror configuration before Spegel needs to be pulled that uses a node port service to reach another Spegel instance. When the Spegel image is pulled the request will be directed to a random Spegel instance. This is possible because the Spegel image has to be present on the receiving node for Spegel to run in the first place.
+After the Spegel image is pulled the application will start and replace the mirror configuration written to bootstrap Spegel.
 
 <p align="center">
-  <img src="./assets/architecture.jpg">
+  <img src="./assets/bootstrap.jpg">
 </p>
 
-Images are composed of multiple layers which are stored as individual files on the node disk. Each layer has a digest which is its identifier. Every node advertises the digests which are stored locally on disk. Kademlia is used to enable a distributed advertisement and lookup of digests. An image pull consists of multiple HTTP requests with one request per digest. The request is first sent to Spegel when an image is pulled if it is configured to act as the mirror for the registry. Spegel will lookup the digest within the cluster to see if any node has advertised that they have it. If a node is found the request will be forwarded to that Spegel instance which will serve the file with the specified digest. If a node is not found a 404 response will be returned and Containerd will fallback to using the actual remote registry.
+Bootstrapping Spegel from itself also has the benefit of never having to pull Spegel from the public internet, unless Spegel itself is being updated. Even in the updating case the image will only need to be fetched once and will then be shared with the other new instances.
+Bootstrapping is not enabled by default as it currently requires some user input to work properly. It is however highly recommended to enable this feature as it makes clusters for the most part immune to registry failures as long as the required image is stored within the cluster.
+There are currently two methods to enable the bootstrap method. Either through the use of init containers or through modifying the VM template used to create the node.  
 
-In its core Spegel is a pull only OCI registry which runs locally on every Node in the Kubernetes cluster. Containerd is configured to use the local registry as a mirror, which would serve the image from within the cluster or from the source registry.
+### Init Container
+
+Using an init container to write the bootstrap mirror config to the host file system is probably the simplest method. It does however have the drawback that the init container itself requires an image to run. The image used needs `sh`, `mkdir`, and `cp` in it. Most Kubernetes solutions today tend to already bake images into the nodes machine image to speed up startup time. A good idea is to use one of these images for the init container. 
+
+AKS users should refer to the [AKS VHD Notes](https://github.com/Azure/AKS/tree/master/vhd-notes/aks-ubuntu) for their specific OS type. The documentation contains a list of images that will always be present on the node. A good idea is to use the `mcr.microsoft.com/aks/command/runtime` image as it is already used to run commands inside of AKS.
+
+EKS users should refer to the [EKS AMI](https://github.com/awslabs/amazon-eks-ami) repository for more information. It is currently not clear if any images are by default baked into the AMI. One option would be to use a custom AMI and pull a specific image when building the AMI.
+
+Enabling the bootstrap init container is simple when installing Spegel with the Helm chart. All that is required is to set the image which will be used in the init container and enable both the init container and service features.
+
+```yaml
+bootstrap:
+  service:
+    enabled: true
+  initContainer:
+    enabled: true
+    image:
+      repository: "mcr.microsoft.com/aks/command/runtime"
+      tag: "master.220211.1"
+```
+
+### VM Template
+
+Modifying the VM template may be the cleaner method of solving the bootstrap problem, as it does not rely on an image always present on the node. Instead of having an init container write the mirror configuration, it is written to the host path as part of building the machine image, meaning the mirror configuration will be present immediatly on startup.
+
+Modifying the VM template may be the cleaner method of solving the bootstrap problem, as it does not rely on an image always present on the node. Instead of having an init container write the mirror configuration, it is written to the host path as part of building the machine image, meaning the mirror configuration will be present immediatly on startup.
+
+For this to work you need to write you own Containerd mirror configuration. By default the Spegel image is fetched from ghcr.io so that is what this example is going to use. If you have chosen to copy the image to another registry you will need to change the example accordingly.
+
+```toml
+server = "https://ghcr.io"
+
+[host."http://127.0.0.1:30000"]
+  capabilities = ["pull", "resolve"]
+[host."http://127.0.0.1:30000".header]
+  X-Spegel-Registry = ["https://ghcr.io"]
+  X-Spegel-Mirror = ["false"]
+```
+
+Make sure to enable the bootstrap service when installing Spegel.
+
+```yaml
+bootstrap:
+  service:
+    enabled: true
+```
 
 ## License
 

@@ -30,6 +30,7 @@ securityContext: {}
 service:
   registry:
     port: 5000
+    nodePort: 30000
   router:
     port: 5001
   metrics:
@@ -72,3 +73,12 @@ spegel:
   containerdMirrorAdd: true
   containerdMirrorRemove: true
   kubeconfigPath: ""
+  bootstrap:
+    service:
+      enabled: false
+    initContainer:
+      enabled: false
+      image:
+        repository: ""
+        pullPolicy: Never
+        tag: ""

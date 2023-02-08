@@ -1,0 +1,9 @@
+spegel:
+  bootstrap:
+    service:
+      enabled: true
+    initContainer:
+      enabled: true
+      image:
+        repository: alpine    
+        tag: "3.17.1"

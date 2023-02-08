@@ -1,0 +1,17 @@
+{{- if .Values.spegel.bootstrap.initContainer.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "spegel.fullname" . }}-bootstrap
+  labels:
+    {{- include "spegel.labels" . | nindent 4 }}
+data:
+  hosts.toml: |
+    server = "https://{{ include "spegel.bootstrapRegistry" . }}"
+
+    [host."http://127.0.0.1:{{ .Values.service.registry.nodePort }}"]
+      capabilities = ["pull", "resolve"]
+    [host."http://127.0.0.1:{{ .Values.service.registry.nodePort }}".header]
+      X-Spegel-Registry = ["https://{{ include "spegel.bootstrapRegistry" . }}"]
+      X-Spegel-Mirror = ["false"]
+{{- end }}

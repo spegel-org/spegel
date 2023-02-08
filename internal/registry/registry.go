@@ -200,8 +200,8 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	c.Set("handler", "manifest")
 
-	dgst := ref.Digest()
 	// Reference is tag so need to resolve digest
+	dgst := ref.Digest()
 	if dgst == "" {
 		image, err := r.containerdClient.ImageService().Get(c, ref.String())
 		if err != nil {

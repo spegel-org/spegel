@@ -56,3 +56,8 @@ Create the name of the service account to use
 {{- define "spegel.serviceAccountName" -}}
 {{- default (include "spegel.fullname" .) .Values.serviceAccount.name }}
 {{- end }}
+
+
+{{- define "spegel.bootstrapRegistry" -}}
+{{- (urlParse (printf "https://%s" .Values.image.repository)).host }}
+{{- end }}
