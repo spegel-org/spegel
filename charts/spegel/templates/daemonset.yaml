@@ -85,18 +85,18 @@ spec:
             port: registry
         volumeMounts:
           - name: containerd-sock
-            mountPath: "/run/containerd/containerd.sock"
+            mountPath: {{ .Values.spegel.containerdSock }}
           - name: containerd-config
-            mountPath: "/etc/containerd/certs.d"
+            mountPath: {{ .Values.spegel.containerdRegistryConfigPath }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
         - name: containerd-sock
           hostPath:
-            path: "/run/containerd/containerd.sock"
+            path: {{ .Values.spegel.containerdSock }}
         - name: containerd-config
           hostPath:
-            path: "/etc/containerd/certs.d"
+            path: {{ .Values.spegel.containerdRegistryConfigPath }}
             type: DirectoryOrCreate
       {{- with .Values.nodeSelector }}
       nodeSelector:
