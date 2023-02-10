@@ -36,7 +36,6 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 		return nil, err
 	}
 	log := logr.FromContextOrDiscard(ctx)
-
 	cfg := pkggin.Config{
 		LogConfig: pkggin.LogConfig{
 			Logger:          log,
@@ -52,9 +51,9 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 	engine := pkggin.NewEngine(cfg)
 	registryHandler := &RegistryHandler{
 		log:              log,
-		registryPort:     registryPort,
 		containerdClient: containerdClient,
 		router:           router,
+		registryPort:     registryPort,
 	}
 	engine.GET("/healthz", registryHandler.readyHandler)
 	engine.Any("/v2/*params", registryHandler.registryHandler)
@@ -82,9 +81,9 @@ func (r *Registry) Shutdown() error {
 
 type RegistryHandler struct {
 	log              logr.Logger
-	registryPort     string
 	containerdClient *containerd.Client
 	router           routing.Router
+	registryPort     string
 }
 
 func (r *RegistryHandler) readyHandler(c *gin.Context) {
@@ -120,7 +119,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 
 	// Requests coming from localhost are meant to be mirrored.
 	if isMirrorRequest(c.Request.Header) {
-		r.handleMirror(c, remoteRegistry, r.registryPort)
+		r.handleMirror(c, remoteRegistry)
 		return
 	}
 
@@ -151,7 +150,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 }
 
 // TODO: Retry multiple endoints
-func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryPort string) {
+func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	c.Set("handler", "mirror")
 
 	// Disable mirroring so we dont end with an infinite loop
@@ -186,7 +185,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry, registryP
 		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find node with ref: %s", ref.String()))
 		return
 	}
-	url, err := url.Parse(fmt.Sprintf("http://%s:%s", ip, registryPort))
+	url, err := url.Parse(fmt.Sprintf("http://%s:%s", ip, r.registryPort))
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)

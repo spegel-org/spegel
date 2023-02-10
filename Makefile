@@ -38,7 +38,7 @@ e2e: docker-build
 	# Deploy Spegel
 	kind load docker-image ${IMG}
 	kubectl --kubeconfig $$KIND_KUBECONFIG create namespace spegel
-	helm --kubeconfig $$KIND_KUBECONFIG upgrade --install --namespace="spegel" spegel ./charts/spegel --set "image.pullPolicy=Never" --set "image.tag=${TAG}" --set "spegel.redisAddr=redis-master.spegel.svc.cluster.local:6379"
+	helm --kubeconfig $$KIND_KUBECONFIG upgrade --install --namespace="spegel" spegel ./charts/spegel --set "image.pullPolicy=Never" --set "image.tag=${TAG}"
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel rollout status daemonset spegel --timeout 60s
 
 	# Deploy test Nginx pods and expect pull to work

@@ -3,7 +3,6 @@ package mirror
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/url"
 	"path"
 
@@ -17,20 +16,12 @@ import (
 // Refer to containerd registry configuration documentation for mor information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath, addr string, registryURLs []url.URL) error {
+func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL) error {
 	if err := validate(registryURLs); err != nil {
 		return err
 	}
-	_, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return err
-	}
-	mirrorURL, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%s", port))
-	if err != nil {
-		return err
-	}
 	for _, registryURL := range registryURLs {
-		content := hostsFileContent(registryURL, *mirrorURL)
+		content := hostsFileContent(registryURL, mirrorURLs)
 		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
 		err := fs.MkdirAll(path.Dir(fp), 0755)
 		if err != nil {
@@ -60,18 +51,21 @@ func RemoveMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath stri
 	return multierr.Combine(errs...)
 }
 
-func hostsFileContent(registryURL url.URL, mirrorURL url.URL) string {
+func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
 	server := registryURL.String()
 	if isDockerHub(registryURL) {
 		server = "https://registry-1.docker.io"
 	}
-	content := fmt.Sprintf(`server = "%[1]s"
+	content := fmt.Sprintf(`server = "%s"`, server)
+	for _, mirrorURL := range mirrorURLs {
+		content = fmt.Sprintf(`%[1]s
 
 [host."%[3]s"]
   capabilities = ["pull", "resolve"]
 [host."%[3]s".header]
   %[4]s = ["%[2]s"]
-  %[5]s = ["true"]`, server, registryURL.String(), mirrorURL.String(), registry.RegistryHeader, registry.MirrorHeader)
+  %[5]s = ["true"]`, content, registryURL.String(), mirrorURL.String(), registry.RegistryHeader, registry.MirrorHeader)
+	}
 	return content
 }
 

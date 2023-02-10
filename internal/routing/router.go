@@ -50,6 +50,7 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, err
 		return nil, fmt.Errorf("could not create host: %w", err)
 	}
 	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().Pretty())
+	log.Info("starting p2p router", "id", self)
 	err = b.Run(ctx, self)
 	if err != nil {
 		return nil, err

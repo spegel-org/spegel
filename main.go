@@ -28,11 +28,12 @@ import (
 )
 
 type arguments struct {
-	MirrorRegistries             []url.URL `arg:"--mirror-registries,required" help:"list of registries to mirror."`
+	Registries                   []url.URL `arg:"--registries,required" help:"registries that are configured to be mirrored."`
+	MirrorRegistries             []url.URL `arg:"--mirror-registries,required" help:"registries that are configured to act as mirrors."`
 	ImageFilter                  string    `arg:"--image-filter" help:"inclusive image name filter."`
-	RegistryAddr                 string    `arg:"--registry-addr" default:":5000" help:"address to server image registry."`
-	RouterAddr                   string    `arg:"--router-addr" default:":5001" help:"address to serve router."`
-	MetricsAddr                  string    `arg:"--metrics-addr" default:":9090" help:"address to serve metrics."`
+	RegistryAddr                 string    `arg:"--registry-addr,required" help:"address to server image registry."`
+	RouterAddr                   string    `arg:"--router-addr,required" help:"address to serve router."`
+	MetricsAddr                  string    `arg:"--metrics-addr,required" help:"address to serve metrics."`
 	ContainerdSock               string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string    `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
 	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
@@ -77,6 +78,24 @@ func run(log logr.Logger, args *arguments) error {
 	defer cancel()
 	g, ctx := errgroup.WithContext(ctx)
 
+	// It is fine to immediatly write mirror configuration because it should fallback to another nodes Spegel instance.
+	fs := afero.NewOsFs()
+	if args.ContainerdMirrorAdd {
+		err := mirror.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries)
+		if err != nil {
+			return err
+		}
+	}
+	if args.ContainerdMirrorRemove {
+		defer func() {
+			err := mirror.RemoveMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries)
+			if err != nil {
+				// TODO: Append remove error to removed error.
+				log.Error(err, "failed to remove mirror configuration")
+			}
+		}()
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	srv := &http.Server{
@@ -120,20 +139,6 @@ func run(log logr.Logger, args *arguments) error {
 		<-ctx.Done()
 		return reg.Shutdown()
 	})
-
-	if args.ContainerdMirrorAdd {
-		fs := afero.NewOsFs()
-		defer func() {
-			err := mirror.RemoveMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.MirrorRegistries)
-			if err != nil {
-				log.Error(err, "failed to remove mirror configuration")
-			}
-		}()
-		err := mirror.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.RegistryAddr, args.MirrorRegistries)
-		if err != nil {
-			return err
-		}
-	}
 
 	log.Info("running registry", "addr", args.RegistryAddr)
 	err = g.Wait()

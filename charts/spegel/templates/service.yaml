@@ -12,3 +12,22 @@ spec:
       port: {{ .Values.service.metrics.port }}
       targetPort: metrics
       protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "spegel.fullname" . }}-registry
+  labels:
+    {{- include "spegel.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  selector:
+    {{- include "spegel.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: registry
+      port: {{ .Values.service.registry.port }}
+      targetPort: registry
+      nodePort: {{ .Values.service.registry.nodePort }}
+      protocol: TCP
+  topologyKeys:
+    - "kubernetes.io/hostname"
