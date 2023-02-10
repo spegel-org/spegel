@@ -9,6 +9,7 @@ import (
 const (
 	RegistryHeader = "X-Spegel-Registry"
 	MirrorHeader   = "X-Spegel-Mirror"
+	ExternalHeader = "X-Spegel-External"
 )
 
 // getRemoteRegistry returns the target registry passed in the header.
@@ -28,4 +29,10 @@ func getRemoteRegistry(header http.Header) (string, error) {
 func isMirrorRequest(header http.Header) bool {
 	mirror := header.Get(MirrorHeader)
 	return mirror == "true"
+}
+
+// isExternalRequest returns true if external header is present.
+func isExternalRequest(header http.Header) bool {
+	external := header.Get(ExternalHeader)
+	return external == "true"
 }

@@ -22,7 +22,7 @@ const KeyTTL = 10 * time.Minute
 
 type Router interface {
 	Close() error
-	Resolve(ctx context.Context, key string) (string, bool, error)
+	Resolve(ctx context.Context, key string, allowSelf bool) (string, bool, error)
 	Advertise(ctx context.Context, keys []string) error
 }
 
@@ -112,7 +112,7 @@ func (r *P2PRouter) Close() error {
 	return r.host.Close()
 }
 
-func (r *P2PRouter) Resolve(ctx context.Context, key string) (string, bool, error) {
+func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool) (string, bool, error) {
 	logr.FromContextOrDiscard(ctx).V(10).Info("resolving key", "host", r.host.ID().Pretty(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
@@ -130,8 +130,8 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string) (string, bool, erro
 			if !ok {
 				return "", false, fmt.Errorf("key not found %s", key)
 			}
-			// Ignore responses that come from self.
-			if info.ID == r.host.ID() {
+			// Ignore responses that come from self if not allowed.
+			if !allowSelf && info.ID == r.host.ID() {
 				continue
 			}
 			for _, addr := range info.Addrs {
