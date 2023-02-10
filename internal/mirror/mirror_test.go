@@ -44,7 +44,8 @@ func TestHostFileContentMultipleMirrors(t *testing.T) {
   capabilities = ["pull", "resolve"]
 [host."http://127.0.0.1:5001".header]
   X-Spegel-Registry = ["https://example.com"]
-  X-Spegel-Mirror = ["true"]`
+  X-Spegel-Mirror = ["true"]
+  X-Spegel-External = ["true"]`
 	require.Equal(t, expected, content)
 }
 

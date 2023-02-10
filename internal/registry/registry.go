@@ -20,11 +20,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/valyala/fastjson"
 	pkggin "github.com/xenitab/pkg/gin"
 
 	"github.com/xenitab/spegel/internal/routing"
 )
+
+var externalMirrorRequests = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "spegel_external_mirror_requests_total",
+	Help: "Total number of external mirror requests.",
+})
 
 type Registry struct {
 	srv *http.Server
@@ -168,13 +175,23 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 		return
 	}
 
+	// If digest is emtpy it means the ref is a tag
 	key := ref.Digest().String()
 	if key == "" {
 		key = ref.String()
 	}
+
+	// We should allow resolving to ourself if the mirror request is external.
+	isExternal := isExternalRequest(c.Request.Header)
+	if isExternal {
+		externalMirrorRequests.Inc()
+		r.log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
+	}
+
+	// Resolve node with the requested key
 	timeoutCtx, cancel := context.WithTimeout(c, 5*time.Second)
 	defer cancel()
-	ip, ok, err := r.router.Resolve(timeoutCtx, key)
+	ip, ok, err := r.router.Resolve(timeoutCtx, key, isExternal)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -185,6 +202,8 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find node with ref: %s", ref.String()))
 		return
 	}
+
+	// Proxy the request to another registry
 	url, err := url.Parse(fmt.Sprintf("http://%s:%s", ip, r.registryPort))
 	if err != nil {
 		//nolint:errcheck // ignore
