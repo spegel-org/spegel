@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#18](https://github.com/XenitAB/spegel/pull/18) Add support to use Spegel instance on another node.
+
 ### Changed
 
 ### Deprecated

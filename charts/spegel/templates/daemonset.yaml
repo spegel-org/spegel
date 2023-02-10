@@ -48,22 +48,25 @@ spec:
           - --image-filter
           - {{ . | quote }}
           {{- end }}
-          {{- with .Values.spegel.mirrorRegistries }}
-          - --mirror-registries
+          {{- with .Values.spegel.registries }}
+          - --registries
           {{- range . }}
           - {{ . | quote }}
           {{- end }}    
           {{- end }}
-        env:
-          - name: POD_IP
-            valueFrom:
-              fieldRef:
-                fieldPath: status.podIP
+          - --mirror-registries
+          - http://127.0.0.1:{{ .Values.service.registry.hostPort }}
+          - http://127.0.0.1:{{ .Values.service.registry.nodePort }}
+          {{- with .Values.spegel.additionalMirrorRegistries }}
+          {{- range . }}
+          - {{ . | quote }}
+          {{- end }}    
+          {{- end }}
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
-            hostPort: {{ .Values.service.registry.port }}
-            hostIP: "127.0.0.1"
+            hostIP: "127.0.0.1"    
+            hostPort: {{ .Values.service.registry.hostPort }}
             protocol: TCP
           - name: router
             containerPort: {{ .Values.service.router.port }}

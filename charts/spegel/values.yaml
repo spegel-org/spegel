@@ -30,6 +30,8 @@ securityContext: {}
 service:
   registry:
     port: 5000
+    hostPort: 30020
+    nodePort: 30021
   router:
     port: 5001
   metrics:
@@ -59,16 +61,17 @@ serviceMonitor:
   enabled: false
 
 spegel:
-  mirrorRegistries:
+  registries:
     - https://docker.io
     - https://ghcr.io
     - https://quay.io
     - https://mcr.microsoft.com
     - https://public.ecr.aws
+  extraMirrorRegistries: []
   imageFilter: ""
   containerdSock: "/run/containerd/containerd.sock"
   containerdNamespace: "k8s.io"
   containerdRegistryConfigPath: "/etc/containerd/certs.d"
   containerdMirrorAdd: true
-  containerdMirrorRemove: true
+  containerdMirrorRemove: false
   kubeconfigPath: ""
