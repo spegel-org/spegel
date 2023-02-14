@@ -19,6 +19,10 @@ metadata:
   name: {{ include "spegel.fullname" . }}-registry
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
+  {{- if .Values.service.registry.topologyAwareHintsEnabled }}
+  annotations:
+    service.kubernetes.io/topology-aware-hints: auto
+  {{- end }}
 spec:
   type: NodePort
   selector:
@@ -29,5 +33,3 @@ spec:
       targetPort: registry
       nodePort: {{ .Values.service.registry.nodePort }}
       protocol: TCP
-  topologyKeys:
-    - "kubernetes.io/hostname"

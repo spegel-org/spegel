@@ -32,6 +32,7 @@ service:
     port: 5000
     hostPort: 30020
     nodePort: 30021
+    topologyAwareHintsEnabled: true
   router:
     port: 5001
   metrics:
