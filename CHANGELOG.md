@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## v0.0.4
+
+### Fixed
+
+- [#26](https://github.com/XenitAB/spegel/pull/26) Replace topology keys with optional topology aware hints.
+
 ## v0.0.3
 
 ### Added 
