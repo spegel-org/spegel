@@ -1,0 +1,15 @@
+# Spegel
+
+{{ template "chart.description" . }}
+
+## Installation
+
+Make sure that you have read and understood the [prerequisites](../../README.md) before proceeding the with the installation.
+
+Install Spegel with the Helm Chart.
+
+```sh
+helm upgrade --create-namespace --install --version v0.0.4 spegel oci://ghcr.io/xenitab/helm-charts/spegel
+```
+
+{{ template "chart.valuesSection" . }}

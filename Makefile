@@ -49,3 +49,9 @@ e2e: docker-build
 
 	# Delete cluster
 	kind delete cluster
+
+helm-docs: tools
+	cd ./charts/spegel && helm-docs
+
+tools:
+	GO111MODULE=on go install github.com/norwoodj/helm-docs/cmd/helm-docs
