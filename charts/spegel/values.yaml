@@ -1,24 +1,33 @@
 image:
+  # -- Image repository.
   repository: ghcr.io/xenitab/spegel
+  # -- Image Pull Policy.
   pullPolicy: IfNotPresent
+  # -- Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
+# -- Image Pull Secrets
 imagePullSecrets: []
+# -- Overrides the name of the chart.
 nameOverride: ""
+# -- Overrides the full name of the chart.
 fullnameOverride: ""
 
 serviceAccount:
-  # Annotations to add to the service account
+  # -- Annotations to add to the service account
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+  # -- The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template.
   name: ""
 
+# -- Annotations to add to the pod.
 podAnnotations: {}
 
+# -- Security context for the pod.
 podSecurityContext: {}
   # fsGroup: 2000
 
+# -- Security context for the Spegel container.
 securityContext: {}
   # capabilities:
   #   drop:
@@ -29,15 +38,22 @@ securityContext: {}
 
 service:
   registry:
+    # -- Port to expose the registry via the service.
     port: 5000
-    hostPort: 30020
+    # -- Node port to expose the registry via the service.
     nodePort: 30021
+    # -- Local host port to expose the registry.
+    hostPort: 30020
+    # -- If true adds topology aware hints annotation to node port service.
     topologyAwareHintsEnabled: true
   router:
+    # -- Port to expose the router via the service.
     port: 5001
   metrics:
+    # -- Port to expose the metrics via the service.
     port: 9090
 
+# -- Resource requests and limits for the Spegel container.
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
@@ -50,29 +66,42 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
+# -- Node selector for pod assignment.
 nodeSelector: {}
 
+# -- Tolerations for pod assignment.
 tolerations:
   - operator: Exists
     effect: NoSchedule
 
+# -- Affinity settings for pod assignment.
 affinity: {}
 
 serviceMonitor:
+  # -- If true creates a Prometheus Service Monitor.
   enabled: false
 
 spegel:
+  # -- Registries for which mirror configuration will be created.
   registries:
     - https://docker.io
     - https://ghcr.io
     - https://quay.io
     - https://mcr.microsoft.com
     - https://public.ecr.aws
+  # -- Extra target mirror registries other than Spegel.
   extraMirrorRegistries: []
+  # -- Inclusive mirror filter, any image that does not match the filter will not be advertised by Spegel.
   imageFilter: ""
+  # -- Path to Containerd socket.
   containerdSock: "/run/containerd/containerd.sock"
+  # -- Containerd namespace where images are stored.
   containerdNamespace: "k8s.io"
+  # -- Path to Containerd mirror configuration.
   containerdRegistryConfigPath: "/etc/containerd/certs.d"
+  # -- If true Spegel will add mirror configuration on startup.
   containerdMirrorAdd: true
+  # -- If true Spegel will remove the mirror configuration on shutdown.
   containerdMirrorRemove: false
+  # -- Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC.
   kubeconfigPath: ""

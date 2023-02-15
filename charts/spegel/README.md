@@ -1,0 +1,49 @@
+# Spegel
+
+Stateless cluster local OCI registry mirror.
+
+## Installation
+
+Make sure that you have read and understood the [prerequisites](../../README.md) before proceeding the with the installation.
+
+Install Spegel with the Helm Chart.
+
+```sh
+helm upgrade --create-namespace --install --version v0.0.4 spegel oci://ghcr.io/xenitab/helm-charts/spegel
+```
+
+## Values
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| affinity | object | `{}` | Affinity settings for pod assignment. |
+| fullnameOverride | string | `""` | Overrides the full name of the chart. |
+| image.pullPolicy | string | `"IfNotPresent"` | Image Pull Policy. |
+| image.repository | string | `"ghcr.io/xenitab/spegel"` | Image repository. |
+| image.tag | string | `""` | Overrides the image tag whose default is the chart appVersion. |
+| imagePullSecrets | list | `[]` | Image Pull Secrets |
+| nameOverride | string | `""` | Overrides the name of the chart. |
+| nodeSelector | object | `{}` | Node selector for pod assignment. |
+| podAnnotations | object | `{}` | Annotations to add to the pod. |
+| podSecurityContext | object | `{}` | Security context for the pod. |
+| resources | object | `{}` | Resource requests and limits for the Spegel container. |
+| securityContext | object | `{}` | Security context for the Spegel container. |
+| service.metrics.port | int | `9090` | Port to expose the metrics via the service. |
+| service.registry.hostPort | int | `30020` | Local host port to expose the registry. |
+| service.registry.nodePort | int | `30021` | Node port to expose the registry via the service. |
+| service.registry.port | int | `5000` | Port to expose the registry via the service. |
+| service.registry.topologyAwareHintsEnabled | bool | `true` | If true adds topology aware hints annotation to node port service. |
+| service.router.port | int | `5001` | Port to expose the router via the service. |
+| serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
+| serviceAccount.name | string | `""` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template. |
+| serviceMonitor.enabled | bool | `false` | If true creates a Prometheus Service Monitor. |
+| spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration on startup. |
+| spegel.containerdMirrorRemove | bool | `false` | If true Spegel will remove the mirror configuration on shutdown. |
+| spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
+| spegel.containerdRegistryConfigPath | string | `"/etc/containerd/certs.d"` | Path to Containerd mirror configuration. |
+| spegel.containerdSock | string | `"/run/containerd/containerd.sock"` | Path to Containerd socket. |
+| spegel.extraMirrorRegistries | list | `[]` | Extra target mirror registries other than Spegel. |
+| spegel.imageFilter | string | `""` | Inclusive mirror filter, any image that does not match the filter will not be advertised by Spegel. |
+| spegel.kubeconfigPath | string | `""` | Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC. |
+| spegel.registries | list | `["https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws"]` | Registries for which mirror configuration will be created. |
+| tolerations | list | `[{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
