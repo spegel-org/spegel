@@ -26,6 +26,7 @@ helm upgrade --create-namespace --install --version v0.0.4 spegel oci://ghcr.io/
 | nodeSelector | object | `{}` | Node selector for pod assignment. |
 | podAnnotations | object | `{}` | Annotations to add to the pod. |
 | podSecurityContext | object | `{}` | Security context for the pod. |
+| priorityClassName | string | `"system-node-critical"` | Priority class name to use for the pod. |
 | resources | object | `{}` | Resource requests and limits for the Spegel container. |
 | securityContext | object | `{}` | Security context for the Spegel container. |
 | service.metrics.port | int | `9090` | Port to expose the metrics via the service. |

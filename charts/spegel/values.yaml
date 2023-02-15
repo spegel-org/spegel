@@ -81,6 +81,9 @@ serviceMonitor:
   # -- If true creates a Prometheus Service Monitor.
   enabled: false
 
+# -- Priority class name to use for the pod.
+priorityClassName: system-node-critical
+
 spegel:
   # -- Registries for which mirror configuration will be created.
   registries:

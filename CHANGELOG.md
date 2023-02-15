@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#29](https://github.com/XenitAB/spegel/pull/29) Make priority class name configurable and set a default value.
+
 ### Changed
 
 ### Deprecated
