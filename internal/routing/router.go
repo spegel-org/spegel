@@ -85,7 +85,7 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, err
 			return nil, err
 		}
 		if addrInfo.ID == host.ID() {
-			log.Info("leader is self skipping connection to bootstrap node")
+			log.Info("leader is self, skipping connection to bootstrap node")
 			break
 		}
 		log.Info("attempting to connect to bootstrap node", "id", addrInfo.ID)
@@ -113,7 +113,7 @@ func (r *P2PRouter) Close() error {
 }
 
 func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool) (string, bool, error) {
-	logr.FromContextOrDiscard(ctx).V(10).Info("resolving key", "host", r.host.ID().Pretty(), "key", key)
+	logr.FromContextOrDiscard(ctx).V(8).Info("resolving key", "host", r.host.ID().Pretty(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
 		return "", false, err
@@ -154,7 +154,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool) (st
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
-	logr.FromContextOrDiscard(ctx).V(10).Info("advertising keys", "host", r.host.ID().Pretty(), "keys", keys)
+	logr.FromContextOrDiscard(ctx).V(8).Info("advertising keys", "host", r.host.ID().Pretty(), "keys", keys)
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {

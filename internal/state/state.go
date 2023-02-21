@@ -65,7 +65,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 		case <-ctx.Done():
 			return nil
 		case <-ticker:
-			log.Info("running scheduled image state update")
+			log.V(1).Info("running scheduled image state update")
 			err := all(ctx, containerdClient, router, imageFilters)
 			if err != nil {
 				return fmt.Errorf("failed to update all images: %w", err)

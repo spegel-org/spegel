@@ -210,7 +210,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
-	r.log.V(5).Info("forwarding request", "path", c.Request.URL.Path, "url", url.String())
+	r.log.V(3).Info("forwarding request", "path", c.Request.URL.Path, "destination", url.String())
 	proxy := httputil.NewSingleHostReverseProxy(url)
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
