@@ -229,13 +229,7 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 		}
 		dgst = image.Target.Digest
 	}
-	info, err := r.containerdClient.ContentStore().Info(c, dgst)
-	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
-		return
-	}
-	b, err := content.ReadBlob(c, r.containerdClient.ContentStore(), ocispec.Descriptor{Digest: info.Digest})
+	b, err := content.ReadBlob(c, r.containerdClient.ContentStore(), ocispec.Descriptor{Digest: dgst})
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -248,8 +242,8 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 		return
 	}
 	c.Header("Content-Type", mediaType)
-	c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
-	c.Header("Docker-Content-Digest", info.Digest.String())
+	c.Header("Content-Length", strconv.FormatInt(int64(len(b)), 10))
+	c.Header("Docker-Content-Digest", dgst.String())
 	if c.Request.Method == "HEAD" {
 		c.Status(http.StatusOK)
 		return
