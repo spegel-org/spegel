@@ -1,0 +1,2 @@
+commonNodeSelector:
+  policy: "true"

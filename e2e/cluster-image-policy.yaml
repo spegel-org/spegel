@@ -1,0 +1,12 @@
+apiVersion: policy.sigstore.dev/v1alpha1
+kind: ClusterImagePolicy
+metadata:
+  name: flux-system
+spec:
+  images:
+  - glob: "ghcr.io/fluxcd/**"
+  authorities:
+  - keyless:
+      url: https://fulcio.example.com
+    source:
+    - oci: "ghcr.io/fluxcd/notification-controller"

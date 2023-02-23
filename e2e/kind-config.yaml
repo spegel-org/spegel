@@ -24,3 +24,6 @@ nodes:
   - role: worker
     labels:
       test: true
+  - role: worker
+    labels:
+      policy: true
