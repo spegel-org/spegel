@@ -32,7 +32,7 @@ type P2PRouter struct {
 }
 
 func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, error) {
-	log := logr.FromContextOrDiscard(ctx)
+	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 
 	h, p, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -51,17 +51,21 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, err
 	}
 	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().Pretty())
 	log.Info("starting p2p router", "id", self)
+
 	err = b.Run(ctx, self)
 	if err != nil {
 		return nil, err
 	}
+
 	dhtOpts := []dht.Option{dht.Mode(dht.ModeServer), dht.ProtocolPrefix("/spegel"), dht.DisableValues(), dht.MaxRecordAge(KeyTTL)}
 	bootstrapPeerOpt := dht.BootstrapPeersFunc(func() []peer.AddrInfo {
 		addrInfo, err := b.GetAddress()
 		if err != nil {
 			log.Error(err, "could not get bootstrap addresses")
+			return nil
 		}
 		if addrInfo.ID == host.ID() {
+			log.Info("leader is self skipping connection to bootstrap node")
 			return nil
 		}
 		return []peer.AddrInfo{*addrInfo}
@@ -76,30 +80,17 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, err
 	}
 	rd := routing.NewRoutingDiscovery(kdht)
 
-	// TODO: Check if bootstrap func would be enough to solve initial joining.
-	// Connect to bootstrap node.
-	retryCount := 0
+	retry := 0
 	for {
-		addrInfo, err := b.GetAddress()
-		if err != nil {
-			return nil, err
-		}
-		if addrInfo.ID == host.ID() {
-			log.Info("leader is self skipping connection to bootstrap node")
+		log.Info("waiting for routing table to be populated with peers")
+		if kdht.RoutingTable().Size() > 0 {
 			break
 		}
-		log.Info("attempting to connect to bootstrap node", "id", addrInfo.ID)
-		err = host.Connect(ctx, *addrInfo)
-		if err != nil && retryCount == 10 {
-			return nil, err
+		retry = retry + 1
+		if retry == 30 {
+			return nil, fmt.Errorf("timed out waiting for routing table to populate with peers")
 		}
-		if err != nil {
-			log.Error(err, "could not connect to bootstrap node", "id", addrInfo.ID)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		log.Info("established connection with bootstrap node", "id", addrInfo.ID)
-		break
+		time.Sleep(1 * time.Second)
 	}
 
 	return &P2PRouter{
