@@ -101,14 +101,14 @@ func (r *RegistryHandler) readyHandler(c *gin.Context) {
 // https://github.com/containerd/containerd/blob/main/docs/garbage-collection.md
 func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	// Only deal with GET and HEAD requests.
-	if !(c.Request.Method == "GET" || c.Request.Method == "HEAD") {
+	if !(c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead) {
 		c.Status(http.StatusNotFound)
 		return
 	}
 
 	// Quickly return 200 for /v2/ to indicate that registry supports v2.
 	if path.Clean(c.Request.URL.Path) == "/v2" {
-		if c.Request.Method != "GET" {
+		if c.Request.Method != http.MethodGet {
 			c.Status(http.StatusNotFound)
 			return
 		}
@@ -124,7 +124,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 		return
 	}
 
-	// Requests coming from localhost are meant to be mirrored.
+	// Request with mirror header are proxied.
 	if isMirrorRequest(c.Request.Header) {
 		r.handleMirror(c, remoteRegistry)
 		return
@@ -218,8 +218,8 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	c.Set("handler", "manifest")
 
+	// If reference is not a digest we need to resolve it.
 	dgst := ref.Digest()
-	// Reference is tag so need to resolve digest
 	if dgst == "" {
 		image, err := r.containerdClient.ImageService().Get(c, ref.String())
 		if err != nil {
@@ -229,6 +229,7 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 		}
 		dgst = image.Target.Digest
 	}
+
 	b, err := content.ReadBlob(c, r.containerdClient.ContentStore(), ocispec.Descriptor{Digest: dgst})
 	if err != nil {
 		//nolint:errcheck // ignore
@@ -244,7 +245,7 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	c.Header("Content-Type", mediaType)
 	c.Header("Content-Length", strconv.FormatInt(int64(len(b)), 10))
 	c.Header("Docker-Content-Digest", dgst.String())
-	if c.Request.Method == "HEAD" {
+	if c.Request.Method == http.MethodHead {
 		c.Status(http.StatusOK)
 		return
 	}
@@ -269,7 +270,7 @@ func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
 	c.Header("Content-Type", "application/octet-stream")
 	c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
 	c.Header("Docker-Content-Digest", ref.Digest().String())
-	if c.Request.Method == "HEAD" {
+	if c.Request.Method == http.MethodHead {
 		c.Status(http.StatusOK)
 		return
 	}
