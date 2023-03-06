@@ -41,7 +41,7 @@ version = 2
 
 ## Installation
 
-The easiest method to install Spegel is with Helm. 
+The easiest method to deploy Spegel is with Helm. 
 
 ```shell
 helm upgrade --create-namespace --namespace spegel --install --version v0.0.4 spegel oci://ghcr.io/xenitab/helm-charts/spegel
