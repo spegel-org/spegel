@@ -44,7 +44,7 @@ version = 2
 The easiest method to install Spegel is with Helm. 
 
 ```shell
-helm upgrade --create-namespace --install --version v0.0.4 spegel oci://ghcr.io/xenitab/helm-charts/spegel
+helm upgrade --create-namespace --namespace spegel --install --version v0.0.4 spegel oci://ghcr.io/xenitab/helm-charts/spegel
 ```
 
 Refer to the [Helm Chart](./charts/spegel) for detailed configuration documentation.
