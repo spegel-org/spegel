@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -9,7 +10,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/spf13/afero"
 	"github.com/xenitab/spegel/internal/registry"
-	"go.uber.org/multierr"
 )
 
 // AddMirrorConfiguration sets up registry configuration to direct pulls through mirror.
@@ -48,7 +48,7 @@ func RemoveMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath stri
 		}
 		logr.FromContextOrDiscard(ctx).Info("removed containerd mirror configuration", "registry", registryURL.String(), "path", dp)
 	}
-	return multierr.Combine(errs...)
+	return errors.Join(errs...)
 }
 
 func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
@@ -80,19 +80,20 @@ func isDockerHub(registryURL url.URL) bool {
 }
 
 func validate(urls []url.URL) error {
+	errs := []error{}
 	for _, u := range urls {
 		if u.Scheme != "http" && u.Scheme != "https" {
-			return fmt.Errorf("invalid registry url scheme must be http or https")
+			errs = append(errs, fmt.Errorf("invalid registry url scheme must be http or https: %s", u.String()))
 		}
 		if u.Path != "" {
-			return fmt.Errorf("invalid registry url path has to be empty")
+			errs = append(errs, fmt.Errorf("invalid registry url path has to be empty: %s", u.String()))
 		}
 		if len(u.Query()) != 0 {
-			return fmt.Errorf("invalid registry url query has to be empty")
+			errs = append(errs, fmt.Errorf("invalid registry url query has to be empty: %s", u.String()))
 		}
 		if u.User != nil {
-			return fmt.Errorf("invalid registry url user has to be empty")
+			errs = append(errs, fmt.Errorf("invalid registry url user has to be empty: %s", u.String()))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
