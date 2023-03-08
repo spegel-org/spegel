@@ -94,19 +94,19 @@ func TestInvalidMirrorURL(t *testing.T) {
 
 	registries := stringListToUrlList(t, []string{"ftp://docker.io"})
 	err := AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
-	require.EqualError(t, err, "invalid registry url scheme must be http or https")
+	require.EqualError(t, err, "invalid registry url scheme must be http or https: ftp://docker.io")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io/foo/bar"})
 	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
-	require.EqualError(t, err, "invalid registry url path has to be empty")
+	require.EqualError(t, err, "invalid registry url path has to be empty: https://docker.io/foo/bar")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io?foo=bar"})
 	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
-	require.EqualError(t, err, "invalid registry url query has to be empty")
+	require.EqualError(t, err, "invalid registry url query has to be empty: https://docker.io?foo=bar")
 
 	registries = stringListToUrlList(t, []string{"https://foo@docker.io"})
 	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
-	require.EqualError(t, err, "invalid registry url user has to be empty")
+	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
 
 }
 
