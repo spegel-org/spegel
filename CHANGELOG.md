@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#49](https://github.com/XenitAB/spegel/pull/49) Add registry.k8s.io to registry mirror list.
+
 ### Deprecated
 
 ### Removed

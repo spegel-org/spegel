@@ -85,5 +85,5 @@ spec:
 | spegel.extraMirrorRegistries | list | `[]` | Extra target mirror registries other than Spegel. |
 | spegel.imageFilter | string | `""` | Inclusive mirror filter, any image that does not match the filter will not be advertised by Spegel. |
 | spegel.kubeconfigPath | string | `""` | Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC. |
-| spegel.registries | list | `["https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws"]` | Registries for which mirror configuration will be created. |
+| spegel.registries | list | `["https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://registry.k8s.io"]` | Registries for which mirror configuration will be created. |
 | tolerations | list | `[{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |

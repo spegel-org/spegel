@@ -92,6 +92,7 @@ spegel:
     - https://quay.io
     - https://mcr.microsoft.com
     - https://public.ecr.aws
+    - https://registry.k8s.io
   # -- Extra target mirror registries other than Spegel.
   extraMirrorRegistries: []
   # -- Inclusive mirror filter, any image that does not match the filter will not be advertised by Spegel.
