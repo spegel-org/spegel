@@ -125,7 +125,7 @@ func run(log logr.Logger, args *arguments) error {
 		return router.Close()
 	})
 	g.Go(func() error {
-		return state.Track(ctx, containerdClient, router, args.ImageFilter)
+		return state.Track(ctx, containerdClient, router, args.Registries, args.ImageFilter)
 	})
 
 	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, containerdClient, router)
