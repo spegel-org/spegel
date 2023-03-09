@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -40,7 +41,7 @@ var advertisedKeys = promauto.NewGauge(prometheus.GaugeOpts{
 })
 
 // TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
-func Track(ctx context.Context, containerdClient *containerd.Client, router routing.Router, imageFilter string) error {
+func Track(ctx context.Context, containerdClient *containerd.Client, router routing.Router, registries []url.URL, imageFilter string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
 	imageFilters := []string{}
@@ -49,6 +50,11 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 		eventFilters = append(eventFilters, fmt.Sprintf(`event.name~="%s"`, imageFilter))
 		imageFilters = append(imageFilters, fmt.Sprintf(`name~=%s`, imageFilter))
 	}
+	for _, registry := range registries {
+		eventFilters = append(eventFilters, fmt.Sprintf(`event.name~="%s"`, registry.Host))
+		imageFilters = append(imageFilters, fmt.Sprintf(`name~=%s`, registry.Host))
+	}
+	log.Info("tracking images with filters", "event", eventFilters, "image", imageFilters)
 
 	// Subscribe to image events before doing the initial sync to catch any changes which may occur inbetween.
 	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilters...)
