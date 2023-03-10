@@ -121,18 +121,15 @@ func all(ctx context.Context, containerdClient *containerd.Client, router routin
 }
 
 func update(ctx context.Context, containerdClient *containerd.Client, router routing.Router, img containerd.Image, skipDigests bool) (int, error) {
-	keys := []string{}
-
-	// Image names can be invalid image references as there is no check run when re-tagging images.
-	// We should not error when this occurs, but we should skip these images as they are impossible to pull.
+	// Parse image reference
 	ref, err := reference.Parse(img.Name())
 	if err != nil {
-		logr.FromContextOrDiscard(ctx).V(10).Info("ignoring non pullable reference", "name", img.Name)
-		return 0, nil
+		return 0, err
 	}
 
 	// Images can be referenced with both tag and digest. The image name is however only needed when resolving a tag to a digest.
 	// For this reason it is only of interest to advertise image names with only the tag.
+	keys := []string{}
 	tag, _, _ := strings.Cut(ref.Object, "@")
 	if tag != "" {
 		ref.Object = tag
@@ -156,14 +153,14 @@ func update(ctx context.Context, containerdClient *containerd.Client, router rou
 }
 
 func getAllImageDigests(ctx context.Context, containerdClient *containerd.Client, img containerd.Image) ([]string, error) {
-	keys := []string{}
-	keys = append(keys, img.Target().Digest.String())
-
-	// Add image config and image layers
 	manifest, err := images.Manifest(ctx, img.ContentStore(), img.Target(), img.Platform())
 	if err != nil {
 		return nil, err
 	}
+
+	// Add image digest, config and image layers
+	keys := []string{}
+	keys = append(keys, img.Target().Digest.String())
 	keys = append(keys, manifest.Config.Digest.String())
 	for _, layer := range manifest.Layers {
 		keys = append(keys, layer.Digest.String())

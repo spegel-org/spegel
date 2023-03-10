@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#51](https://github.com/XenitAB/spegel/pull/51) Filter tracked images to only included mirrored registries.
+- [#52](https://github.com/XenitAB/spegel/pull/52) Return error when image reference is not valid.
 
 ### Security
 
