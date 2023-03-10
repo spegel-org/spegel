@@ -31,15 +31,15 @@ const (
 	EventTopicDelete = "/images/delete"
 )
 
-var advertisedImages = promauto.NewGauge(prometheus.GaugeOpts{
+var advertisedImages = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "spegel_advertised_images",
 	Help: "Number of images advertised to be availible.",
-})
+}, []string{"registry"})
 
-var advertisedKeys = promauto.NewGauge(prometheus.GaugeOpts{
+var advertisedKeys = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "spegel_advertised_keys",
 	Help: "Number of keys advertised to be availible.",
-})
+}, []string{"registry"})
 
 // TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
 func Track(ctx context.Context, containerdClient *containerd.Client, router routing.Router, registries []url.URL, imageFilter string) error {
@@ -78,7 +78,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 			if err != nil {
 				return err
 			}
-			_, err = update(ctx, containerdClient, router, img, false)
+			_, _, err = update(ctx, containerdClient, router, img, false)
 			if err != nil {
 				return err
 			}
@@ -93,31 +93,27 @@ func all(ctx context.Context, containerdClient *containerd.Client, router routin
 	if err != nil {
 		return err
 	}
-	imgTotal := 0
-	keyTotal := 0
+	advertisedImages.Reset()
+	advertisedKeys.Reset()
 	targets := map[string]interface{}{}
 	for _, img := range imgs {
 		_, skipDigests := targets[img.Target().Digest.String()]
-		addKeyTotal, err := update(ctx, containerdClient, router, img, skipDigests)
+		registry, keyTotal, err := update(ctx, containerdClient, router, img, skipDigests)
 		if err != nil {
 			return err
 		}
 		targets[img.Target().Digest.String()] = nil
-		if addKeyTotal > 0 {
-			imgTotal += 1
-			keyTotal += addKeyTotal
-		}
+		advertisedImages.WithLabelValues(registry).Add(1)
+		advertisedKeys.WithLabelValues(registry).Add(float64(keyTotal))
 	}
-	advertisedImages.Set(float64(imgTotal))
-	advertisedKeys.Set(float64(keyTotal))
 	return nil
 }
 
-func update(ctx context.Context, containerdClient *containerd.Client, router routing.Router, img containerd.Image, skipDigests bool) (int, error) {
+func update(ctx context.Context, containerdClient *containerd.Client, router routing.Router, img containerd.Image, skipDigests bool) (string, int, error) {
 	// Parse image reference
 	ref, err := reference.Parse(img.Name())
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
 
 	// Images can be referenced with both tag and digest. The image name is however only needed when resolving a tag to a digest.
@@ -132,17 +128,17 @@ func update(ctx context.Context, containerdClient *containerd.Client, router rou
 	if !skipDigests {
 		dgsts, err := getAllImageDigests(ctx, containerdClient, img)
 		if err != nil {
-			return 0, err
+			return "", 0, err
 		}
 		keys = append(keys, dgsts...)
 	}
 
 	err = router.Advertise(ctx, keys)
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
 
-	return len(keys), nil
+	return ref.Hostname(), len(keys), nil
 }
 
 func getAllImageDigests(ctx context.Context, containerdClient *containerd.Client, img containerd.Image) ([]string, error) {
