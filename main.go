@@ -62,7 +62,7 @@ func main() {
 	log.Info("gracefully shutdown")
 }
 
-func run(log logr.Logger, args *arguments) error {
+func run(log logr.Logger, args *arguments) (err error) {
 	cs, err := pkgkubernetes.GetKubernetesClientset(args.KubeconfigPath)
 	if err != nil {
 		return err
@@ -71,7 +71,9 @@ func run(log logr.Logger, args *arguments) error {
 	if err != nil {
 		return fmt.Errorf("could not create containerd client: %w", err)
 	}
-	defer containerdClient.Close()
+	defer func() {
+		err = errors.Join(err, containerdClient.Close())
+	}()
 
 	ctx := logr.NewContext(context.Background(), log)
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
@@ -88,11 +90,7 @@ func run(log logr.Logger, args *arguments) error {
 	}
 	if args.ContainerdMirrorRemove {
 		defer func() {
-			err := mirror.RemoveMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries)
-			if err != nil {
-				// TODO: Append remove error to removed error.
-				log.Error(err, "failed to remove mirror configuration")
-			}
+			err = errors.Join(err, mirror.RemoveMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries))
 		}()
 	}
 
