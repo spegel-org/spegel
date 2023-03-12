@@ -28,10 +28,13 @@ import (
 	"github.com/xenitab/spegel/internal/routing"
 )
 
-var externalMirrorRequests = promauto.NewCounter(prometheus.CounterOpts{
-	Name: "spegel_external_mirror_requests_total",
-	Help: "Total number of external mirror requests.",
-})
+var mirrorRequestsTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "spegel_mirror_requests_total",
+		Help: "Total number of mirror requests.",
+	},
+	[]string{"registry", "cache", "source"},
+)
 
 type Registry struct {
 	srv *http.Server
@@ -63,7 +66,7 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 		registryPort:     registryPort,
 	}
 	engine.GET("/healthz", registryHandler.readyHandler)
-	engine.Any("/v2/*params", registryHandler.registryHandler)
+	engine.Any("/v2/*params", metricsHandler, registryHandler.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: engine,
@@ -184,7 +187,6 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	// We should allow resolving to ourself if the mirror request is external.
 	isExternal := isExternalRequest(c.Request.Header)
 	if isExternal {
-		externalMirrorRequests.Inc()
 		r.log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
 	}
 
@@ -287,4 +289,28 @@ func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
 		return
 	}
 	c.Status(http.StatusOK)
+}
+
+func metricsHandler(c *gin.Context) {
+	c.Next()
+	handler, ok := c.Get("handler")
+	if !ok {
+		return
+	}
+	if handler != "mirror" {
+		return
+	}
+	remoteRegistry, err := getRemoteRegistry(c.Request.Header)
+	if err != nil {
+		return
+	}
+	sourceType := "internal"
+	if isExternalRequest(c.Request.Header) {
+		sourceType = "external"
+	}
+	cacheType := "hit"
+	if c.Writer.Status() != http.StatusOK {
+		cacheType = "miss"
+	}
+	mirrorRequestsTotal.WithLabelValues(remoteRegistry, cacheType, sourceType).Inc()
 }

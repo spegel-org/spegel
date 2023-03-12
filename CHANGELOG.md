@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#32](https://github.com/XenitAB/spegel/pull/32) Update Go to 1.20.
 - [#33](https://github.com/XenitAB/spegel/pull/33) Remove containerd info call when handling manifest request.
 - [#48](https://github.com/XenitAB/spegel/pull/48) Replace multierr with stdlib errors join.
+- [#54](https://github.com/XenitAB/spegel/pull/54) Refactor metrics and add documentation.
 
 ### Deprecated
 
