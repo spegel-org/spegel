@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#29](https://github.com/XenitAB/spegel/pull/29) Make priority class name configurable and set a default value.
 - [#49](https://github.com/XenitAB/spegel/pull/49) Add registry.k8s.io to registry mirror list.
+- [#56](https://github.com/XenitAB/spegel/pull/56) Add gcr.io and k8s.gcr.io registries to default list.
 
 ### Changed
  
