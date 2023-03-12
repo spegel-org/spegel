@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+### Changed
+ 
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.5
+
+### Added 
+
 - [#29](https://github.com/XenitAB/spegel/pull/29) Make priority class name configurable and set a default value.
 - [#49](https://github.com/XenitAB/spegel/pull/49) Add registry.k8s.io to registry mirror list.
 - [#56](https://github.com/XenitAB/spegel/pull/56) Add gcr.io and k8s.gcr.io registries to default list.
@@ -20,18 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#48](https://github.com/XenitAB/spegel/pull/48) Replace multierr with stdlib errors join.
 - [#54](https://github.com/XenitAB/spegel/pull/54) Refactor metrics and add documentation.
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - [#51](https://github.com/XenitAB/spegel/pull/51) Filter tracked images to only included mirrored registries.
 - [#52](https://github.com/XenitAB/spegel/pull/52) Return error when image reference is not valid.
 - [#55](https://github.com/XenitAB/spegel/pull/55) Fix filters by merging them into a single statement.
 - [#53](https://github.com/XenitAB/spegel/pull/53) Include error from defer in returned error.
-
-### Security
 
 ## v0.0.4
 
