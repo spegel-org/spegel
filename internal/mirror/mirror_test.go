@@ -9,6 +9,8 @@ import (
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+
+	"github.com/xenitab/spegel/internal/utils"
 )
 
 func TestHostFileContent(t *testing.T) {
@@ -30,7 +32,7 @@ func TestHostFileContent(t *testing.T) {
 func TestHostFileContentMultipleMirrors(t *testing.T) {
 	registryURL, err := url.Parse("https://example.com")
 	require.NoError(t, err)
-	mirrorURLs := stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"})
+	mirrorURLs := utils.StringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"})
 	content := hostsFileContent(*registryURL, mirrorURLs)
 	expected := `server = "https://example.com"
 
@@ -67,10 +69,10 @@ func TestHostFileContentDockerOverride(t *testing.T) {
 
 func TestMirrorConfiguration(t *testing.T) {
 	fs := afero.NewMemMapFs()
-	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
+	mirrors := utils.StringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 
 	registryConfigPath := "/etc/containerd/certs.d"
-	registries := stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"})
+	registries := utils.StringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"})
 	err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, registries, mirrors)
 	require.NoError(t, err)
 	for _, registry := range registries {
@@ -90,33 +92,22 @@ func TestMirrorConfiguration(t *testing.T) {
 
 func TestInvalidMirrorURL(t *testing.T) {
 	fs := afero.NewMemMapFs()
-	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
+	mirrors := utils.StringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 
-	registries := stringListToUrlList(t, []string{"ftp://docker.io"})
+	registries := utils.StringListToUrlList(t, []string{"ftp://docker.io"})
 	err := AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
 	require.EqualError(t, err, "invalid registry url scheme must be http or https: ftp://docker.io")
 
-	registries = stringListToUrlList(t, []string{"https://docker.io/foo/bar"})
+	registries = utils.StringListToUrlList(t, []string{"https://docker.io/foo/bar"})
 	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
 	require.EqualError(t, err, "invalid registry url path has to be empty: https://docker.io/foo/bar")
 
-	registries = stringListToUrlList(t, []string{"https://docker.io?foo=bar"})
+	registries = utils.StringListToUrlList(t, []string{"https://docker.io?foo=bar"})
 	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
 	require.EqualError(t, err, "invalid registry url query has to be empty: https://docker.io?foo=bar")
 
-	registries = stringListToUrlList(t, []string{"https://foo@docker.io"})
+	registries = utils.StringListToUrlList(t, []string{"https://foo@docker.io"})
 	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
 	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
 
-}
-
-func stringListToUrlList(t *testing.T, list []string) []url.URL {
-	t.Helper()
-	urls := []url.URL{}
-	for _, item := range list {
-		u, err := url.Parse(item)
-		require.NoError(t, err)
-		urls = append(urls, *u)
-	}
-	return urls
 }

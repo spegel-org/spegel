@@ -20,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/xenitab/spegel/internal/routing"
+	"github.com/xenitab/spegel/internal/utils"
 )
 
 type EventTopic string
@@ -44,27 +45,19 @@ var advertisedKeys = promauto.NewGauge(prometheus.GaugeOpts{
 func Track(ctx context.Context, containerdClient *containerd.Client, router routing.Router, registries []url.URL, imageFilter string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
-	imageFilters := []string{}
-	eventFilters := []string{`topic~="/images/create|/images/update"`}
-	if imageFilter != "" {
-		eventFilters = append(eventFilters, fmt.Sprintf(`event.name~="%s"`, imageFilter))
-		imageFilters = append(imageFilters, fmt.Sprintf(`name~=%s`, imageFilter))
-	}
-	for _, registry := range registries {
-		eventFilters = append(eventFilters, fmt.Sprintf(`event.name~="%s"`, registry.Host))
-		imageFilters = append(imageFilters, fmt.Sprintf(`name~=%s`, registry.Host))
-	}
-	log.Info("tracking images with filters", "event", eventFilters, "image", imageFilters)
+	// Create filters
+	listFilter, eventFilter := createFilters(registries, imageFilter)
+	log.Info("tracking images with filters", "event", eventFilter, "list", listFilter)
 
 	// Subscribe to image events before doing the initial sync to catch any changes which may occur inbetween.
-	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilters...)
+	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilter)
 
 	// Setup expiration ticker to update key expiration before they expire
 	immediate := make(chan time.Time, 1)
 	immediate <- time.Now()
 	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
 	defer expirationTicker.Stop()
-	ticker := merge(immediate, expirationTicker.C)
+	ticker := utils.MergeChannels(immediate, expirationTicker.C)
 
 	for {
 		select {
@@ -72,7 +65,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 			return nil
 		case <-ticker:
 			log.Info("running scheduled image state update")
-			err := all(ctx, containerdClient, router, imageFilters)
+			err := all(ctx, containerdClient, router, listFilter)
 			if err != nil {
 				return fmt.Errorf("failed to update all images: %w", err)
 			}
@@ -95,8 +88,8 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 	}
 }
 
-func all(ctx context.Context, containerdClient *containerd.Client, router routing.Router, imageFilters []string) error {
-	imgs, err := containerdClient.ListImages(ctx, imageFilters...)
+func all(ctx context.Context, containerdClient *containerd.Client, router routing.Router, filter string) error {
+	imgs, err := containerdClient.ListImages(ctx, filter)
 	if err != nil {
 		return err
 	}
@@ -208,4 +201,17 @@ func getEventImageName(e *events.Envelope) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown topic: %s", e.Topic)
 	}
+}
+
+func createFilters(registries []url.URL, imageFilter string) (string, string) {
+	registryHosts := []string{}
+	for _, registry := range registries {
+		registryHosts = append(registryHosts, registry.Host)
+	}
+	if imageFilter != "" {
+		imageFilter = "|" + imageFilter
+	}
+	listFilter := fmt.Sprintf(`name~="%s%s"`, strings.Join(registryHosts, "|"), imageFilter)
+	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update",event.name~="%s%s"`, strings.Join(registryHosts, "|"), imageFilter)
+	return listFilter, eventFilter
 }
