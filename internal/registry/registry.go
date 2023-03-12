@@ -267,7 +267,6 @@ func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
-	c.Header("Content-Type", "application/octet-stream")
 	c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
 	c.Header("Docker-Content-Digest", ref.Digest().String())
 	if c.Request.Method == http.MethodHead {

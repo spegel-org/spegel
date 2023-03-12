@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/spf13/afero"
+
 	"github.com/xenitab/spegel/internal/registry"
 )
 
