@@ -41,7 +41,7 @@ jobs:
         run: |
           echo "::set-output name=tag::${GITHUB_REF#refs/tags/}"
       - name: Cache container layers
-        uses: actions/cache@v2.1.4
+        uses: actions/cache@v3.3.1
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ github.sha }}
