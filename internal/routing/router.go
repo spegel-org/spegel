@@ -2,8 +2,10 @@ package routing
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -156,6 +158,23 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 }
 
 func createCid(key string) (cid.Cid, error) {
+	if strings.HasPrefix(key, "sha256:") {
+		_, after, ok := strings.Cut(key, ":")
+		if !ok {
+			return cid.Cid{}, fmt.Errorf("Invalid key format expected <hash>:<sum> received %s", key)
+		}
+		buf, err := hex.DecodeString(after)
+		if err != nil {
+			return cid.Cid{}, err
+		}
+		b, err := mh.Encode(buf, mh.SHA2_256)
+		if err != nil {
+			return cid.Cid{}, err
+		}
+		c := cid.NewCidV1(uint64(mc.Raw), b)
+		return c, nil
+	}
+
 	pref := cid.Prefix{
 		Version:  1,
 		Codec:    uint64(mc.Raw),
