@@ -77,8 +77,7 @@ spec:
 | serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
 | serviceAccount.name | string | `""` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template. |
 | serviceMonitor.enabled | bool | `false` | If true creates a Prometheus Service Monitor. |
-| spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration on startup. |
-| spegel.containerdMirrorRemove | bool | `false` | If true Spegel will remove the mirror configuration on shutdown. |
+| spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
 | spegel.containerdRegistryConfigPath | string | `"/etc/containerd/certs.d"` | Path to Containerd mirror configuration. |
 | spegel.containerdSock | string | `"/run/containerd/containerd.sock"` | Path to Containerd socket. |
