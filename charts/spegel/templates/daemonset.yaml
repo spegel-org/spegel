@@ -24,21 +24,53 @@ spec:
       serviceAccountName: {{ include "spegel.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      containers:
-      - name: registry
-        securityContext:
-          {{- toYaml .Values.securityContext | nindent 12 }}
+      {{- if .Values.spegel.containerdMirrorAdd }}
+      initContainers:
+      - name: configuration
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
         args:
+          - configuration
+          - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
+          {{- with .Values.spegel.registries }}
+          - --registries
+          {{- range . }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- end }}
+          - --mirror-registries
+          - http://127.0.0.1:{{ .Values.service.registry.hostPort }}
+          - http://127.0.0.1:{{ .Values.service.registry.nodePort }}
+          {{- with .Values.spegel.additionalMirrorRegistries }}
+          {{- range . }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- end }}
+        volumeMounts:
+          - name: containerd-config
+            mountPath: {{ .Values.spegel.containerdRegistryConfigPath }}
+      {{- end }}
+      containers:
+      - name: registry
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        args:
+          - registry
           - --registry-addr=:{{ .Values.service.registry.port }}
           - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
+          {{- with .Values.spegel.registries }}
+          - --registries
+          {{- range . }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- end }}
           - --containerd-sock={{ .Values.spegel.containerdSock }}
           - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
-          - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
-          - --containerd-mirror-add={{ .Values.spegel.containerdMirrorAdd }}
-          - --containerd-mirror-remove={{ .Values.spegel.containerdMirrorRemove }}
           {{- with .Values.spegel.kubeconfigPath }}
           - --kubeconfig-path={{ . }}
           {{- end }}
@@ -47,20 +79,6 @@ spec:
           {{- with .Values.spegel.imageFilter }}
           - --image-filter
           - {{ . | quote }}
-          {{- end }}
-          {{- with .Values.spegel.registries }}
-          - --registries
-          {{- range . }}
-          - {{ . | quote }}
-          {{- end }}    
-          {{- end }}
-          - --mirror-registries
-          - http://127.0.0.1:{{ .Values.service.registry.hostPort }}
-          - http://127.0.0.1:{{ .Values.service.registry.nodePort }}
-          {{- with .Values.spegel.additionalMirrorRegistries }}
-          {{- range . }}
-          - {{ . | quote }}
-          {{- end }}    
           {{- end }}
         ports:
           - name: registry
@@ -89,18 +107,18 @@ spec:
         volumeMounts:
           - name: containerd-sock
             mountPath: {{ .Values.spegel.containerdSock }}
-          - name: containerd-config
-            mountPath: {{ .Values.spegel.containerdRegistryConfigPath }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
         - name: containerd-sock
           hostPath:
             path: {{ .Values.spegel.containerdSock }}
+        {{- if .Values.spegel.containerdMirrorAdd }}
         - name: containerd-config
           hostPath:
             path: {{ .Values.spegel.containerdRegistryConfigPath }}
             type: DirectoryOrCreate
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -105,9 +105,7 @@ spegel:
   containerdNamespace: "k8s.io"
   # -- Path to Containerd mirror configuration.
   containerdRegistryConfigPath: "/etc/containerd/certs.d"
-  # -- If true Spegel will add mirror configuration on startup.
+  # -- If true Spegel will add mirror configuration to the node.
   containerdMirrorAdd: true
-  # -- If true Spegel will remove the mirror configuration on shutdown.
-  containerdMirrorRemove: false
   # -- Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC.
   kubeconfigPath: ""

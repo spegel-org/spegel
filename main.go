@@ -27,21 +27,28 @@ import (
 	"github.com/xenitab/spegel/internal/state"
 )
 
-type arguments struct {
+type ConfigurationCmd struct {
+	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
 	Registries                   []url.URL `arg:"--registries,required" help:"registries that are configured to be mirrored."`
 	MirrorRegistries             []url.URL `arg:"--mirror-registries,required" help:"registries that are configured to act as mirrors."`
-	ImageFilter                  string    `arg:"--image-filter" help:"inclusive image name filter."`
-	RegistryAddr                 string    `arg:"--registry-addr,required" help:"address to server image registry."`
-	RouterAddr                   string    `arg:"--router-addr,required" help:"address to serve router."`
-	MetricsAddr                  string    `arg:"--metrics-addr,required" help:"address to serve metrics."`
-	ContainerdSock               string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
-	ContainerdNamespace          string    `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
-	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
-	ContainerdMirrorAdd          bool      `arg:"--containerd-mirror-add" default:"true" help:"Will add containerd mirror configuration if true."`
-	ContainerdMirrorRemove       bool      `arg:"--containerd-mirror-remove" default:"true" help:"Will remove containerd mirror configuration if true."`
-	KubeconfigPath               string    `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
-	LeaderElectionNamespace      string    `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
-	LeaderElectionName           string    `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
+}
+
+type RegistryCmd struct {
+	RegistryAddr            string    `arg:"--registry-addr,required" help:"address to server image registry."`
+	RouterAddr              string    `arg:"--router-addr,required" help:"address to serve router."`
+	MetricsAddr             string    `arg:"--metrics-addr,required" help:"address to serve metrics."`
+	Registries              []url.URL `arg:"--registries,required" help:"registries that are configured to be mirrored."`
+	ImageFilter             string    `arg:"--image-filter" help:"inclusive image name filter."`
+	ContainerdSock          string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
+	ContainerdNamespace     string    `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
+	KubeconfigPath          string    `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
+	LeaderElectionNamespace string    `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
+	LeaderElectionName      string    `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
+}
+
+type arguments struct {
+	Configuration *ConfigurationCmd `arg:"subcommand:configuration"`
+	Registry      *RegistryCmd      `arg:"subcommand:registry"`
 }
 
 func main() {
@@ -53,8 +60,9 @@ func main() {
 		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
 	}
 	log := zapr.NewLogger(zapLog)
+	ctx := logr.NewContext(context.Background(), log)
 
-	err = run(log, args)
+	err = run(ctx, args)
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
@@ -62,12 +70,37 @@ func main() {
 	log.Info("gracefully shutdown")
 }
 
-func run(log logr.Logger, args *arguments) (err error) {
-	cs, err := pkgkubernetes.GetKubernetesClientset(args.KubeconfigPath)
+func run(ctx context.Context, args *arguments) error {
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
+	defer cancel()
+	switch {
+	case args.Configuration != nil:
+		return configurationCommand(ctx, args.Configuration)
+	case args.Registry != nil:
+		return registryCommand(ctx, args.Registry)
+	default:
+		return fmt.Errorf("unknown subcommand")
+	}
+}
+
+func configurationCommand(ctx context.Context, configurationCommand *ConfigurationCmd) error {
+	fs := afero.NewOsFs()
+	err := mirror.AddMirrorConfiguration(ctx, fs, configurationCommand.ContainerdRegistryConfigPath, configurationCommand.Registries, configurationCommand.MirrorRegistries)
 	if err != nil {
 		return err
 	}
-	containerdClient, err := containerd.New(args.ContainerdSock, containerd.WithDefaultNamespace(args.ContainerdNamespace))
+	return nil
+}
+
+func registryCommand(ctx context.Context, registryCmd *RegistryCmd) (err error) {
+	log := logr.FromContextOrDiscard(ctx)
+	g, ctx := errgroup.WithContext(ctx)
+
+	cs, err := pkgkubernetes.GetKubernetesClientset(registryCmd.KubeconfigPath)
+	if err != nil {
+		return err
+	}
+	containerdClient, err := containerd.New(registryCmd.ContainerdSock, containerd.WithDefaultNamespace(registryCmd.ContainerdNamespace))
 	if err != nil {
 		return fmt.Errorf("could not create containerd client: %w", err)
 	}
@@ -75,29 +108,10 @@ func run(log logr.Logger, args *arguments) (err error) {
 		err = errors.Join(err, containerdClient.Close())
 	}()
 
-	ctx := logr.NewContext(context.Background(), log)
-	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
-	defer cancel()
-	g, ctx := errgroup.WithContext(ctx)
-
-	// It is fine to immediatly write mirror configuration because it should fallback to another nodes Spegel instance.
-	fs := afero.NewOsFs()
-	if args.ContainerdMirrorAdd {
-		err := mirror.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries)
-		if err != nil {
-			return err
-		}
-	}
-	if args.ContainerdMirrorRemove {
-		defer func() {
-			err = errors.Join(err, mirror.RemoveMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries))
-		}()
-	}
-
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	srv := &http.Server{
-		Addr:    args.MetricsAddr,
+		Addr:    registryCmd.MetricsAddr,
 		Handler: mux,
 	}
 	g.Go(func() error {
@@ -113,8 +127,8 @@ func run(log logr.Logger, args *arguments) (err error) {
 		return srv.Shutdown(shutdownCtx)
 	})
 
-	bootstrapper := routing.NewKubernetesBootstrapper(cs, args.LeaderElectionNamespace, args.LeaderElectionName)
-	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper)
+	bootstrapper := routing.NewKubernetesBootstrapper(cs, registryCmd.LeaderElectionNamespace, registryCmd.LeaderElectionName)
+	router, err := routing.NewP2PRouter(ctx, registryCmd.RouterAddr, bootstrapper)
 	if err != nil {
 		return err
 	}
@@ -123,10 +137,10 @@ func run(log logr.Logger, args *arguments) (err error) {
 		return router.Close()
 	})
 	g.Go(func() error {
-		return state.Track(ctx, containerdClient, router, args.Registries, args.ImageFilter)
+		return state.Track(ctx, containerdClient, router, registryCmd.Registries, registryCmd.ImageFilter)
 	})
 
-	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, containerdClient, router)
+	reg, err := registry.NewRegistry(ctx, registryCmd.RegistryAddr, containerdClient, router)
 	if err != nil {
 		return err
 	}
@@ -138,7 +152,7 @@ func run(log logr.Logger, args *arguments) (err error) {
 		return reg.Shutdown()
 	})
 
-	log.Info("running registry", "addr", args.RegistryAddr)
+	log.Info("running registry", "addr", registryCmd.RegistryAddr)
 	err = g.Wait()
 	if err != nil {
 		return err
