@@ -45,7 +45,7 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 	if err != nil {
 		return nil, err
 	}
-	log := logr.FromContextOrDiscard(ctx)
+	log := logr.FromContextOrDiscard(ctx).WithName("registry")
 	cfg := pkggin.Config{
 		LogConfig: pkggin.LogConfig{
 			Logger:          log,
@@ -55,6 +55,7 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 			IncludeKeys:     []string{"handler"},
 		},
 		MetricsConfig: pkggin.MetricsConfig{
+			Service:   "registry",
 			HandlerID: "registry",
 		},
 	}
@@ -119,6 +120,11 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 		return
 	}
 
+	// challenge here is that registry is not resolved
+	// cant differentiate between mutated and not mutated
+	// would be good not to have a special case
+	// could hide it in the image pull secret
+
 	// Always expect remoteRegistry header to be passed in request.
 	remoteRegistry, err := getRemoteRegistry(c.Request.Header)
 	if err != nil {
@@ -179,12 +185,6 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 		return
 	}
 
-	// If digest is emtpy it means the ref is a tag
-	key := ref.Digest().String()
-	if key == "" {
-		key = ref.String()
-	}
-
 	// We should allow resolving to ourself if the mirror request is external.
 	isExternal := isExternalRequest(c.Request.Header)
 	if isExternal {
@@ -194,7 +194,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	// Resolve node with the requested key
 	timeoutCtx, cancel := context.WithTimeout(c, 5*time.Second)
 	defer cancel()
-	ip, ok, err := r.router.Resolve(timeoutCtx, key, isExternal)
+	ip, ok, err := r.router.Resolve(timeoutCtx, ref, isExternal)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)

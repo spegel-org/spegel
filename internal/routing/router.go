@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/containerd/containerd/reference"
 	"github.com/go-logr/logr"
 	cid "github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p"
@@ -22,7 +23,7 @@ const KeyTTL = 10 * time.Minute
 
 type Router interface {
 	Close() error
-	Resolve(ctx context.Context, key string, allowSelf bool) (string, bool, error)
+	Resolve(ctx context.Context, ref reference.Spec, allowSelf bool) (string, bool, error)
 	Advertise(ctx context.Context, keys []string) error
 }
 
@@ -106,7 +107,13 @@ func (r *P2PRouter) Close() error {
 	return r.host.Close()
 }
 
-func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool) (string, bool, error) {
+func (r *P2PRouter) Resolve(ctx context.Context, ref reference.Spec, allowSelf bool) (string, bool, error) {
+	// If digest is emtpy it means the ref is a tag
+	key := ref.Digest().String()
+	if key == "" {
+		key = ref.String()
+	}
+
 	logr.FromContextOrDiscard(ctx).V(10).Info("resolving key", "host", r.host.ID().Pretty(), "key", key)
 	c, err := createCid(key)
 	if err != nil {

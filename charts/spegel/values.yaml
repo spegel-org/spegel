@@ -37,6 +37,9 @@ securityContext: {}
   # runAsUser: 1000
 
 service:
+  webhook:
+    # -- Port to expose the mutating webhook.
+    port: 8443
   registry:
     # -- Port to expose the registry via the service.
     port: 5000
@@ -90,6 +93,10 @@ serviceMonitor:
 # -- Priority class name to use for the pod.
 priorityClassName: system-node-critical
 
+webhook:
+  # -- Timeout for mutating webhook.
+  timeoutSeconds: 5
+
 spegel:
   # -- Registries for which mirror configuration will be created.
   registries:
@@ -105,13 +112,16 @@ spegel:
   extraMirrorRegistries: []
   # -- Inclusive mirror filter, any image that does not match the filter will not be advertised by Spegel.
   imageFilter: ""
+  # -- If true Spegel will add mirror configuration to the node.
+  containerdMirrorAdd: true
+  # -- If true Spegel will mutate it's init containers image registry to pull from self.
+  # selfBootstrap: true
+  selfBootstrap: true
   # -- Path to Containerd socket.
   containerdSock: "/run/containerd/containerd.sock"
   # -- Containerd namespace where images are stored.
   containerdNamespace: "k8s.io"
   # -- Path to Containerd mirror configuration.
   containerdRegistryConfigPath: "/etc/containerd/certs.d"
-  # -- If true Spegel will add mirror configuration to the node.
-  containerdMirrorAdd: true
   # -- Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC.
   kubeconfigPath: ""

@@ -74,6 +74,7 @@ spec:
 | service.registry.port | int | `5000` | Port to expose the registry via the service. |
 | service.registry.topologyAwareHintsEnabled | bool | `true` | If true adds topology aware hints annotation to node port service. |
 | service.router.port | int | `5001` | Port to expose the router via the service. |
+| service.webhook.port | int | `443` | Port to expose the mutating webhook. |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
 | serviceAccount.name | string | `""` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template. |
 | serviceMonitor.enabled | bool | `false` | If true creates a Prometheus Service Monitor. |
@@ -85,4 +86,6 @@ spec:
 | spegel.imageFilter | string | `""` | Inclusive mirror filter, any image that does not match the filter will not be advertised by Spegel. |
 | spegel.kubeconfigPath | string | `""` | Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC. |
 | spegel.registries | list | `["https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://gcr.io","https://registry.k8s.io","https://k8s.gcr.io"]` | Registries for which mirror configuration will be created. |
+| spegel.selfBootstrap | bool | `true` | If true Spegel will mutate it's init containers image registry to pull from self. selfBootstrap: true |
 | tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
+| webhook.timeoutSeconds | int | `5` | Timeout for mutating webhook. |

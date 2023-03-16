@@ -25,6 +25,7 @@ import (
 	"github.com/xenitab/spegel/internal/registry"
 	"github.com/xenitab/spegel/internal/routing"
 	"github.com/xenitab/spegel/internal/state"
+	"github.com/xenitab/spegel/internal/webhook"
 )
 
 type ConfigurationCmd struct {
@@ -44,6 +45,9 @@ type RegistryCmd struct {
 	KubeconfigPath          string    `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
 	LeaderElectionNamespace string    `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
 	LeaderElectionName      string    `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
+	SelfBootstrapEnabled    bool      `arg:"--self-bootstrap-enabled" help:"if true self bootstrap webhook will be enabled."`
+	WebhookAddr             string    `arg:"--webhook-addr" help:"address to serve webhook."`
+	SelfBootstrapAddr       string    `arg:"--self-bootstrap-addr" help:"address to use as a self bootstrap registry."`
 }
 
 type Arguments struct {
@@ -151,6 +155,20 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		<-ctx.Done()
 		return reg.Shutdown()
 	})
+
+	if args.SelfBootstrapEnabled {
+		wbk, err := webhook.NewWebhook(ctx, args.WebhookAddr, args.SelfBootstrapAddr, router)
+		if err != nil {
+			return err
+		}
+		g.Go(func() error {
+			return wbk.ListenAndServe(ctx)
+		})
+		g.Go(func() error {
+			<-ctx.Done()
+			return wbk.Shutdown()
+		})
+	}
 
 	log.Info("running registry", "addr", args.RegistryAddr)
 	err = g.Wait()

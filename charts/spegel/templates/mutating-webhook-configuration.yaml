@@ -1,0 +1,56 @@
+{{- $ca := genCA "spegel-ca" 3650 -}}
+{{- $cn := printf "%s.%s.svc" ( include "spegel.fullname" . ) .Release.Namespace -}}
+{{- $san := list ( printf "%s" ( include "spegel.fullname" . ) ) ( printf "%s.%s" ( include "spegel.fullname" . ) .Release.Namespace ) ( printf "%s.%s.svc" ( include "spegel.fullname" . ) .Release.Namespace ) -}}
+{{- $cert := genSignedCert $cn nil $san 3650 $ca -}}
+{{- if .Values.spegel.selfBootstrap }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "spegel.fullname" . }}
+  labels:
+    {{- include "spegel.labels" . | nindent 4 }}
+webhooks:
+  - name: "deployment-mutation.production.svc"
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: 
+            - {{ .Release.Namespace }}
+    objectSelector:
+      matchLabels:
+        {{- include "spegel.selectorLabels" . | nindent 8 }}
+    rules:
+      - operations: 
+          - CREATE
+        apiGroups:
+          - ""
+        apiVersions:
+          - v1
+        resources:
+          - pods
+        scope: "Namespaced"
+    clientConfig:
+      caBundle: {{ $ca.Cert | b64enc | quote }}
+      service:
+        name: {{ include "spegel.fullname" . }}
+        namespace: {{ .Release.Namespace }}
+        path: "/v1/mutate"
+    admissionReviewVersions: ["v1"]
+    matchPolicy: Exact
+    sideEffects: None
+    failurePolicy: Ignore
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "spegel.fullname" . }}-tls
+  labels:
+    {{- include "spegel.labels" . | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ $cert.Cert | b64enc | quote }}
+  tls.key: {{ $cert.Key | b64enc | quote }}
+  ca.crt: {{ $ca.Cert | b64enc | quote }}
+{{- end }}

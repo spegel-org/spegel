@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#68](https://github.com/XenitAB/spegel/pull/68) Enable Spegel scaling during GitHub container registry outage. 
+
 ### Changed
 
 - [#82](https://github.com/XenitAB/spegel/pull/82) Filter out localhost from advertised IPs.

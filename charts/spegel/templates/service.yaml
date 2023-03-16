@@ -12,6 +12,12 @@ spec:
       port: {{ .Values.service.metrics.port }}
       targetPort: metrics
       protocol: TCP
+    {{- if .Values.spegel.selfBootstrap }}
+    - name: webhook
+      port: 443
+      targetPort: webhook
+      protocol: TCP
+    {{- end }}
 ---
 apiVersion: v1
 kind: Service

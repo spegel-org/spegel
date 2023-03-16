@@ -64,22 +64,27 @@ spec:
           - --registry-addr=:{{ .Values.service.registry.port }}
           - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
+          - --containerd-sock={{ .Values.spegel.containerdSock }}
+          - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
+          - --leader-election-namespace={{ .Release.Namespace }}
+          - --leader-election-name={{ .Release.Namespace }}-leader-election
           {{- with .Values.spegel.registries }}
           - --registries
           {{- range . }}
           - {{ . | quote }}
           {{- end }}
           {{- end }}
-          - --containerd-sock={{ .Values.spegel.containerdSock }}
-          - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
           {{- with .Values.spegel.kubeconfigPath }}
           - --kubeconfig-path={{ . }}
           {{- end }}
-          - --leader-election-namespace={{ .Release.Namespace }}
-          - --leader-election-name={{ .Release.Namespace }}-leader-election
           {{- with .Values.spegel.imageFilter }}
           - --image-filter
           - {{ . | quote }}
+          {{- end }}
+          {{- if .Values.spegel.selfBootstrap }}
+          - --self-bootstrap-enabled=true
+          - --webhook-addr=:{{ .Values.service.webhook.port }}
+          - --self-bootstrap-addr=127.0.0.1:{{ .Values.service.registry.nodePort }}          
           {{- end }}
         ports:
           - name: registry
@@ -93,6 +98,11 @@ spec:
           - name: metrics
             containerPort: {{ .Values.service.metrics.port }}
             protocol: TCP
+          {{- if .Values.spegel.selfBootstrap }}
+          - name: webhook
+            containerPort: {{ .Values.service.webhook.port }}
+            protocol: TCP
+          {{- end }}
         # Startup may take a bit longer on bootsrap as Pods need to find each other.
         # This is why the startup proben is a bit more forgiving, while hitting the endpoint more often.
         startupProbe:
@@ -108,6 +118,11 @@ spec:
         volumeMounts:
           - name: containerd-sock
             mountPath: {{ .Values.spegel.containerdSock }}
+        {{- if .Values.spegel.selfBootstrap }}
+          - name: tls
+            mountPath: "/etc/admission-webhook/tls"
+            readOnly: true
+        {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
@@ -119,6 +134,11 @@ spec:
           hostPath:
             path: {{ .Values.spegel.containerdRegistryConfigPath }}
             type: DirectoryOrCreate
+        {{- end }}
+        {{- if .Values.spegel.selfBootstrap }}
+        - name: tls
+          secret:
+            secretName: {{ include "spegel.fullname" . }}-tls
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
