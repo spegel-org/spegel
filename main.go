@@ -46,13 +46,13 @@ type RegistryCmd struct {
 	LeaderElectionName      string    `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
 }
 
-type arguments struct {
+type Arguments struct {
 	Configuration *ConfigurationCmd `arg:"subcommand:configuration"`
 	Registry      *RegistryCmd      `arg:"subcommand:registry"`
 }
 
 func main() {
-	args := &arguments{}
+	args := &Arguments{}
 	arg.MustParse(args)
 
 	zapLog, err := zap.NewProduction()
@@ -70,7 +70,7 @@ func main() {
 	log.Info("gracefully shutdown")
 }
 
-func run(ctx context.Context, args *arguments) error {
+func run(ctx context.Context, args *Arguments) error {
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
 	defer cancel()
 	switch {
@@ -83,24 +83,24 @@ func run(ctx context.Context, args *arguments) error {
 	}
 }
 
-func configurationCommand(ctx context.Context, configurationCommand *ConfigurationCmd) error {
+func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	fs := afero.NewOsFs()
-	err := mirror.AddMirrorConfiguration(ctx, fs, configurationCommand.ContainerdRegistryConfigPath, configurationCommand.Registries, configurationCommand.MirrorRegistries)
+	err := mirror.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func registryCommand(ctx context.Context, registryCmd *RegistryCmd) (err error) {
+func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	log := logr.FromContextOrDiscard(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
-	cs, err := pkgkubernetes.GetKubernetesClientset(registryCmd.KubeconfigPath)
+	cs, err := pkgkubernetes.GetKubernetesClientset(args.KubeconfigPath)
 	if err != nil {
 		return err
 	}
-	containerdClient, err := containerd.New(registryCmd.ContainerdSock, containerd.WithDefaultNamespace(registryCmd.ContainerdNamespace))
+	containerdClient, err := containerd.New(args.ContainerdSock, containerd.WithDefaultNamespace(args.ContainerdNamespace))
 	if err != nil {
 		return fmt.Errorf("could not create containerd client: %w", err)
 	}
@@ -111,7 +111,7 @@ func registryCommand(ctx context.Context, registryCmd *RegistryCmd) (err error) 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 	srv := &http.Server{
-		Addr:    registryCmd.MetricsAddr,
+		Addr:    args.MetricsAddr,
 		Handler: mux,
 	}
 	g.Go(func() error {
@@ -127,8 +127,8 @@ func registryCommand(ctx context.Context, registryCmd *RegistryCmd) (err error) 
 		return srv.Shutdown(shutdownCtx)
 	})
 
-	bootstrapper := routing.NewKubernetesBootstrapper(cs, registryCmd.LeaderElectionNamespace, registryCmd.LeaderElectionName)
-	router, err := routing.NewP2PRouter(ctx, registryCmd.RouterAddr, bootstrapper)
+	bootstrapper := routing.NewKubernetesBootstrapper(cs, args.LeaderElectionNamespace, args.LeaderElectionName)
+	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper)
 	if err != nil {
 		return err
 	}
@@ -137,10 +137,10 @@ func registryCommand(ctx context.Context, registryCmd *RegistryCmd) (err error) 
 		return router.Close()
 	})
 	g.Go(func() error {
-		return state.Track(ctx, containerdClient, router, registryCmd.Registries, registryCmd.ImageFilter)
+		return state.Track(ctx, containerdClient, router, args.Registries, args.ImageFilter)
 	})
 
-	reg, err := registry.NewRegistry(ctx, registryCmd.RegistryAddr, containerdClient, router)
+	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, containerdClient, router)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func registryCommand(ctx context.Context, registryCmd *RegistryCmd) (err error) 
 		return reg.Shutdown()
 	})
 
-	log.Info("running registry", "addr", registryCmd.RegistryAddr)
+	log.Info("running registry", "addr", args.RegistryAddr)
 	err = g.Wait()
 	if err != nil {
 		return err
