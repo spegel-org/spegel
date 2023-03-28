@@ -24,6 +24,7 @@ spec:
       serviceAccountName: {{ include "spegel.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      priorityClassName: {{ .Values.priorityClassName }}
       {{- if .Values.spegel.containerdMirrorAdd }}
       initContainers:
       - name: configuration
