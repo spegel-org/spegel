@@ -6,7 +6,7 @@ require (
 	github.com/alexflint/go-arg v1.4.3
 	github.com/containerd/containerd v1.6.19
 	github.com/gin-gonic/gin v1.9.0
-	github.com/go-logr/logr v1.2.3
+	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zapr v1.2.3
 	github.com/ipfs/go-cid v0.4.0
 	github.com/libp2p/go-libp2p v0.26.4
