@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.9.0
 	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zapr v1.2.3
-	github.com/ipfs/go-cid v0.4.0
+	github.com/ipfs/go-cid v0.4.1
 	github.com/libp2p/go-libp2p v0.26.4
 	github.com/libp2p/go-libp2p-kad-dht v0.22.0
 	github.com/multiformats/go-multiaddr v0.9.0
