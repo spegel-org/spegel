@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -14,17 +13,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/reference"
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/opencontainers/go-digest"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/valyala/fastjson"
 	pkggin "github.com/xenitab/pkg/gin"
 
+	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
 )
 
@@ -40,7 +36,7 @@ type Registry struct {
 	srv *http.Server
 }
 
-func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.Client, router routing.Router) (*Registry, error) {
+func NewRegistry(ctx context.Context, addr string, ociClient oci.OCIClient, router routing.Router) (*Registry, error) {
 	_, registryPort, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -60,10 +56,10 @@ func NewRegistry(ctx context.Context, addr string, containerdClient *containerd.
 	}
 	engine := pkggin.NewEngine(cfg)
 	registryHandler := &RegistryHandler{
-		log:              log,
-		containerdClient: containerdClient,
-		router:           router,
-		registryPort:     registryPort,
+		log:          log,
+		ociClient:    ociClient,
+		router:       router,
+		registryPort: registryPort,
 	}
 	engine.GET("/healthz", registryHandler.readyHandler)
 	engine.Any("/v2/*params", metricsHandler, registryHandler.registryHandler)
@@ -90,10 +86,10 @@ func (r *Registry) Shutdown() error {
 }
 
 type RegistryHandler struct {
-	log              logr.Logger
-	containerdClient *containerd.Client
-	router           routing.Router
-	registryPort     string
+	log          logr.Logger
+	ociClient    oci.OCIClient
+	router       routing.Router
+	registryPort string
 }
 
 func (r *RegistryHandler) readyHandler(c *gin.Context) {
@@ -141,6 +137,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 		return
 	}
 	if ok {
+		// TODO: Resolve tag
 		r.handleManifest(c, ref)
 		return
 	}
@@ -151,7 +148,8 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 		return
 	}
 	if ok {
-		r.handleBlob(c, ref)
+		// TODO: Require digest
+		r.handleBlob(c, ref.Digest())
 		return
 	}
 
@@ -217,31 +215,13 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
 
-func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
+func (r *RegistryHandler) handleManifest(c *gin.Context, dgst digest.Digest) {
 	c.Set("handler", "manifest")
 
-	// If reference is not a digest we need to resolve it.
-	dgst := ref.Digest()
-	if dgst == "" {
-		image, err := r.containerdClient.ImageService().Get(c, ref.String())
-		if err != nil {
-			//nolint:errcheck // ignore
-			c.AbortWithError(http.StatusNotFound, err)
-			return
-		}
-		dgst = image.Target.Digest
-	}
-
-	b, err := content.ReadBlob(c, r.containerdClient.ContentStore(), ocispec.Descriptor{Digest: dgst})
+	b, mediaType, err := r.ociClient.GetContent(c, dgst)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
-		return
-	}
-	mediaType := fastjson.GetString(b, "mediaType")
-	if mediaType == "" {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find media type in manifest %s", dgst))
 		return
 	}
 	c.Header("Content-Type", mediaType)
@@ -260,29 +240,22 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	c.Status(http.StatusOK)
 }
 
-func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
+func (r *RegistryHandler) handleBlob(c *gin.Context, dgst digest.Digest) {
 	c.Set("handler", "blob")
 
-	info, err := r.containerdClient.ContentStore().Info(c, ref.Digest())
+	size, err := r.ociClient.GetSize(c, dgst)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
-	c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
-	c.Header("Docker-Content-Digest", ref.Digest().String())
+	c.Header("Content-Length", strconv.FormatInt(size, 10))
+	c.Header("Docker-Content-Digest", dgst.String())
 	if c.Request.Method == http.MethodHead {
 		c.Status(http.StatusOK)
 		return
 	}
-	ra, err := r.containerdClient.ContentStore().ReaderAt(c, ocispec.Descriptor{Digest: info.Digest})
-	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
-		return
-	}
-	defer ra.Close()
-	_, err = io.Copy(c.Writer, content.NewReader(ra))
+	err = r.ociClient.Copy(c, dgst, c.Writer)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)

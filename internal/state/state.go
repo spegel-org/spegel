@@ -2,33 +2,19 @@ package state
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/containerd/containerd"
-	apievents "github.com/containerd/containerd/api/events"
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/events"
-	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/reference"
 	"github.com/go-logr/logr"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/xenitab/spegel/internal/routing"
 	"github.com/xenitab/spegel/internal/utils"
-)
-
-type EventTopic string
-
-const (
-	EventTopicCreate = "/images/create"
-	EventTopicUpdate = "/images/update"
-	EventTopicDelete = "/images/delete"
 )
 
 var advertisedImages = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -46,8 +32,8 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 	log := logr.FromContextOrDiscard(ctx)
 
 	// Create filters
-	listFilter, eventFilter := createFilters(registries, imageFilter)
-	log.Info("tracking images with filters", "event", eventFilter, "list", listFilter)
+	// listFilter, eventFilter := createFilters(registries, imageFilter)
+	// log.Info("tracking images with filters", "event", eventFilter, "list", listFilter)
 
 	// Subscribe to image events before doing the initial sync to catch any changes which may occur inbetween.
 	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilter)
@@ -88,7 +74,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 	}
 }
 
-func all(ctx context.Context, containerdClient *containerd.Client, router routing.Router, filter string) error {
+func updateAll(ctx context.Context, containerdClient *containerd.Client, router routing.Router, filter string) error {
 	imgs, err := containerdClient.ListImages(ctx, filter)
 	if err != nil {
 		return err
@@ -109,7 +95,7 @@ func all(ctx context.Context, containerdClient *containerd.Client, router routin
 	return nil
 }
 
-func update(ctx context.Context, containerdClient *containerd.Client, router routing.Router, img containerd.Image, skipDigests bool) (string, int, error) {
+func updateImage(ctx context.Context, containerdClient *containerd.Client, router routing.Router, img containerd.Image, skipDigests bool) (string, int, error) {
 	// Parse image reference
 	ref, err := reference.Parse(img.Name())
 	if err != nil {
@@ -139,75 +125,4 @@ func update(ctx context.Context, containerdClient *containerd.Client, router rou
 	}
 
 	return ref.Hostname(), len(keys), nil
-}
-
-func getAllImageDigests(ctx context.Context, containerdClient *containerd.Client, img containerd.Image) ([]string, error) {
-	manifest, err := images.Manifest(ctx, img.ContentStore(), img.Target(), img.Platform())
-	if err != nil {
-		return nil, err
-	}
-
-	// Add image digest, config and image layers
-	keys := []string{}
-	keys = append(keys, img.Target().Digest.String())
-	keys = append(keys, manifest.Config.Digest.String())
-	for _, layer := range manifest.Layers {
-		keys = append(keys, layer.Digest.String())
-	}
-
-	// If manifest is of list or index type it needs to be parsed separatly to add the manifest digest for the specific architecture.
-	// This is because when the images manifest is fetched through containerd the plaform specific manifest is immediatly returned.
-	if img.Metadata().Target.MediaType == images.MediaTypeDockerSchema2ManifestList || img.Metadata().Target.MediaType == ocispec.MediaTypeImageIndex {
-		b, err := content.ReadBlob(ctx, containerdClient.ContentStore(), img.Target())
-		if err != nil {
-			return nil, err
-		}
-		var idx ocispec.Index
-		if err := json.Unmarshal(b, &idx); err != nil {
-			return nil, err
-		}
-		for _, manifest := range idx.Manifests {
-			if !img.Platform().Match(*manifest.Platform) {
-				continue
-			}
-			keys = append(keys, manifest.Digest.String())
-			break
-		}
-	}
-
-	return keys, nil
-}
-
-func getEventImageName(e *events.Envelope) (string, error) {
-	switch e.Topic {
-	case EventTopicCreate:
-		img := apievents.ImageCreate{}
-		err := img.Unmarshal(e.Event.Value)
-		if err != nil {
-			return "", err
-		}
-		return img.Name, nil
-	case EventTopicUpdate:
-		img := apievents.ImageUpdate{}
-		err := img.Unmarshal(e.Event.Value)
-		if err != nil {
-			return "", err
-		}
-		return img.Name, nil
-	default:
-		return "", fmt.Errorf("unknown topic: %s", e.Topic)
-	}
-}
-
-func createFilters(registries []url.URL, imageFilter string) (string, string) {
-	registryHosts := []string{}
-	for _, registry := range registries {
-		registryHosts = append(registryHosts, registry.Host)
-	}
-	if imageFilter != "" {
-		imageFilter = "|" + imageFilter
-	}
-	listFilter := fmt.Sprintf(`name~="%s%s"`, strings.Join(registryHosts, "|"), imageFilter)
-	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update",event.name~="%s%s"`, strings.Join(registryHosts, "|"), imageFilter)
-	return listFilter, eventFilter
 }
