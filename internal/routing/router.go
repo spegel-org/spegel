@@ -45,7 +45,23 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, err
 	if err != nil {
 		return nil, fmt.Errorf("could not create host multi address: %w", err)
 	}
-	host, err := libp2p.New(libp2p.ListenAddrs(multiAddr))
+	factory := libp2p.AddrsFactory(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+		for _, addr := range addrs {
+			v, err := addr.ValueForProtocol(multiaddr.P_IP4)
+			if err != nil {
+				continue
+			}
+			if v == "" {
+				continue
+			}
+			if v == "127.0.0.1" {
+				continue
+			}
+			return []multiaddr.Multiaddr{addr}
+		}
+		return nil
+	})
+	host, err := libp2p.New(libp2p.ListenAddrs(multiAddr), factory)
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
 	}
@@ -125,21 +141,14 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool) (st
 			if !allowSelf && info.ID == r.host.ID() {
 				continue
 			}
-			for _, addr := range info.Addrs {
-				v, err := addr.ValueForProtocol(multiaddr.P_IP4)
-				if err != nil {
-					return "", false, err
-				}
-				// Protect against empty values beeing returned.
-				if v == "" {
-					continue
-				}
-				// There are two IPs being advertised, one is localhost which is not useful.
-				if v == "127.0.0.1" {
-					continue
-				}
-				return v, true, nil
+			if len(info.Addrs) != 1 {
+				return "", false, fmt.Errorf("expected address list to only contain a single item")
 			}
+			v, err := info.Addrs[0].ValueForProtocol(multiaddr.P_IP4)
+			if err != nil {
+				return "", false, err
+			}
+			return v, true, nil
 		}
 	}
 }
