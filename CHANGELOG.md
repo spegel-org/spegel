@@ -11,18 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- [#42](https://github.com/XenitAB/spegel/pull/42) Only use bootstrap function for initial peer discovery.
-- [#66](https://github.com/XenitAB/spegel/pull/66) Move mirror configuration logic to run as an init container.
- 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
 
-- [#71](https://github.com/XenitAB/spegel/pull/71) Fix priority class name.
-
 ### Security
+
+## v0.0.6
+
+### Changed
+
+- [#42](https://github.com/XenitAB/spegel/pull/42) Only use bootstrap function for initial peer discovery.
+- [#66](https://github.com/XenitAB/spegel/pull/66) Move mirror configuration logic to run as an init container.
+ 
+### Fixed
+
+- [#71](https://github.com/XenitAB/spegel/pull/71) Fix priority class name.
 
 ## v0.0.5
 
