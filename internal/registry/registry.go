@@ -159,7 +159,8 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	c.Status(http.StatusNotFound)
 }
 
-// TODO: Retry multiple endoints
+// TODO: Explore if it is worth returning early if router is not populated.
+// TODO: Retry multiple endoints.
 func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	c.Set("handler", "mirror")
 

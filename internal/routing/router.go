@@ -96,19 +96,6 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, err
 	}
 	rd := routing.NewRoutingDiscovery(kdht)
 
-	retry := 0
-	for {
-		log.Info("waiting for routing table to be populated with peers")
-		if kdht.RoutingTable().Size() > 0 {
-			break
-		}
-		retry = retry + 1
-		if retry == 30 {
-			return nil, fmt.Errorf("timed out waiting for routing table to populate with peers")
-		}
-		time.Sleep(1 * time.Second)
-	}
-
 	return &P2PRouter{
 		host: host,
 		rd:   rd,

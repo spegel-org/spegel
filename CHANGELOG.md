@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#89](https://github.com/XenitAB/spegel/pull/89) Remove p2p route table check on startup.
+
 ### Deprecated
 
 ### Removed
