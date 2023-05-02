@@ -67,12 +67,18 @@ resources: {}
   #   memory: 128Mi
 
 # -- Node selector for pod assignment.
-nodeSelector: {}
+nodeSelector:
+  kubernetes.io/os: linux
+
 
 # -- Tolerations for pod assignment.
 tolerations:
-  - operator: Exists
-    effect: NoSchedule
+  - key: CriticalAddonsOnly
+    operator: Exists
+  - effect: NoExecute
+    operator: Exists
+  - effect: NoSchedule
+    operator: Exists
 
 # -- Affinity settings for pod assignment.
 affinity: {}

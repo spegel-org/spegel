@@ -62,7 +62,7 @@ spec:
 | image.tag | string | `""` | Overrides the image tag whose default is the chart appVersion. |
 | imagePullSecrets | list | `[]` | Image Pull Secrets |
 | nameOverride | string | `""` | Overrides the name of the chart. |
-| nodeSelector | object | `{}` | Node selector for pod assignment. |
+| nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for pod assignment. |
 | podAnnotations | object | `{}` | Annotations to add to the pod. |
 | podSecurityContext | object | `{}` | Security context for the pod. |
 | priorityClassName | string | `"system-node-critical"` | Priority class name to use for the pod. |
@@ -85,4 +85,4 @@ spec:
 | spegel.imageFilter | string | `""` | Inclusive mirror filter, any image that does not match the filter will not be advertised by Spegel. |
 | spegel.kubeconfigPath | string | `""` | Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC. |
 | spegel.registries | list | `["https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://gcr.io","https://registry.k8s.io","https://k8s.gcr.io"]` | Registries for which mirror configuration will be created. |
-| tolerations | list | `[{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
+| tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
