@@ -9,16 +9,16 @@ metadata:
   name: nginx-tag
   namespace: nginx
   labels:
-    app: nginx
+    app: nginx-tag
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx
+      app: nginx-tag
   template:
     metadata:
       labels:
-        app: nginx
+        app: nginx-tag
     spec:
       containers:
       - name: nginx
@@ -35,16 +35,16 @@ metadata:
   name: nginx-digest
   namespace: nginx
   labels:
-    app: nginx
+    app: nginx-digest
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx
+      app: nginx-digest
   template:
     metadata:
       labels:
-        app: nginx
+        app: nginx-digest
     spec:
       containers:
       - name: nginx
@@ -61,16 +61,16 @@ metadata:
   name: nginx-tag-and-digest
   namespace: nginx
   labels:
-    app: nginx
+    app: nginx-tag-and-digest
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx
+      app: nginx-tag-and-digest
   template:
     metadata:
       labels:
-        app: nginx
+        app: nginx-tag-and-digest
     spec:
       containers:
       - name: nginx
@@ -80,29 +80,29 @@ spec:
         - containerPort: 80
       nodeSelector:
         test: "true"
-# ---
-# apiVersion: apps/v1
-# kind: Deployment
-# metadata:
-#   name: nginx-not-present
-#   namespace: nginx
-#   labels:
-#     app: nginx
-# spec:
-#   replicas: 3
-#   selector:
-#     matchLabels:
-#       app: nginx
-#   template:
-#     metadata:
-#       labels:
-#         app: nginx
-#     spec:
-#       containers:
-#       - name: nginx
-#         image: docker.io/library/nginx:foo
-#         imagePullPolicy: Always
-#         ports:
-#         - containerPort: 80
-#       nodeSelector:
-#         test: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-not-present
+  namespace: nginx
+  labels:
+    app: nginx-not-present
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-not-present
+  template:
+    metadata:
+      labels:
+        app: nginx-not-present
+    spec:
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx:1.24.0-bullseye-perl
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        test: "true"

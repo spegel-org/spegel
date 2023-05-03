@@ -37,17 +37,21 @@ e2e: docker-build
 	# Pull images onto single node which will never run workload.
 	docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd
 
-	# Remove default route to disable internet access
-	docker exec kind-control-plane ip route del default
-	docker exec kind-worker ip route del default
-	docker exec kind-worker2 ip route del default
-	docker exec kind-worker3 ip route del default
+	# Block internet access by only allowing RFC1918 CIDR
+	for NODE in kind-control-plane kind-worker kind-worker2 kind-worker3
+	do
+		docker exec $$NODE iptables -A OUTPUT -o eth0 -d 10.0.0.0/8 -j ACCEPT
+		docker exec $$NODE iptables -A OUTPUT -o eth0 -d 172.16.0.0/12 -j ACCEPT
+		docker exec $$NODE iptables -A OUTPUT -o eth0 -d 192.168.0.0/16 -j ACCEPT
+		docker exec $$NODE iptables -A OUTPUT -o eth0 -j REJECT
+	done
 
-	# Deploy test Nginx pods and expect pull to work
+	# Deploy test Nginx pods and verify deployment status
 	kubectl --kubeconfig $$KIND_KUBECONFIG apply -f ./e2e/test-nginx.yaml
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait deployment/nginx-tag --for condition=available
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait deployment/nginx-digest --for condition=available
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait deployment/nginx-tag-and-digest --for condition=available
+	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=60s -l app=nginx-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod
 
 	# Delete cluster
 	kind delete cluster
