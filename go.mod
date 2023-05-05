@@ -23,7 +23,7 @@ require (
 	github.com/xenitab/pkg/gin v0.0.7
 	github.com/xenitab/pkg/kubernetes v0.0.3
 	go.uber.org/zap v1.24.0
-	golang.org/x/sync v0.1.0
+	golang.org/x/sync v0.2.0
 	k8s.io/client-go v0.26.3
 )
 
