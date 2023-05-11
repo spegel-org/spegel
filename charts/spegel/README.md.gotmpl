@@ -12,7 +12,7 @@ Make sure that you have read and understood the [prerequisites](../../README.md#
 Delpoy Spegel with the Helm CLI.
 
 ```sh
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.5 spegel oci://ghcr.io/xenitab/helm-charts/spegel
+helm upgrade --create-namespace --namespace spegel --install --version v0.0.7 spegel oci://ghcr.io/xenitab/helm-charts/spegel
 ```
 
 ### Flux
@@ -45,7 +45,7 @@ spec:
   chart:
     spec:
       chart: spegel
-      version: "v0.0.5"
+      version: "v0.0.7"
       interval: 5m
       sourceRef:
         kind: HelmRepository
