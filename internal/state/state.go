@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/containerd/containerd"
-	apievents "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/images"
@@ -180,20 +179,12 @@ func getAllImageDigests(ctx context.Context, containerdClient *containerd.Client
 
 func getEventImageName(e *events.Envelope) (string, error) {
 	switch e.Topic {
-	case EventTopicCreate:
-		img := apievents.ImageCreate{}
-		err := img.Unmarshal(e.Event.Value)
-		if err != nil {
-			return "", err
+	case EventTopicCreate, EventTopicUpdate:
+		imageName, ok := e.Field([]string{"event.name"})
+		if !ok {
+			return "", fmt.Errorf("field event.name not found")
 		}
-		return img.Name, nil
-	case EventTopicUpdate:
-		img := apievents.ImageUpdate{}
-		err := img.Unmarshal(e.Event.Value)
-		if err != nil {
-			return "", err
-		}
-		return img.Name, nil
+		return imageName, nil
 	default:
 		return "", fmt.Errorf("unknown topic: %s", e.Topic)
 	}
