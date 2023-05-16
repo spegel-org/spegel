@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/alexflint/go-arg"
-	"github.com/containerd/containerd"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -23,6 +22,7 @@ import (
 	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
 
 	"github.com/xenitab/spegel/internal/mirror"
+	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/registry"
 	"github.com/xenitab/spegel/internal/routing"
 	"github.com/xenitab/spegel/internal/state"
@@ -101,13 +101,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	if err != nil {
 		return err
 	}
-	containerdClient, err := containerd.New(args.ContainerdSock, containerd.WithDefaultNamespace(args.ContainerdNamespace))
+	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.Registries, args.ImageFilter)
 	if err != nil {
-		return fmt.Errorf("could not create containerd client: %w", err)
+		return err
 	}
-	defer func() {
-		err = errors.Join(err, containerdClient.Close())
-	}()
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
@@ -138,10 +135,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return router.Close()
 	})
 	g.Go(func() error {
-		return state.Track(ctx, containerdClient, router, args.Registries, args.ImageFilter)
+		return state.Track(ctx, ociClient, router)
 	})
 
-	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, containerdClient, router)
+	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, ociClient, router)
 	if err != nil {
 		return err
 	}

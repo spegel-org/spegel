@@ -2,35 +2,16 @@ package state
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/url"
-	"strings"
 	"time"
 
-	"github.com/containerd/containerd"
-	apievents "github.com/containerd/containerd/api/events"
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/events"
-	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/platforms"
 	"github.com/go-logr/logr"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-
 	"github.com/xenitab/pkg/channels"
 
 	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
-)
-
-type EventTopic string
-
-const (
-	EventTopicCreate = "/images/create"
-	EventTopicUpdate = "/images/update"
-	EventTopicDelete = "/images/delete"
 )
 
 var advertisedImages = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -44,17 +25,11 @@ var advertisedKeys = promauto.NewGaugeVec(prometheus.GaugeOpts{
 }, []string{"registry"})
 
 // TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
-func Track(ctx context.Context, containerdClient *containerd.Client, router routing.Router, registries []url.URL, imageFilter string) error {
+func Track(ctx context.Context, ociClient oci.Client, router routing.Router) error {
 	log := logr.FromContextOrDiscard(ctx)
 
-	// Create filters
-	listFilter, eventFilter := createFilters(registries, imageFilter)
-	log.Info("tracking images with filters", "event", eventFilter, "list", listFilter)
-
-	// Subscribe to image events before doing the initial sync to catch any changes which may occur inbetween.
-	envelopeCh, errCh := containerdClient.EventService().Subscribe(ctx, eventFilter)
-
-	// Setup expiration ticker to update key expiration before they expire
+	// Setup event channels
+	eventCh, errCh := ociClient.Subscribe(ctx)
 	immediate := make(chan time.Time, 1)
 	immediate <- time.Now()
 	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
@@ -67,24 +42,12 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 			return nil
 		case <-ticker:
 			log.Info("running scheduled image state update")
-			err := all(ctx, containerdClient, router, listFilter)
+			err := all(ctx, ociClient, router)
 			if err != nil {
 				return fmt.Errorf("failed to update all images: %w", err)
 			}
-		case e := <-envelopeCh:
-			name, err := getEventImageName(e)
-			if err != nil {
-				return err
-			}
-			cImg, err := containerdClient.GetImage(ctx, name)
-			if err != nil {
-				return err
-			}
-			img, err := oci.ParseWithDigest(cImg.Name(), cImg.Target().Digest)
-			if err != nil {
-				return err
-			}
-			_, err = update(ctx, containerdClient, router, img, false)
+		case img := <-eventCh:
+			_, err := update(ctx, ociClient, router, img, false)
 			if err != nil {
 				return err
 			}
@@ -94,21 +57,17 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 	}
 }
 
-func all(ctx context.Context, containerdClient *containerd.Client, router routing.Router, filter string) error {
-	cImgs, err := containerdClient.ListImages(ctx, filter)
+func all(ctx context.Context, ociClient oci.Client, router routing.Router) error {
+	imgs, err := ociClient.ListImages(ctx)
 	if err != nil {
 		return err
 	}
 	advertisedImages.Reset()
 	advertisedKeys.Reset()
 	targets := map[string]interface{}{}
-	for _, cImg := range cImgs {
-		img, err := oci.ParseWithDigest(cImg.Name(), cImg.Target().Digest)
-		if err != nil {
-			return err
-		}
+	for _, img := range imgs {
 		_, skipDigests := targets[img.Digest.String()]
-		keyTotal, err := update(ctx, containerdClient, router, img, skipDigests)
+		keyTotal, err := update(ctx, ociClient, router, img, skipDigests)
 		if err != nil {
 			return err
 		}
@@ -119,13 +78,13 @@ func all(ctx context.Context, containerdClient *containerd.Client, router routin
 	return nil
 }
 
-func update(ctx context.Context, containerdClient *containerd.Client, router routing.Router, img oci.Image, skipDigests bool) (int, error) {
+func update(ctx context.Context, ociClient oci.Client, router routing.Router, img oci.Image, skipDigests bool) (int, error) {
 	keys := []string{}
-	if tagRef, ok := img.TagReference(); ok {
+	if tagRef, ok := img.TagName(); ok {
 		keys = append(keys, tagRef)
 	}
 	if !skipDigests {
-		dgsts, err := getAllImageDigests(ctx, containerdClient, img)
+		dgsts, err := ociClient.GetImageDigests(ctx, img)
 		if err != nil {
 			return 0, err
 		}
@@ -136,93 +95,4 @@ func update(ctx context.Context, containerdClient *containerd.Client, router rou
 		return 0, err
 	}
 	return len(keys), nil
-}
-
-type unknownDocument struct {
-	MediaType string `json:"mediaType,omitempty"`
-}
-
-func getAllImageDigests(ctx context.Context, containerdClient *containerd.Client, img oci.Image) ([]string, error) {
-	keys := []string{}
-	platform := platforms.Default()
-	err := images.Walk(ctx, images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-		b, err := content.ReadBlob(ctx, containerdClient.ContentStore(), desc)
-		if err != nil {
-			return nil, err
-		}
-		var ud unknownDocument
-		if err := json.Unmarshal(b, &ud); err != nil {
-			return nil, err
-		}
-
-		switch ud.MediaType {
-		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-			var idx ocispec.Index
-			if err := json.Unmarshal(b, &idx); err != nil {
-				return nil, err
-			}
-			for _, manifest := range idx.Manifests {
-				if !platform.Match(*manifest.Platform) {
-					continue
-				}
-				keys = append(keys, manifest.Digest.String())
-				return []ocispec.Descriptor{manifest}, nil
-			}
-			return nil, fmt.Errorf("could not find platform architecture in manifest: %v", desc.Digest)
-		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-			var manifest ocispec.Manifest
-			if err := json.Unmarshal(b, &manifest); err != nil {
-				return nil, err
-			}
-			keys = append(keys, manifest.Config.Digest.String())
-			for _, layer := range manifest.Layers {
-				keys = append(keys, layer.Digest.String())
-			}
-			// TODO: In the images.Manifest implementation there is a platform check that I do not understand
-			return nil, nil
-		}
-		return nil, fmt.Errorf("unexpected media type %v for digest: %v", ud.MediaType, desc.Digest)
-	}), ocispec.Descriptor{Digest: img.Digest})
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk image manifests: %w", err)
-	}
-	if len(keys) == 0 {
-		return nil, fmt.Errorf("no image digests found")
-	}
-	keys = append(keys, img.Digest.String())
-	return keys, nil
-}
-
-func getEventImageName(e *events.Envelope) (string, error) {
-	switch e.Topic {
-	case EventTopicCreate:
-		img := apievents.ImageCreate{}
-		err := img.Unmarshal(e.Event.Value)
-		if err != nil {
-			return "", err
-		}
-		return img.Name, nil
-	case EventTopicUpdate:
-		img := apievents.ImageUpdate{}
-		err := img.Unmarshal(e.Event.Value)
-		if err != nil {
-			return "", err
-		}
-		return img.Name, nil
-	default:
-		return "", fmt.Errorf("unknown topic: %s", e.Topic)
-	}
-}
-
-func createFilters(registries []url.URL, imageFilter string) (string, string) {
-	registryHosts := []string{}
-	for _, registry := range registries {
-		registryHosts = append(registryHosts, registry.Host)
-	}
-	if imageFilter != "" {
-		imageFilter = "|" + imageFilter
-	}
-	listFilter := fmt.Sprintf(`name~="%s%s"`, strings.Join(registryHosts, "|"), imageFilter)
-	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update",event.name~="%s%s"`, strings.Join(registryHosts, "|"), imageFilter)
-	return listFilter, eventFilter
 }

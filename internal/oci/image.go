@@ -10,41 +10,31 @@ import (
 )
 
 type Image struct {
-	Name       string
 	Registry   string
 	Repository string
 	Tag        string
 	Digest     digest.Digest
 }
 
-func NewImageWithTag(registry, repository, tag string) Image {
-	name := fmt.Sprintf("%s/%s:%s", registry, repository, tag)
+func NewImage(name, registry, repository, tag string, dgst digest.Digest) (Image, error) {
+	if registry == "" {
+		return Image{}, fmt.Errorf("image needs to contain a registry")
+	}
+	if repository == "" {
+		return Image{}, fmt.Errorf("image needs to repository a digest")
+	}
+	if dgst == "" {
+		return Image{}, fmt.Errorf("image needs to contain a digest")
+	}
 	return Image{
-		Name:       name,
 		Registry:   registry,
 		Repository: repository,
 		Tag:        tag,
-	}
-}
-
-func NewImageWithDigest(registry, repository string, dgst digest.Digest) Image {
-	name := fmt.Sprintf("%s/%s@%s", registry, repository, dgst.String())
-	return Image{
-		Name:       name,
-		Registry:   registry,
-		Repository: repository,
 		Digest:     dgst,
-	}
+	}, nil
 }
 
-func (i Image) Key() string {
-	if i.Digest.String() != "" {
-		return i.Digest.String()
-	}
-	return i.Name
-}
-
-func (i Image) TagReference() (string, bool) {
+func (i Image) TagName() (string, bool) {
 	if i.Tag == "" {
 		return "", false
 	}
@@ -53,21 +43,7 @@ func (i Image) TagReference() (string, bool) {
 
 var splitRe = regexp.MustCompile(`[:@]`)
 
-func ParseWithDigest(s string, dgst digest.Digest) (Image, error) {
-	img, err := Parse(s)
-	if err != nil {
-		return Image{}, err
-	}
-	if img.Digest == "" {
-		img.Digest = dgst
-	}
-	if img.Digest != dgst {
-		return Image{}, fmt.Errorf("invalid digest set does not match parsed digest: %v %v", s, dgst)
-	}
-	return img, nil
-}
-
-func Parse(s string) (Image, error) {
+func Parse(s string, extraDgst digest.Digest) (Image, error) {
 	if strings.Contains(s, "://") {
 		return Image{}, fmt.Errorf("invalid reference")
 	}
@@ -93,21 +69,19 @@ func Parse(s string) (Image, error) {
 	}
 	tag, dgst := splitObject(object)
 	tag, _, _ = strings.Cut(tag, "@")
-	img := Image{
-		Name:       s,
-		Registry:   u.Host,
-		Repository: strings.TrimPrefix(u.Path, "/"),
-		Tag:        tag,
-		Digest:     dgst,
+	repository := strings.TrimPrefix(u.Path, "/")
+
+	if dgst == "" {
+		dgst = extraDgst
+	}
+	if dgst != extraDgst {
+		return Image{}, fmt.Errorf("invalid digest set does not match parsed digest: %v %v", s, dgst)
 	}
 
-	if img.Tag == "" && img.Digest == "" {
-		return Image{}, fmt.Errorf("reference needs to contain a tag or digest")
+	img, err := NewImage(s, u.Host, repository, tag, dgst)
+	if err != nil {
+		return Image{}, err
 	}
-	if img.Registry == "" {
-		return Image{}, fmt.Errorf("reference needs to contain a registry")
-	}
-
 	return img, nil
 }
 
