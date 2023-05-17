@@ -21,6 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
+
 	"github.com/xenitab/spegel/internal/mirror"
 	"github.com/xenitab/spegel/internal/registry"
 	"github.com/xenitab/spegel/internal/routing"
