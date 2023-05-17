@@ -19,8 +19,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/xenitab/pkg/channels"
+
 	"github.com/xenitab/spegel/internal/routing"
-	"github.com/xenitab/spegel/internal/utils"
 )
 
 type EventTopic string
@@ -57,7 +58,7 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 	immediate <- time.Now()
 	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
 	defer expirationTicker.Stop()
-	ticker := utils.MergeChannels(immediate, expirationTicker.C)
+	ticker := channels.Merge(immediate, expirationTicker.C)
 
 	for {
 		select {
