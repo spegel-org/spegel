@@ -13,7 +13,7 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/reference"
+	"github.com/containerd/containerd/platforms"
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/prometheus/client_golang/prometheus"
@@ -21,6 +21,7 @@ import (
 
 	"github.com/xenitab/pkg/channels"
 
+	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
 )
 
@@ -75,11 +76,15 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 			if err != nil {
 				return err
 			}
-			img, err := containerdClient.GetImage(ctx, name)
+			cImg, err := containerdClient.GetImage(ctx, name)
 			if err != nil {
 				return err
 			}
-			_, _, err = update(ctx, containerdClient, router, img, false)
+			img, err := oci.ParseWithDigest(cImg.Name(), cImg.Target().Digest)
+			if err != nil {
+				return err
+			}
+			_, err = update(ctx, containerdClient, router, img, false)
 			if err != nil {
 				return err
 			}
@@ -90,92 +95,101 @@ func Track(ctx context.Context, containerdClient *containerd.Client, router rout
 }
 
 func all(ctx context.Context, containerdClient *containerd.Client, router routing.Router, filter string) error {
-	imgs, err := containerdClient.ListImages(ctx, filter)
+	cImgs, err := containerdClient.ListImages(ctx, filter)
 	if err != nil {
 		return err
 	}
 	advertisedImages.Reset()
 	advertisedKeys.Reset()
 	targets := map[string]interface{}{}
-	for _, img := range imgs {
-		_, skipDigests := targets[img.Target().Digest.String()]
-		registry, keyTotal, err := update(ctx, containerdClient, router, img, skipDigests)
+	for _, cImg := range cImgs {
+		img, err := oci.ParseWithDigest(cImg.Name(), cImg.Target().Digest)
 		if err != nil {
 			return err
 		}
-		targets[img.Target().Digest.String()] = nil
-		advertisedImages.WithLabelValues(registry).Add(1)
-		advertisedKeys.WithLabelValues(registry).Add(float64(keyTotal))
+		_, skipDigests := targets[img.Digest.String()]
+		keyTotal, err := update(ctx, containerdClient, router, img, skipDigests)
+		if err != nil {
+			return err
+		}
+		targets[img.Digest.String()] = nil
+		advertisedImages.WithLabelValues(img.Registry).Add(1)
+		advertisedKeys.WithLabelValues(img.Registry).Add(float64(keyTotal))
 	}
 	return nil
 }
 
-func update(ctx context.Context, containerdClient *containerd.Client, router routing.Router, img containerd.Image, skipDigests bool) (string, int, error) {
-	// Parse image reference
-	ref, err := reference.Parse(img.Name())
-	if err != nil {
-		return "", 0, err
-	}
-
-	// Images can be referenced with both tag and digest. The image name is however only needed when resolving a tag to a digest.
-	// For this reason it is only of interest to advertise image names with only the tag.
+func update(ctx context.Context, containerdClient *containerd.Client, router routing.Router, img oci.Image, skipDigests bool) (int, error) {
 	keys := []string{}
-	tag, _, _ := strings.Cut(ref.Object, "@")
-	if tag != "" {
-		ref.Object = tag
-		keys = append(keys, ref.String())
+	if tagRef, ok := img.TagReference(); ok {
+		keys = append(keys, tagRef)
 	}
-
 	if !skipDigests {
 		dgsts, err := getAllImageDigests(ctx, containerdClient, img)
 		if err != nil {
-			return "", 0, err
+			return 0, err
 		}
 		keys = append(keys, dgsts...)
 	}
-
-	err = router.Advertise(ctx, keys)
+	err := router.Advertise(ctx, keys)
 	if err != nil {
-		return "", 0, err
+		return 0, err
 	}
-
-	return ref.Hostname(), len(keys), nil
+	return len(keys), nil
 }
 
-func getAllImageDigests(ctx context.Context, containerdClient *containerd.Client, img containerd.Image) ([]string, error) {
-	manifest, err := images.Manifest(ctx, img.ContentStore(), img.Target(), img.Platform())
-	if err != nil {
-		return nil, err
-	}
+type unknownDocument struct {
+	MediaType string `json:"mediaType,omitempty"`
+}
 
-	// Add image digest, config and image layers
+func getAllImageDigests(ctx context.Context, containerdClient *containerd.Client, img oci.Image) ([]string, error) {
 	keys := []string{}
-	keys = append(keys, img.Target().Digest.String())
-	keys = append(keys, manifest.Config.Digest.String())
-	for _, layer := range manifest.Layers {
-		keys = append(keys, layer.Digest.String())
-	}
-
-	// If manifest is of list or index type it needs to be parsed separatly to add the manifest digest for the specific architecture.
-	// This is because when the images manifest is fetched through containerd the plaform specific manifest is immediatly returned.
-	if img.Metadata().Target.MediaType == images.MediaTypeDockerSchema2ManifestList || img.Metadata().Target.MediaType == ocispec.MediaTypeImageIndex {
-		b, err := content.ReadBlob(ctx, containerdClient.ContentStore(), img.Target())
+	platform := platforms.Default()
+	err := images.Walk(ctx, images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		b, err := content.ReadBlob(ctx, containerdClient.ContentStore(), desc)
 		if err != nil {
 			return nil, err
 		}
-		var idx ocispec.Index
-		if err := json.Unmarshal(b, &idx); err != nil {
+		var ud unknownDocument
+		if err := json.Unmarshal(b, &ud); err != nil {
 			return nil, err
 		}
-		for _, manifest := range idx.Manifests {
-			if !img.Platform().Match(*manifest.Platform) {
-				continue
-			}
-			keys = append(keys, manifest.Digest.String())
-			break
-		}
-	}
 
+		switch ud.MediaType {
+		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+			var idx ocispec.Index
+			if err := json.Unmarshal(b, &idx); err != nil {
+				return nil, err
+			}
+			for _, manifest := range idx.Manifests {
+				if !platform.Match(*manifest.Platform) {
+					continue
+				}
+				keys = append(keys, manifest.Digest.String())
+				return []ocispec.Descriptor{manifest}, nil
+			}
+			return nil, fmt.Errorf("could not find platform architecture in manifest: %v", desc.Digest)
+		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+			var manifest ocispec.Manifest
+			if err := json.Unmarshal(b, &manifest); err != nil {
+				return nil, err
+			}
+			keys = append(keys, manifest.Config.Digest.String())
+			for _, layer := range manifest.Layers {
+				keys = append(keys, layer.Digest.String())
+			}
+			// TODO: In the images.Manifest implementation there is a platform check that I do not understand
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unexpected media type %v for digest: %v", ud.MediaType, desc.Digest)
+	}), ocispec.Descriptor{Digest: img.Digest})
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk image manifests: %w", err)
+	}
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("no image digests found")
+	}
+	keys = append(keys, img.Digest.String())
 	return keys, nil
 }
 

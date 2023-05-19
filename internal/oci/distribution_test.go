@@ -1,4 +1,4 @@
-package registry
+package oci
 
 import (
 	"testing"
@@ -28,10 +28,10 @@ func TestAnyReference(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ref, ok, err := AnyReference(tt.registry, tt.path)
+			img, ok, err := AnyReference(tt.registry, tt.path)
 			require.NoError(t, err)
 			require.True(t, ok)
-			require.Equal(t, tt.expected, ref.String())
+			require.Equal(t, tt.expected, img.Name)
 		})
 	}
 }

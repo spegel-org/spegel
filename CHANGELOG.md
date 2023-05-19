@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#107](https://github.com/XenitAB/spegel/pull/107) Refactor image references with generic implementation.
+
 ### Deprecated
 
 ### Removed
