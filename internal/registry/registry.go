@@ -16,7 +16,6 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/reference"
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -25,6 +24,7 @@ import (
 	"github.com/valyala/fastjson"
 	pkggin "github.com/xenitab/pkg/gin"
 
+	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
 )
 
@@ -134,24 +134,24 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	}
 
 	// Serve registry endpoints.
-	ref, ok, err := ManifestReference(remoteRegistry, c.Request.URL.Path)
+	img, ok, err := oci.ManifestReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 	if ok {
-		r.handleManifest(c, ref)
+		r.handleManifest(c, img)
 		return
 	}
-	ref, ok, err = BlobReference(remoteRegistry, c.Request.URL.Path)
+	img, ok, err = oci.BlobReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 	if ok {
-		r.handleBlob(c, ref)
+		r.handleBlob(c, img)
 		return
 	}
 
@@ -167,7 +167,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	// Disable mirroring so we dont end with an infinite loop
 	c.Request.Header[MirrorHeader] = []string{"false"}
 
-	ref, ok, err := AnyReference(remoteRegistry, c.Request.URL.Path)
+	img, ok, err := oci.AnyReference(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -179,12 +179,6 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 		return
 	}
 
-	// If digest is emtpy it means the ref is a tag
-	key := ref.Digest().String()
-	if key == "" {
-		key = ref.String()
-	}
-
 	// We should allow resolving to ourself if the mirror request is external.
 	isExternal := isExternalRequest(c.Request.Header)
 	if isExternal {
@@ -194,7 +188,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	// Resolve node with the requested key
 	timeoutCtx, cancel := context.WithTimeout(c, 5*time.Second)
 	defer cancel()
-	ip, ok, err := r.router.Resolve(timeoutCtx, key, isExternal)
+	ip, ok, err := r.router.Resolve(timeoutCtx, img.Key(), isExternal)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -202,7 +196,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	}
 	if !ok {
 		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find node with ref: %s", ref.String()))
+		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find node with ref: %s", img.Digest))
 		return
 	}
 
@@ -218,22 +212,21 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, remoteRegistry string) {
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
 
-func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
+func (r *RegistryHandler) handleManifest(c *gin.Context, img oci.Image) {
 	c.Set("handler", "manifest")
 
 	// If reference is not a digest we need to resolve it.
-	dgst := ref.Digest()
-	if dgst == "" {
-		image, err := r.containerdClient.ImageService().Get(c, ref.String())
+	if img.Digest == "" {
+		cImg, err := r.containerdClient.ImageService().Get(c, img.Name)
 		if err != nil {
 			//nolint:errcheck // ignore
 			c.AbortWithError(http.StatusNotFound, err)
 			return
 		}
-		dgst = image.Target.Digest
+		img.Digest = cImg.Target.Digest
 	}
 
-	b, err := content.ReadBlob(c, r.containerdClient.ContentStore(), ocispec.Descriptor{Digest: dgst})
+	b, err := content.ReadBlob(c, r.containerdClient.ContentStore(), ocispec.Descriptor{Digest: img.Digest})
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -242,12 +235,12 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	mediaType := fastjson.GetString(b, "mediaType")
 	if mediaType == "" {
 		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find media type in manifest %s", dgst))
+		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find media type in manifest %s", img.Digest))
 		return
 	}
 	c.Header("Content-Type", mediaType)
 	c.Header("Content-Length", strconv.FormatInt(int64(len(b)), 10))
-	c.Header("Docker-Content-Digest", dgst.String())
+	c.Header("Docker-Content-Digest", img.Digest.String())
 	if c.Request.Method == http.MethodHead {
 		c.Status(http.StatusOK)
 		return
@@ -261,17 +254,17 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, ref reference.Spec) {
 	c.Status(http.StatusOK)
 }
 
-func (r *RegistryHandler) handleBlob(c *gin.Context, ref reference.Spec) {
+func (r *RegistryHandler) handleBlob(c *gin.Context, img oci.Image) {
 	c.Set("handler", "blob")
 
-	info, err := r.containerdClient.ContentStore().Info(c, ref.Digest())
+	info, err := r.containerdClient.ContentStore().Info(c, img.Digest)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 	c.Header("Content-Length", strconv.FormatInt(info.Size, 10))
-	c.Header("Docker-Content-Digest", ref.Digest().String())
+	c.Header("Docker-Content-Digest", img.Digest.String())
 	if c.Request.Method == http.MethodHead {
 		c.Status(http.StatusOK)
 		return
