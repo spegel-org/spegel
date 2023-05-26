@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/alexflint/go-arg v1.4.3
-	github.com/containerd/containerd v1.6.20
+	github.com/containerd/containerd v1.6.19
 	github.com/gin-gonic/gin v1.9.0
 	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zapr v1.2.4
@@ -16,7 +16,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.1
 	github.com/norwoodj/helm-docs v1.11.0
 	github.com/opencontainers/go-digest v1.0.0
-	github.com/opencontainers/image-spec v1.1.0-rc2.0.20221005185240-3a7f492d3f1b
+	github.com/opencontainers/image-spec v1.1.0-rc.3
 	github.com/prometheus/client_golang v1.15.1
 	github.com/spf13/afero v1.9.5
 	github.com/stretchr/testify v1.8.2
@@ -34,7 +34,8 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
 	github.com/Microsoft/go-winio v0.6.0 // indirect
-	github.com/Microsoft/hcsshim v0.10.0-rc.7 // indirect
+	github.com/Microsoft/hcsshim v0.10.0-rc.3 // indirect
+	github.com/akavel/rsrc v0.10.2 // indirect
 	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -97,6 +98,7 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
+	github.com/josephspurrier/goversioninfo v1.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.16.4 // indirect
