@@ -34,6 +34,18 @@ func NewImage(name, registry, repository, tag string, dgst digest.Digest) (Image
 	}, nil
 }
 
+func (i Image) String() string {
+	tag := ""
+	if i.Tag != "" {
+		tag = fmt.Sprintf(":%s", i.Tag)
+	}
+	dgstStr := ""
+	if i.Tag != "" {
+		dgstStr = fmt.Sprintf("@%s", i.Digest.String())
+	}
+	return fmt.Sprintf("%s/%s%s%s", i.Registry, i.Repository, tag, dgstStr)
+}
+
 func (i Image) TagName() (string, bool) {
 	if i.Tag == "" {
 		return "", false

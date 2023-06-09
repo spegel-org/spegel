@@ -47,6 +47,7 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router) err
 				return fmt.Errorf("failed to update all images: %w", err)
 			}
 		case img := <-eventCh:
+			log.Info("received image event", "image", img)
 			_, err := update(ctx, ociClient, router, img, false)
 			if err != nil {
 				return err
