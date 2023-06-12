@@ -39,7 +39,6 @@ type RegistryCmd struct {
 	RouterAddr              string    `arg:"--router-addr,required" help:"address to serve router."`
 	MetricsAddr             string    `arg:"--metrics-addr,required" help:"address to serve metrics."`
 	Registries              []url.URL `arg:"--registries,required" help:"registries that are configured to be mirrored."`
-	ImageFilter             string    `arg:"--image-filter" help:"inclusive image name filter."`
 	ContainerdSock          string    `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace     string    `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
 	KubeconfigPath          string    `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
@@ -101,7 +100,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	if err != nil {
 		return err
 	}
-	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.Registries, args.ImageFilter)
+	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.Registries)
 	if err != nil {
 		return err
 	}

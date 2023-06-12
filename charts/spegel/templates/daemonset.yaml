@@ -77,10 +77,6 @@ spec:
           {{- end }}
           - --leader-election-namespace={{ .Release.Namespace }}
           - --leader-election-name={{ .Release.Namespace }}-leader-election
-          {{- with .Values.spegel.imageFilter }}
-          - --image-filter
-          - {{ . | quote }}
-          {{- end }}
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}

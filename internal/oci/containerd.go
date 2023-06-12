@@ -25,12 +25,12 @@ type Containerd struct {
 	eventFilter string
 }
 
-func NewContainerd(sock, namespace string, registries []url.URL, imageFilter string) (*Containerd, error) {
+func NewContainerd(sock, namespace string, registries []url.URL) (*Containerd, error) {
 	client, err := containerd.New(sock, containerd.WithDefaultNamespace(namespace))
 	if err != nil {
 		return nil, fmt.Errorf("could not create containerd client: %w", err)
 	}
-	listFilter, eventFilter := createFilters(registries, imageFilter)
+	listFilter, eventFilter := createFilters(registries)
 	return &Containerd{
 		client:      client,
 		listFilter:  listFilter,
@@ -197,15 +197,12 @@ func getEventImageName(e *events.Envelope) (string, error) {
 	}
 }
 
-func createFilters(registries []url.URL, imageFilter string) (string, string) {
+func createFilters(registries []url.URL) (string, string) {
 	registryHosts := []string{}
 	for _, registry := range registries {
 		registryHosts = append(registryHosts, registry.Host)
 	}
-	if imageFilter != "" {
-		imageFilter = "|" + imageFilter
-	}
-	listFilter := fmt.Sprintf(`name~="%s%s"`, strings.Join(registryHosts, "|"), imageFilter)
-	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update",event.name~="%s%s"`, strings.Join(registryHosts, "|"), imageFilter)
+	listFilter := fmt.Sprintf(`name~="%s"`, strings.Join(registryHosts, "|"))
+	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update",event.name~="%s"`, strings.Join(registryHosts, "|"))
 	return listFilter, eventFilter
 }
