@@ -21,14 +21,14 @@ func TestParseImage(t *testing.T) {
 			image:              "library/ubuntu:latest",
 			expectedRepository: "library/ubuntu",
 			expectedTag:        "latest",
-			expectedDigest:     "",
+			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
 		},
 		{
 			name:               "Only tag",
 			image:              "library/alpine:3.18.0",
 			expectedRepository: "library/alpine",
 			expectedTag:        "3.18.0",
-			expectedDigest:     "",
+			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
 		},
 		{
 			name:               "Tag and digest",
@@ -49,7 +49,7 @@ func TestParseImage(t *testing.T) {
 	for _, registry := range registries {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s_%s", tt.name, registry), func(t *testing.T) {
-				img, err := Parse(fmt.Sprintf("%s/%s", registry, tt.image))
+				img, err := Parse(fmt.Sprintf("%s/%s", registry, tt.image), digest.Digest(tt.expectedDigest))
 				require.NoError(t, err)
 				require.Equal(t, registry, img.Registry)
 				require.Equal(t, tt.expectedRepository, img.Repository)
@@ -62,6 +62,6 @@ func TestParseImage(t *testing.T) {
 }
 
 func TestParseImageNoTagOrDigest(t *testing.T) {
-	_, err := Parse("ghcr.io/xenitab/spegel")
-	require.EqualError(t, err, "reference needs to contain a tag or digest")
+	_, err := Parse("ghcr.io/xenitab/spegel", digest.Digest(""))
+	require.EqualError(t, err, "image needs to contain a digest")
 }

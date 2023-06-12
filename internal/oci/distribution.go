@@ -1,13 +1,23 @@
 package oci
 
 import (
+	"fmt"
 	"regexp"
 
 	"github.com/opencontainers/go-digest"
 )
 
+type ReferenceType string
+
+const (
+	ReferenceTypeManifest = "Manifest"
+	ReferenceTypeBlob     = "ManifestBlob"
+)
+
 // Package is used to parse components from requests which comform with the OCI distribution spec.
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md
+// /v2/<name>/manifests/<reference>
+// /v2/<name>/blobs/<reference>
 
 var (
 	nameRegex           = regexp.MustCompile(`([a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*)`)
@@ -17,72 +27,19 @@ var (
 	blobsRegexDigest    = regexp.MustCompile(`/v2/` + nameRegex.String() + `/blobs/(.*)`)
 )
 
-func manifestWithTagReference(registry, path string) (Image, bool, error) {
+func ParsePathComponents(registry, path string) (string, digest.Digest, ReferenceType, error) {
 	comps := manifestRegexTag.FindStringSubmatch(path)
-	if len(comps) != 6 {
-		return Image{}, false, nil
+	if len(comps) == 6 {
+		ref := fmt.Sprintf("%s/%s:%s", registry, comps[1], comps[5])
+		return ref, "", ReferenceTypeManifest, nil
 	}
-	img := NewImageWithTag(registry, comps[1], comps[5])
-	return img, true, nil
-}
-
-func manifestWithDigestReference(registry, path string) (Image, bool, error) {
-	comps := manifestRegexDigest.FindStringSubmatch(path)
-	if len(comps) != 6 {
-		return Image{}, false, nil
+	comps = manifestRegexDigest.FindStringSubmatch(path)
+	if len(comps) == 6 {
+		return "", digest.Digest(comps[5]), ReferenceTypeManifest, nil
 	}
-	img := NewImageWithDigest(registry, comps[1], digest.Digest(comps[5]))
-	return img, true, nil
-}
-
-// ManifestReference parses name and reference components from manifest path and returns an image reference.
-// If path does not match any of the regex patterns false will be returned without an error.
-// /v2/<name>/manifests/<reference>
-func ManifestReference(registry, path string) (Image, bool, error) {
-	img, ok, err := manifestWithTagReference(registry, path)
-	if err != nil {
-		return Image{}, ok, err
+	comps = blobsRegexDigest.FindStringSubmatch(path)
+	if len(comps) == 6 {
+		return "", digest.Digest(comps[5]), ReferenceTypeBlob, nil
 	}
-	if ok {
-		return img, ok, nil
-	}
-	img, ok, err = manifestWithDigestReference(registry, path)
-	if err != nil {
-		return Image{}, ok, err
-	}
-	if ok {
-		return img, ok, nil
-	}
-	return Image{}, false, nil
-}
-
-// BlobReference parses name and reference components from blob path and returns and image reference.
-// If path does not match the regex pattern false will be returned without an error.
-// /v2/<name>/blobs/<reference>
-func BlobReference(registry, path string) (Image, bool, error) {
-	comps := blobsRegexDigest.FindStringSubmatch(path)
-	if len(comps) != 6 {
-		return Image{}, false, nil
-	}
-	img := NewImageWithDigest(registry, comps[1], digest.Digest(comps[5]))
-	return img, true, nil
-}
-
-// Any reference returns the name and tag or digest for a path whcih matches any of the request paths.
-func AnyReference(registry, path string) (Image, bool, error) {
-	img, ok, err := ManifestReference(registry, path)
-	if err != nil {
-		return Image{}, ok, err
-	}
-	if ok {
-		return img, ok, nil
-	}
-	img, ok, err = BlobReference(registry, path)
-	if err != nil {
-		return Image{}, ok, err
-	}
-	if ok {
-		return img, ok, nil
-	}
-	return Image{}, false, nil
+	return "", "", "", fmt.Errorf("distribution path could not be parsed")
 }

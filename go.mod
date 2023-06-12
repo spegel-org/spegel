@@ -20,7 +20,6 @@ require (
 	github.com/prometheus/client_golang v1.15.1
 	github.com/spf13/afero v1.9.5
 	github.com/stretchr/testify v1.8.4
-	github.com/valyala/fastjson v1.6.4
 	github.com/xenitab/pkg/channels v0.0.1
 	github.com/xenitab/pkg/gin v0.0.8
 	github.com/xenitab/pkg/kubernetes v0.0.4
