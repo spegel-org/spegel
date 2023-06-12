@@ -20,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	pkggin "github.com/xenitab/pkg/gin"
 
+	"github.com/xenitab/spegel/internal/header"
 	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
 )
@@ -114,7 +115,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	}
 
 	// Always expect remoteRegistry header to be passed in request.
-	remoteRegistry, err := getRemoteRegistry(c.Request.Header)
+	remoteRegistry, err := header.GetRemoteRegistry(c.Request.Header)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -134,7 +135,7 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 	if key == "" {
 		key = ref
 	}
-	if isMirrorRequest(c.Request.Header) {
+	if header.IsMirrorRequest(c.Request.Header) {
 		r.handleMirror(c, key)
 		return
 	}
@@ -167,10 +168,10 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, key string) {
 	c.Set("handler", "mirror")
 
 	// Disable mirroring so we dont end with an infinite loop
-	c.Request.Header[MirrorHeader] = []string{"false"}
+	c.Request.Header[header.MirrorHeader] = []string{"false"}
 
 	// We should allow resolving to ourself if the mirror request is external.
-	isExternal := isExternalRequest(c.Request.Header)
+	isExternal := header.IsExternalRequest(c.Request.Header)
 	if isExternal {
 		r.log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
 	}
@@ -254,12 +255,12 @@ func metricsHandler(c *gin.Context) {
 	if handler != "mirror" {
 		return
 	}
-	remoteRegistry, err := getRemoteRegistry(c.Request.Header)
+	remoteRegistry, err := header.GetRemoteRegistry(c.Request.Header)
 	if err != nil {
 		return
 	}
 	sourceType := "internal"
-	if isExternalRequest(c.Request.Header) {
+	if header.IsExternalRequest(c.Request.Header) {
 		sourceType = "external"
 	}
 	cacheType := "hit"

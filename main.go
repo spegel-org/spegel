@@ -16,12 +16,10 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/afero"
+	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
-
-	"github.com/xenitab/spegel/internal/mirror"
 	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/registry"
 	"github.com/xenitab/spegel/internal/routing"
@@ -85,7 +83,7 @@ func run(ctx context.Context, args *Arguments) error {
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	fs := afero.NewOsFs()
-	err := mirror.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries)
+	err := oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries)
 	if err != nil {
 		return err
 	}
