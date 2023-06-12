@@ -49,10 +49,10 @@ e2e: docker-build
 	# Deploy test Nginx pods and verify deployment status
 	kubectl --kubeconfig $$KIND_KUBECONFIG apply -f ./e2e/test-nginx.yaml
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx get pods
-	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=60s deployment/nginx-tag --for condition=available
-	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=60s deployment/nginx-digest --for condition=available
-	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=60s deployment/nginx-tag-and-digest --for condition=available
-	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=30s -l app=nginx-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod
+	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=90s deployment/nginx-tag --for condition=available
+	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=90s deployment/nginx-digest --for condition=available
+	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=90s deployment/nginx-tag-and-digest --for condition=available
+	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=90s -l app=nginx-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod
 
 	# Verify that Spegel has never restarted
 	RESTART_COUNT=$$(kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}')
