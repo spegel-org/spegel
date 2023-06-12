@@ -11,9 +11,7 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd"
-	apievents "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/go-logr/logr"
@@ -23,6 +21,11 @@ import (
 	"github.com/xenitab/pkg/channels"
 
 	"github.com/xenitab/spegel/internal/header"
+)
+
+const (
+	ImageEventCreate = "/images/create"
+	ImageEventUpdate = "/images/update"
 )
 
 type Containerd struct {
@@ -50,12 +53,16 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error)
 	envelopeCh, cErrCh := c.client.EventService().Subscribe(ctx, c.eventFilter)
 	go func() {
 		for envelope := range envelopeCh {
-			name, err := getEventImageName(envelope)
-			if err != nil {
-				errCh <- err
+			if !(envelope.Topic == ImageEventCreate || envelope.Topic == ImageEventUpdate) {
+				errCh <- fmt.Errorf("event topic not supported %s", envelope.Topic)
 				return
 			}
-			cImg, err := c.client.GetImage(ctx, name)
+			imageName, ok := envelope.Field([]string{"event", "name"})
+			if !ok {
+				errCh <- fmt.Errorf("event name field not found")
+				return
+			}
+			cImg, err := c.client.GetImage(ctx, imageName)
 			if err != nil {
 				errCh <- err
 				return
@@ -182,34 +189,13 @@ func (c *Containerd) WriteBlob(ctx context.Context, dst io.Writer, dgst digest.D
 	return nil
 }
 
-func getEventImageName(e *events.Envelope) (string, error) {
-	switch e.Topic {
-	case "/images/create":
-		img := apievents.ImageCreate{}
-		err := img.Unmarshal(e.Event.Value)
-		if err != nil {
-			return "", err
-		}
-		return img.Name, nil
-	case "/images/update":
-		img := apievents.ImageUpdate{}
-		err := img.Unmarshal(e.Event.Value)
-		if err != nil {
-			return "", err
-		}
-		return img.Name, nil
-	default:
-		return "", fmt.Errorf("unknown topic: %s", e.Topic)
-	}
-}
-
 func createFilters(registries []url.URL) (string, string) {
 	registryHosts := []string{}
 	for _, registry := range registries {
 		registryHosts = append(registryHosts, registry.Host)
 	}
 	listFilter := fmt.Sprintf(`name~="%s"`, strings.Join(registryHosts, "|"))
-	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update",event.name~="%s"`, strings.Join(registryHosts, "|"))
+	eventFilter := fmt.Sprintf(`topic~="%s|%s",event.name~="%s"`, ImageEventCreate, ImageEventUpdate, strings.Join(registryHosts, "|"))
 	return listFilter, eventFilter
 }
 
