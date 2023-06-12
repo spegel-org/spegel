@@ -54,6 +54,14 @@ e2e: docker-build
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=90s deployment/nginx-tag-and-digest --for condition=available
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace nginx wait --timeout=90s -l app=nginx-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod
 
+	# Verify that Spegel has never restarted
+	RESTART_COUNT=$$(kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}')
+	if [[ $$RESTART_COUNT != "0 0 0 0" ]]
+	then
+		echo "Spegel should not have restarted during tests."
+		exit 1
+	fi
+
 	# Delete cluster
 	kind delete cluster
 
