@@ -1,4 +1,4 @@
-package registry
+package header
 
 import (
 	"fmt"
@@ -12,8 +12,8 @@ const (
 	ExternalHeader = "X-Spegel-External"
 )
 
-// getRemoteRegistry returns the target registry passed in the header.
-func getRemoteRegistry(header http.Header) (string, error) {
+// GetRemoteRegistry returns the target registry passed in the header.
+func GetRemoteRegistry(header http.Header) (string, error) {
 	registry := header.Get(RegistryHeader)
 	if registry == "" {
 		return "", fmt.Errorf("registry header cannot be empty")
@@ -25,14 +25,14 @@ func getRemoteRegistry(header http.Header) (string, error) {
 	return registryUrl.Host, nil
 }
 
-// isMirrorRequest returns true if mirror header is present.
-func isMirrorRequest(header http.Header) bool {
+// IsMirrorRequest returns true if mirror header is present.
+func IsMirrorRequest(header http.Header) bool {
 	mirror := header.Get(MirrorHeader)
 	return mirror == "true"
 }
 
-// isExternalRequest returns true if external header is present.
-func isExternalRequest(header http.Header) bool {
+// IsExternalRequest returns true if external header is present.
+func IsExternalRequest(header http.Header) bool {
 	external := header.Get(ExternalHeader)
 	return external == "true"
 }
