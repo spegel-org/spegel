@@ -11,7 +11,6 @@ func TestCreateFilter(t *testing.T) {
 	tests := []struct {
 		name                string
 		registries          []string
-		imageFilter         string
 		expectedListFilter  string
 		expectedEventFilter string
 	}{
@@ -24,15 +23,14 @@ func TestCreateFilter(t *testing.T) {
 		{
 			name:                "additional image filtes",
 			registries:          []string{"https://docker.io", "https://gcr.io"},
-			imageFilter:         "xenitab/spegel",
-			expectedListFilter:  `name~="docker.io|gcr.io|xenitab/spegel"`,
-			expectedEventFilter: `topic~="/images/create|/images/update",event.name~="docker.io|gcr.io|xenitab/spegel"`,
+			expectedListFilter:  `name~="docker.io|gcr.io"`,
+			expectedEventFilter: `topic~="/images/create|/images/update",event.name~="docker.io|gcr.io"`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			listFilter, eventFilter := createFilters(utils.StringListToUrlList(t, tt.registries), tt.imageFilter)
+			listFilter, eventFilter := createFilters(utils.StringListToUrlList(t, tt.registries))
 			require.Equal(t, listFilter, tt.expectedListFilter)
 			require.Equal(t, eventFilter, tt.expectedEventFilter)
 		})
