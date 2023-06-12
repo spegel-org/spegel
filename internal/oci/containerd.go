@@ -11,9 +11,11 @@ import (
 	"strings"
 
 	"github.com/containerd/containerd"
+	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -21,11 +23,6 @@ import (
 	"github.com/xenitab/pkg/channels"
 
 	"github.com/xenitab/spegel/internal/header"
-)
-
-const (
-	ImageEventCreate = "/images/create"
-	ImageEventUpdate = "/images/update"
 )
 
 type Containerd struct {
@@ -53,13 +50,9 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error)
 	envelopeCh, cErrCh := c.client.EventService().Subscribe(ctx, c.eventFilter)
 	go func() {
 		for envelope := range envelopeCh {
-			if !(envelope.Topic == ImageEventCreate || envelope.Topic == ImageEventUpdate) {
-				errCh <- fmt.Errorf("event topic not supported %s", envelope.Topic)
-				return
-			}
-			imageName, ok := envelope.Field([]string{"event", "name"})
-			if !ok {
-				errCh <- fmt.Errorf("event name field not found")
+			imageName, err := getEventImage(envelope.Event)
+			if err != nil {
+				errCh <- err
 				return
 			}
 			cImg, err := c.client.GetImage(ctx, imageName)
@@ -189,13 +182,28 @@ func (c *Containerd) WriteBlob(ctx context.Context, dst io.Writer, dgst digest.D
 	return nil
 }
 
+func getEventImage(e typeurl.Any) (string, error) {
+	evt, err := typeurl.UnmarshalAny(e)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshalany: %w", err)
+	}
+	switch e := evt.(type) {
+	case *eventtypes.ImageCreate:
+		return e.Name, nil
+	case *eventtypes.ImageUpdate:
+		return e.Name, nil
+	default:
+		return "", errors.New("unsupported event")
+	}
+}
+
 func createFilters(registries []url.URL) (string, string) {
 	registryHosts := []string{}
 	for _, registry := range registries {
 		registryHosts = append(registryHosts, registry.Host)
 	}
 	listFilter := fmt.Sprintf(`name~="%s"`, strings.Join(registryHosts, "|"))
-	eventFilter := fmt.Sprintf(`topic~="%s|%s",event.name~="%s"`, ImageEventCreate, ImageEventUpdate, strings.Join(registryHosts, "|"))
+	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update",event.name~="%s"`, strings.Join(registryHosts, "|"))
 	return listFilter, eventFilter
 }
 
