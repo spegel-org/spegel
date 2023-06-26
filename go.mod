@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/alexflint/go-arg v1.4.3
 	github.com/containerd/containerd v1.7.2
+	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zapr v1.2.4
@@ -24,7 +25,7 @@ require (
 	github.com/xenitab/pkg/gin v0.0.8
 	github.com/xenitab/pkg/kubernetes v0.0.4
 	go.uber.org/zap v1.24.0
-	golang.org/x/sync v0.2.0
+	golang.org/x/sync v0.3.0
 	k8s.io/client-go v0.27.2
 )
 
@@ -46,7 +47,6 @@ require (
 	github.com/containerd/continuity v0.4.1 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.2 // indirect
-	github.com/containerd/typeurl/v2 v2.1.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
