@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/go-logr/logr"
 	cid "github.com/ipfs/go-cid"
@@ -18,20 +17,13 @@ import (
 	mh "github.com/multiformats/go-multihash"
 )
 
-const KeyTTL = 10 * time.Minute
-
-type Router interface {
-	Close() error
-	Resolve(ctx context.Context, key string, allowSelf bool) (string, bool, error)
-	Advertise(ctx context.Context, keys []string) error
-}
-
 type P2PRouter struct {
-	host host.Host
-	rd   *routing.RoutingDiscovery
+	host         host.Host
+	rd           *routing.RoutingDiscovery
+	registryPort string
 }
 
-func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, error) {
+func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort string) (Router, error) {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 
 	h, p, err := net.SplitHostPort(addr)
@@ -97,8 +89,9 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, err
 	rd := routing.NewRoutingDiscovery(kdht)
 
 	return &P2PRouter{
-		host: host,
-		rd:   rd,
+		host:         host,
+		rd:           rd,
+		registryPort: registryPort,
 	}, nil
 }
 
@@ -106,38 +99,33 @@ func (r *P2PRouter) Close() error {
 	return r.host.Close()
 }
 
-func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool) (string, bool, error) {
-	logr.FromContextOrDiscard(ctx).V(10).Info("resolving key", "host", r.host.ID().Pretty(), "key", key)
+func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan string, error) {
+	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().Pretty(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
-		return "", false, err
+		return nil, err
 	}
-	cancelCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	ch := r.rd.FindProvidersAsync(cancelCtx, c, 0)
-	for {
-		select {
-		case <-ctx.Done():
-			return "", false, ctx.Err()
-		case info, ok := <-ch:
-			// Channel is closed means no provider is found.
-			if !ok {
-				return "", false, fmt.Errorf("key not found %s", key)
-			}
-			// Ignore responses that come from self if not allowed.
+	addrCh := r.rd.FindProvidersAsync(ctx, c, count)
+	peerCh := make(chan string, count)
+	go func() {
+		for info := range addrCh {
 			if !allowSelf && info.ID == r.host.ID() {
 				continue
 			}
 			if len(info.Addrs) != 1 {
-				return "", false, fmt.Errorf("expected address list to only contain a single item")
+				log.Info("expected address list to only contain a single item")
+				continue
 			}
 			v, err := info.Addrs[0].ValueForProtocol(multiaddr.P_IP4)
 			if err != nil {
-				return "", false, err
+				log.Error(err, "could not get IPV4 address")
+				continue
 			}
-			return v, true, nil
+			// Combine peer with registry port to create mirror endpoint.
+			peerCh <- fmt.Sprintf("http://%s:%s", v, r.registryPort)
 		}
-	}
+	}()
+	return peerCh, nil
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
