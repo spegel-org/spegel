@@ -22,7 +22,7 @@ require (
 	github.com/spf13/afero v1.9.5
 	github.com/stretchr/testify v1.8.4
 	github.com/xenitab/pkg/channels v0.0.1
-	github.com/xenitab/pkg/gin v0.0.8
+	github.com/xenitab/pkg/gin v0.0.9
 	github.com/xenitab/pkg/kubernetes v0.0.4
 	go.uber.org/zap v1.24.0
 	golang.org/x/sync v0.3.0
