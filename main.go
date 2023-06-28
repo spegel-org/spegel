@@ -106,12 +106,12 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
-	srv := &http.Server{
+	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
 		Handler: mux,
 	}
 	g.Go(func() error {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
@@ -120,7 +120,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdownCtx)
+		return metricsSrv.Shutdown(shutdownCtx)
 	})
 
 	_, registryPort, err := net.SplitHostPort(args.RegistryAddr)
@@ -140,16 +140,19 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return state.Track(ctx, ociClient, router)
 	})
 
-	reg, err := registry.NewRegistry(ctx, args.RegistryAddr, ociClient, router, 3)
-	if err != nil {
-		return err
-	}
+	reg := registry.NewRegistry(ociClient, router, 3)
+	regSrv := reg.Server(args.RegistryAddr, log)
 	g.Go(func() error {
-		return reg.ListenAndServe(ctx)
+		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
 	})
 	g.Go(func() error {
 		<-ctx.Done()
-		return reg.Shutdown()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return regSrv.Shutdown(shutdownCtx)
 	})
 
 	log.Info("running registry", "addr", args.RegistryAddr)

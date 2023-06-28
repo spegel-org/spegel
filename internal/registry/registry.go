@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -33,11 +32,20 @@ var mirrorRequestsTotal = promauto.NewCounterVec(
 )
 
 type Registry struct {
-	srv *http.Server
+	ociClient     oci.Client
+	router        routing.Router
+	mirrorRetries int
 }
 
-func NewRegistry(ctx context.Context, addr string, ociClient oci.Client, router routing.Router, mirrorRetries int) (*Registry, error) {
-	log := logr.FromContextOrDiscard(ctx)
+func NewRegistry(ociClient oci.Client, router routing.Router, mirrorRetries int) *Registry {
+	return &Registry{
+		ociClient:     ociClient,
+		router:        router,
+		mirrorRetries: mirrorRetries,
+	}
+}
+
+func (r *Registry) Server(addr string, log logr.Logger) *http.Server {
 	cfg := pkggin.Config{
 		LogConfig: pkggin.LogConfig{
 			Logger:          log,
@@ -51,48 +59,20 @@ func NewRegistry(ctx context.Context, addr string, ociClient oci.Client, router 
 		},
 	}
 	engine := pkggin.NewEngine(cfg)
-	registryHandler := &RegistryHandler{
-		log:           log,
-		ociClient:     ociClient,
-		router:        router,
-		mirrorRetries: mirrorRetries,
-	}
-	engine.GET("/healthz", registryHandler.readyHandler)
-	engine.Any("/v2/*params", metricsHandler, registryHandler.registryHandler)
+	engine.GET("/healthz", r.readyHandler)
+	engine.Any("/v2/*params", metricsHandler, r.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: engine,
 	}
-	return &Registry{
-		srv: srv,
-	}, nil
+	return srv
 }
 
-func (r *Registry) ListenAndServe(ctx context.Context) error {
-	if err := r.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	return nil
-}
-
-func (r *Registry) Shutdown() error {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return r.srv.Shutdown(shutdownCtx)
-}
-
-type RegistryHandler struct {
-	log           logr.Logger
-	ociClient     oci.Client
-	router        routing.Router
-	mirrorRetries int
-}
-
-func (r *RegistryHandler) readyHandler(c *gin.Context) {
+func (r *Registry) readyHandler(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func (r *RegistryHandler) registryHandler(c *gin.Context) {
+func (r *Registry) registryHandler(c *gin.Context) {
 	// Only deal with GET and HEAD requests.
 	if !(c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead) {
 		c.Status(http.StatusNotFound)
@@ -158,8 +138,10 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 }
 
 // TODO: Explore if it is worth returning early if router is not populated.
-func (r *RegistryHandler) handleMirror(c *gin.Context, key string) {
+func (r *Registry) handleMirror(c *gin.Context, key string) {
 	c.Set("handler", "mirror")
+
+	log := pkggin.FromContextOrDiscard(c)
 
 	// Disable mirroring so we dont end with an infinite loop
 	c.Request.Header[header.MirrorHeader] = []string{"false"}
@@ -167,13 +149,13 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, key string) {
 	// We should allow resolving to ourself if the mirror request is external.
 	isExternal := header.IsExternalRequest(c.Request.Header)
 	if isExternal {
-		r.log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
+		log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
 	}
 
 	// Resolve mirror with the requested key
 	resolveCtx, cancel := context.WithTimeout(c, 5*time.Second)
 	defer cancel()
-	resolveCtx = logr.NewContext(resolveCtx, r.log)
+	resolveCtx = logr.NewContext(resolveCtx, log)
 	mirrorCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.mirrorRetries)
 	if err != nil {
 		//nolint:errcheck // ignore
@@ -209,7 +191,7 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, key string) {
 			proxy.ModifyResponse = func(resp *http.Response) error {
 				if resp.StatusCode != http.StatusOK {
 					err := fmt.Errorf("expected mirror to respond with 200 OK but received: %s", resp.Status)
-					r.log.Error(err, "mirror failed attempting next")
+					log.Error(err, "mirror failed attempting next")
 					return err
 				}
 				succeeded = true
@@ -219,13 +201,13 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, key string) {
 			if !succeeded {
 				break
 			}
-			r.log.V(5).Info("mirrored request", "path", c.Request.URL.Path, "url", u.String())
+			log.V(5).Info("mirrored request", "path", c.Request.URL.Path, "url", u.String())
 			return
 		}
 	}
 }
 
-func (r *RegistryHandler) handleManifest(c *gin.Context, dgst digest.Digest) {
+func (r *Registry) handleManifest(c *gin.Context, dgst digest.Digest) {
 	c.Set("handler", "manifest")
 	b, mediaType, err := r.ociClient.GetBlob(c, dgst)
 	if err != nil {
@@ -247,7 +229,7 @@ func (r *RegistryHandler) handleManifest(c *gin.Context, dgst digest.Digest) {
 	}
 }
 
-func (r *RegistryHandler) handleBlob(c *gin.Context, dgst digest.Digest) {
+func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 	c.Set("handler", "blob")
 	size, err := r.ociClient.GetSize(c, dgst)
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	"github.com/xenitab/spegel/internal/routing"
 )
@@ -60,11 +59,7 @@ func TestMirrorHandler(t *testing.T) {
 		"last-peer-working": {badSvr.URL, badSvr.URL, goodSvr.URL},
 	}
 	router := routing.NewMockRouter(resolver)
-	handler := RegistryHandler{
-		log:           logr.Discard(),
-		router:        router,
-		mirrorRetries: 3,
-	}
+	reg := NewRegistry(nil, router, 3)
 
 	tests := []struct {
 		name            string
@@ -116,7 +111,7 @@ func TestMirrorHandler(t *testing.T) {
 				c, _ := gin.CreateTestContext(rw)
 				target := fmt.Sprintf("http://example.com/%s", tt.key)
 				c.Request = httptest.NewRequest(method, target, nil)
-				handler.handleMirror(c, tt.key)
+				reg.handleMirror(c, tt.key)
 
 				resp := rw.Result()
 				defer resp.Body.Close()
