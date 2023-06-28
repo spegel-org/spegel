@@ -32,16 +32,18 @@ var mirrorRequestsTotal = promauto.NewCounterVec(
 )
 
 type Registry struct {
-	ociClient     oci.Client
-	router        routing.Router
-	mirrorRetries int
+	ociClient      oci.Client
+	router         routing.Router
+	resolveRetries int
+	resolveTimeout time.Duration
 }
 
-func NewRegistry(ociClient oci.Client, router routing.Router, mirrorRetries int) *Registry {
+func NewRegistry(ociClient oci.Client, router routing.Router, resolveRetries int, resolveTimeout time.Duration) *Registry {
 	return &Registry{
-		ociClient:     ociClient,
-		router:        router,
-		mirrorRetries: mirrorRetries,
+		ociClient:      ociClient,
+		router:         router,
+		resolveRetries: resolveRetries,
+		resolveTimeout: resolveTimeout,
 	}
 }
 
@@ -153,10 +155,10 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 	}
 
 	// Resolve mirror with the requested key
-	resolveCtx, cancel := context.WithTimeout(c, 5*time.Second)
+	resolveCtx, cancel := context.WithTimeout(c, r.resolveTimeout)
 	defer cancel()
 	resolveCtx = logr.NewContext(resolveCtx, log)
-	mirrorCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.mirrorRetries)
+	mirrorCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)

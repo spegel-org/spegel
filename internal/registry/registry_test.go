@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -59,7 +60,7 @@ func TestMirrorHandler(t *testing.T) {
 		"last-peer-working": {badSvr.URL, badSvr.URL, goodSvr.URL},
 	}
 	router := routing.NewMockRouter(resolver)
-	reg := NewRegistry(nil, router, 3)
+	reg := NewRegistry(nil, router, 3, 5*time.Second)
 
 	tests := []struct {
 		name            string
