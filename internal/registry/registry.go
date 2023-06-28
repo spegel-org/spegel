@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -37,11 +36,7 @@ type Registry struct {
 	srv *http.Server
 }
 
-func NewRegistry(ctx context.Context, addr string, ociClient oci.Client, router routing.Router) (*Registry, error) {
-	_, registryPort, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
+func NewRegistry(ctx context.Context, addr string, ociClient oci.Client, router routing.Router, mirrorRetries int) (*Registry, error) {
 	log := logr.FromContextOrDiscard(ctx)
 	cfg := pkggin.Config{
 		LogConfig: pkggin.LogConfig{
@@ -57,10 +52,10 @@ func NewRegistry(ctx context.Context, addr string, ociClient oci.Client, router 
 	}
 	engine := pkggin.NewEngine(cfg)
 	registryHandler := &RegistryHandler{
-		log:          log,
-		ociClient:    ociClient,
-		router:       router,
-		registryPort: registryPort,
+		log:           log,
+		ociClient:     ociClient,
+		router:        router,
+		mirrorRetries: mirrorRetries,
 	}
 	engine.GET("/healthz", registryHandler.readyHandler)
 	engine.Any("/v2/*params", metricsHandler, registryHandler.registryHandler)
@@ -87,10 +82,10 @@ func (r *Registry) Shutdown() error {
 }
 
 type RegistryHandler struct {
-	log          logr.Logger
-	ociClient    oci.Client
-	router       routing.Router
-	registryPort string
+	log           logr.Logger
+	ociClient     oci.Client
+	router        routing.Router
+	mirrorRetries int
 }
 
 func (r *RegistryHandler) readyHandler(c *gin.Context) {
@@ -163,7 +158,6 @@ func (r *RegistryHandler) registryHandler(c *gin.Context) {
 }
 
 // TODO: Explore if it is worth returning early if router is not populated.
-// TODO: Retry multiple endoints.
 func (r *RegistryHandler) handleMirror(c *gin.Context, key string) {
 	c.Set("handler", "mirror")
 
@@ -176,31 +170,59 @@ func (r *RegistryHandler) handleMirror(c *gin.Context, key string) {
 		r.log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
 	}
 
-	// Resolve node with the requested key
-	timeoutCtx, cancel := context.WithTimeout(c, 5*time.Second)
+	// Resolve mirror with the requested key
+	resolveCtx, cancel := context.WithTimeout(c, 5*time.Second)
 	defer cancel()
-	ip, ok, err := r.router.Resolve(timeoutCtx, key, isExternal)
+	resolveCtx = logr.NewContext(resolveCtx, r.log)
+	mirrorCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.mirrorRetries)
 	if err != nil {
 		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
-		return
+		c.AbortWithError(http.StatusInternalServerError, err)
 	}
-	if !ok {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not find node with key: %s", key))
-		return
-	}
+	for {
+		select {
+		case <-resolveCtx.Done():
+			// Resolving mirror has timed out meaning one could not be found.
+			//nolint:errcheck // ignore
+			c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not resolve mirror for key: %s", key))
+			return
+		case mirror, ok := <-mirrorCh:
+			// Channel closed means no more mirrors will be received and max retries has been reached.
+			if !ok {
+				//nolint:errcheck // ignore
+				c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("mirror resolution has been exhausted"))
+				return
+			}
 
-	// Proxy the request to another registry
-	url, err := url.Parse(fmt.Sprintf("http://%s:%s", ip, r.registryPort))
-	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
-		return
+			// Modify response returns and error on non 200 status code and NOP error handler skips response writing.
+			// If proxy fails no response is written and it is tried again against a different mirror.
+			// If the response writer has been written to it means that the request was properly proxied.
+			succeeded := false
+			u, err := url.Parse(mirror)
+			if err != nil {
+				//nolint:errcheck // ignore
+				c.AbortWithError(http.StatusInternalServerError, err)
+				return
+			}
+			proxy := httputil.NewSingleHostReverseProxy(u)
+			proxy.ErrorHandler = func(http.ResponseWriter, *http.Request, error) {}
+			proxy.ModifyResponse = func(resp *http.Response) error {
+				if resp.StatusCode != http.StatusOK {
+					err := fmt.Errorf("expected mirror to respond with 200 OK but received: %s", resp.Status)
+					r.log.Error(err, "mirror failed attempting next")
+					return err
+				}
+				succeeded = true
+				return nil
+			}
+			proxy.ServeHTTP(c.Writer, c.Request)
+			if !succeeded {
+				break
+			}
+			r.log.V(5).Info("mirrored request", "path", c.Request.URL.Path, "url", u.String())
+			return
+		}
 	}
-	r.log.V(5).Info("forwarding request", "path", c.Request.URL.Path, "url", url.String())
-	proxy := httputil.NewSingleHostReverseProxy(url)
-	proxy.ServeHTTP(c.Writer, c.Request)
 }
 
 func (r *RegistryHandler) handleManifest(c *gin.Context, dgst digest.Digest) {
