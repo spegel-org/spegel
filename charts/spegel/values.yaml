@@ -103,6 +103,10 @@ spegel:
     - https://k8s.gcr.io
   # -- Extra target mirror registries other than Spegel.
   extraMirrorRegistries: []
+  # -- Max ammount of mirrors to attempt.
+  mirrorResolveRetries: 3
+  # -- Max duration spent finding a mirror.
+  mirrorResolveTimeout: "5s"
   # -- Path to Containerd socket.
   containerdSock: "/run/containerd/containerd.sock"
   # -- Containerd namespace where images are stored.

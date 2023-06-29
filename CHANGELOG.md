@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 
 
 - [#125](https://github.com/XenitAB/spegel/pull/125) Add retry mirroring to new peer if current peer fails.
+- [#127](https://github.com/XenitAB/spegel/pull/127) Add configuration for resolve retry and timeout.
 
 ### Changed
 

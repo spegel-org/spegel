@@ -61,6 +61,8 @@ spec:
           {{- toYaml .Values.securityContext | nindent 12 }}
         args:
           - registry
+          - --mirror-resolve-retries={{ .Values.spegel.mirrorResolveRetries }}
+          - --mirror-resolve-timeout={{ .Values.spegel.mirrorResolveTimeout }}
           - --registry-addr=:{{ .Values.service.registry.port }}
           - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
