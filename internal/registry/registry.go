@@ -99,7 +99,7 @@ func (r *Registry) registryHandler(c *gin.Context) {
 		return
 	}
 
-	// Parse out path components from request
+	// Parse out path components from request.
 	ref, dgst, refType, err := oci.ParsePathComponents(remoteRegistry, c.Request.URL.Path)
 	if err != nil {
 		//nolint:errcheck // ignore
@@ -108,11 +108,11 @@ func (r *Registry) registryHandler(c *gin.Context) {
 	}
 
 	// Request with mirror header are proxied.
-	key := dgst.String()
-	if key == "" {
-		key = ref
-	}
 	if header.IsMirrorRequest(c.Request.Header) {
+		key := dgst.String()
+		if key == "" {
+			key = ref
+		}
 		r.handleMirror(c, key)
 		return
 	}
