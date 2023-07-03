@@ -69,10 +69,8 @@ spec:
 | resources | object | `{}` | Resource requests and limits for the Spegel container. |
 | securityContext | object | `{}` | Security context for the Spegel container. |
 | service.metrics.port | int | `9090` | Port to expose the metrics via the service. |
-| service.registry.hostPort | int | `30020` | Local host port to expose the registry. |
 | service.registry.nodePort | int | `30021` | Node port to expose the registry via the service. |
 | service.registry.port | int | `5000` | Port to expose the registry via the service. |
-| service.registry.topologyAwareHintsEnabled | bool | `true` | If true adds topology aware hints annotation to node port service. |
 | service.router.port | int | `5001` | Port to expose the router via the service. |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
 | serviceAccount.name | string | `""` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template. |

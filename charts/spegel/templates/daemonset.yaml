@@ -42,7 +42,6 @@ spec:
           {{- end }}
           {{- end }}
           - --mirror-registries
-          - http://127.0.0.1:{{ .Values.service.registry.hostPort }}
           - http://127.0.0.1:{{ .Values.service.registry.nodePort }}
           {{- with .Values.spegel.additionalMirrorRegistries }}
           {{- range . }}
@@ -82,8 +81,6 @@ spec:
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
-            hostIP: "127.0.0.1"    
-            hostPort: {{ .Values.service.registry.hostPort }}
             protocol: TCP
           - name: router
             containerPort: {{ .Values.service.router.port }}

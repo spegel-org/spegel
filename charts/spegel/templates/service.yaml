@@ -19,12 +19,9 @@ metadata:
   name: {{ include "spegel.fullname" . }}-registry
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
-  {{- if .Values.service.registry.topologyAwareHintsEnabled }}
-  annotations:
-    service.kubernetes.io/topology-aware-hints: auto
-  {{- end }}
 spec:
   type: NodePort
+  trafficPolicy: PreferLocal
   selector:
     {{- include "spegel.selectorLabels" . | nindent 4 }}
   ports:

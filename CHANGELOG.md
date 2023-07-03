@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#126](https://github.com/XenitAB/spegel/pull/126) Refactor registry implementation to not require separate handler.
 - [#132](https://github.com/XenitAB/spegel/pull/132) Extend tests to validate single node and mirror fallback.
 - [#133](https://github.com/XenitAB/spegel/pull/133) Use routing table size for readiness check.
+- [#134](https://github.com/XenitAB/spegel/pull/134) Switch to using single service with fallback policy for all requests.
 
 ### Deprecated
 

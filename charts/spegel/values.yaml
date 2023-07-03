@@ -42,10 +42,6 @@ service:
     port: 5000
     # -- Node port to expose the registry via the service.
     nodePort: 30021
-    # -- Local host port to expose the registry.
-    hostPort: 30020
-    # -- If true adds topology aware hints annotation to node port service.
-    topologyAwareHintsEnabled: true
   router:
     # -- Port to expose the router via the service.
     port: 5001
