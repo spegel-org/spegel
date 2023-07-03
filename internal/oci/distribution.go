@@ -11,7 +11,7 @@ type ReferenceType string
 
 const (
 	ReferenceTypeManifest = "Manifest"
-	ReferenceTypeBlob     = "ManifestBlob"
+	ReferenceTypeBlob     = "Blob"
 )
 
 // Package is used to parse components from requests which comform with the OCI distribution spec.
