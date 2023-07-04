@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#114](https://github.com/XenitAB/spegel/pull/114) Move mirror configuration to specific OCI implementation.
 - [#117](https://github.com/XenitAB/spegel/pull/117) Update Containerd client to 1.7.
 - [#126](https://github.com/XenitAB/spegel/pull/126) Refactor registry implementation to not require separate handler.
+- [#132](https://github.com/XenitAB/spegel/pull/132) Extend tests to validate single node and mirror fallback.
 
 ### Deprecated
 
