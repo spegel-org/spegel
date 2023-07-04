@@ -18,7 +18,9 @@ import (
 )
 
 type P2PRouter struct {
+	b            Bootstrapper
 	host         host.Host
+	kdht         *dht.IpfsDHT
 	rd           *routing.RoutingDiscovery
 	registryPort string
 }
@@ -89,7 +91,9 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 	rd := routing.NewRoutingDiscovery(kdht)
 
 	return &P2PRouter{
+		b:            b,
 		host:         host,
+		kdht:         kdht,
 		rd:           rd,
 		registryPort: registryPort,
 	}, nil
@@ -97,6 +101,20 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 
 func (r *P2PRouter) Close() error {
 	return r.host.Close()
+}
+
+func (r *P2PRouter) HasMirrors() (bool, error) {
+	addrInfo, err := r.b.GetAddress()
+	if err != nil {
+		return false, err
+	}
+	if addrInfo.ID == r.host.ID() {
+		return true, nil
+	}
+	if r.kdht.RoutingTable().Size() == 0 {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan string, error) {

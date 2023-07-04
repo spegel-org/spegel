@@ -71,6 +71,17 @@ func (r *Registry) Server(addr string, log logr.Logger) *http.Server {
 }
 
 func (r *Registry) readyHandler(c *gin.Context) {
+	ok, err := r.router.HasMirrors()
+	if err != nil {
+		//nolint:errcheck // ignore
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	if !ok {
+		c.Status(http.StatusInternalServerError)
+		return
+
+	}
 	c.Status(http.StatusOK)
 }
 
@@ -139,7 +150,6 @@ func (r *Registry) registryHandler(c *gin.Context) {
 	c.Status(http.StatusNotFound)
 }
 
-// TODO: Explore if it is worth returning early if router is not populated.
 func (r *Registry) handleMirror(c *gin.Context, key string) {
 	c.Set("handler", "mirror")
 
