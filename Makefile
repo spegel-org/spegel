@@ -31,14 +31,23 @@ e2e: docker-build
 	# Deploy Spegel
 	kind load docker-image ${IMG}
 	kubectl --kubeconfig $$KIND_KUBECONFIG create namespace spegel
-	helm --kubeconfig $$KIND_KUBECONFIG upgrade --install --namespace="spegel" spegel ./charts/spegel --set "image.pullPolicy=Never" --set "image.tag=${TAG}"
+	helm --kubeconfig $$KIND_KUBECONFIG upgrade --install --namespace="spegel" spegel ./charts/spegel --set "image.pullPolicy=Never" --set "image.tag=${TAG}" --set "nodeSelector.spegel=schedule"
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel rollout status daemonset spegel --timeout 60s
+	POD_COUNT=$$(kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel get pods --no-headers | wc -l)
+	if [[ $$POD_COUNT != "5" ]]
+	then
+		echo "Spegel should have 5 Pods running."
+		exit 1
+	fi
+
+	# Remove Spegel from the last node to test that the mirror fallback is working.
+	kubectl --kubeconfig $$KIND_KUBECONFIG label nodes kind-worker4 spegel-
 
 	# Pull images onto single node which will never run workload.
 	docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd
 
 	# Block internet access by only allowing RFC1918 CIDR
-	for NODE in kind-control-plane kind-worker kind-worker2 kind-worker3
+	for NODE in kind-control-plane kind-worker kind-worker2 kind-worker3 kind-worker4
 	do
 		docker exec $$NODE iptables -A OUTPUT -o eth0 -d 10.0.0.0/8 -j ACCEPT
 		docker exec $$NODE iptables -A OUTPUT -o eth0 -d 172.16.0.0/12 -j ACCEPT
@@ -59,6 +68,17 @@ e2e: docker-build
 	if [[ $$RESTART_COUNT != "0 0 0 0" ]]
 	then
 		echo "Spegel should not have restarted during tests."
+		exit 1
+	fi
+
+	# Remove all Spegel Pods and only restart one to verify that running a single instance works
+	kubectl --kubeconfig $$KIND_KUBECONFIG label nodes kind-control-plane kind-worker kind-worker2 spegel-
+	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel delete pods --all
+	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel rollout status daemonset spegel --timeout 60s
+	POD_COUNT=$$(kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel get pods --no-headers | wc -l)
+	if [[ $$POD_COUNT != "1" ]]
+	then
+		echo "Spegel should have 1 Pods running."
 		exit 1
 	fi
 

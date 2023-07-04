@@ -14,10 +14,20 @@ containerdConfigPatches:
     content_sharing_policy = "isolated"
 nodes:
   - role: control-plane
-  - role: worker
+    labels:
+      spegel: schedule
   - role: worker
     labels:
+      spegel: schedule
+  - role: worker
+    labels:
+      spegel: schedule
       test: true
   - role: worker
     labels:
+      spegel: schedule
+      test: true
+  - role: worker
+    labels:
+      spegel: schedule
       test: true
