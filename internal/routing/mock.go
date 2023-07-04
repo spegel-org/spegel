@@ -18,6 +18,10 @@ func (m *MockRouter) Close() error {
 	return nil
 }
 
+func (m *MockRouter) HasMirrors() (bool, error) {
+	return true, nil
+}
+
 func (m *MockRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan string, error) {
 	peerCh := make(chan string, count)
 	peers, ok := m.resolver[key]
