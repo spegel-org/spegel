@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.8
+
+### Added 
+
 - [#125](https://github.com/XenitAB/spegel/pull/125) Add retry mirroring to new peer if current peer fails.
 - [#127](https://github.com/XenitAB/spegel/pull/127) Add configuration for resolve retry and timeout.
 
@@ -21,15 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#132](https://github.com/XenitAB/spegel/pull/132) Extend tests to validate single node and mirror fallback.
 - [#133](https://github.com/XenitAB/spegel/pull/133) Use routing table size for readiness check.
 
-### Deprecated
-
 ### Removed
 
 - [#113](https://github.com/XenitAB/spegel/pull/113) Remove image filter configuration.
-
-### Fixed
-
-### Security
 
 ## v0.0.7
 
