@@ -56,3 +56,14 @@ Create the name of the service account to use
 {{- define "spegel.serviceAccountName" -}}
 {{- default (include "spegel.fullname" .) .Values.serviceAccount.name }}
 {{- end }}
+
+{{/*
+Image reference
+*/}}
+{{- define "spegel.image" -}}
+{{- if .Values.image.digest }}
+{{- .Values.image.repository }}@{{ .Values.image.digest }}
+{{- else }}
+{{- .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+{{- end }}
+{{- end }}

@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#138](https://github.com/XenitAB/spegel/pull/138) Set image digest in Helm chart.
+
 ### Deprecated
 
 ### Removed

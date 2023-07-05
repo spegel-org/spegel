@@ -30,8 +30,13 @@ e2e: docker-build
 
 	# Deploy Spegel
 	kind load docker-image ${IMG}
+	DIGEST=$$(docker exec kind-worker crictl inspecti -o 'go-template' --template '{{ index .status.repoDigests 0 }}' ${IMG} | cut -d'@' -f2)
+	for NODE in kind-control-plane kind-worker kind-worker2 kind-worker3 kind-worker4
+	do
+		docker exec $$NODE ctr -n k8s.io image tag ${IMG} ghcr.io/xenitab/spegel@$${DIGEST}
+	done
 	kubectl --kubeconfig $$KIND_KUBECONFIG create namespace spegel
-	helm --kubeconfig $$KIND_KUBECONFIG upgrade --install --namespace="spegel" spegel ./charts/spegel --set "image.pullPolicy=Never" --set "image.tag=${TAG}" --set "nodeSelector.spegel=schedule"
+	helm --kubeconfig $$KIND_KUBECONFIG upgrade --install --namespace="spegel" spegel ./charts/spegel --set "image.pullPolicy=Never" --set "image.digest=$${DIGEST}" --set "nodeSelector.spegel=schedule"
 	kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel rollout status daemonset spegel --timeout 60s
 	POD_COUNT=$$(kubectl --kubeconfig $$KIND_KUBECONFIG --namespace spegel get pods --no-headers | wc -l)
 	if [[ $$POD_COUNT != "5" ]]
