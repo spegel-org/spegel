@@ -28,7 +28,7 @@ spec:
       {{- if .Values.spegel.containerdMirrorAdd }}
       initContainers:
       - name: configuration
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        image: "{{ include "spegel.image" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 12 }}
@@ -55,7 +55,7 @@ spec:
       {{- end }}
       containers:
       - name: registry
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        image: "{{ include "spegel.image" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 12 }}

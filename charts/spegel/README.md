@@ -57,6 +57,7 @@ spec:
 |-----|------|---------|-------------|
 | affinity | object | `{}` | Affinity settings for pod assignment. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
+| image.digest | string | `""` | Image digest. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image Pull Policy. |
 | image.repository | string | `"ghcr.io/xenitab/spegel"` | Image repository. |
 | image.tag | string | `""` | Overrides the image tag whose default is the chart appVersion. |
