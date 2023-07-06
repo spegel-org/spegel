@@ -738,8 +738,8 @@ github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1/go.mod h
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=
 github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415/go.mod h1:GwrjFmJcFw6At/Gs6z4yjiIwzuJ1/+UwLxMQDVQXShQ=
 github.com/xeipuuv/gojsonschema v1.2.0/go.mod h1:anYRn/JVcOK2ZgGU+IjEV4nwlhoK5sQluxsYJ78Id3Y=
-github.com/xenitab/pkg/channels v0.0.1 h1:W6LBi4N5XaUhEEj0FGKIpigZK6gVWkouuuOXFp7sVpw=
-github.com/xenitab/pkg/channels v0.0.1/go.mod h1:/MCBlje0/98BdAF7LetkSK1+lXeUpScIbTENGaWjGRg=
+github.com/xenitab/pkg/channels v0.0.2 h1:nCMsjEyhJedmAimYPOobzJl/yj7byU9h6IHEPc4QlPg=
+github.com/xenitab/pkg/channels v0.0.2/go.mod h1:/MCBlje0/98BdAF7LetkSK1+lXeUpScIbTENGaWjGRg=
 github.com/xenitab/pkg/gin v0.0.9 h1:BGdxnKoXAJBkthQTwQdaRdN7jTiNO+/C8hIexBrasfU=
 github.com/xenitab/pkg/gin v0.0.9/go.mod h1:8rzqJ8X5KJOo31PBOD4/Wtlt2ac8hCjN1mpOf1YAFs4=
 github.com/xenitab/pkg/kubernetes v0.0.4 h1:muVWzci89l611bd4FzWlDsHm2zwwzNpxA2TvY9svebI=
