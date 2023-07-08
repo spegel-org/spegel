@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/containerd/containerd"
@@ -27,6 +28,7 @@ import (
 
 type Containerd struct {
 	client      *containerd.Client
+	platform    platforms.MatchComparer
 	listFilter  string
 	eventFilter string
 }
@@ -39,6 +41,7 @@ func NewContainerd(sock, namespace string, registries []url.URL) (*Containerd, e
 	listFilter, eventFilter := createFilters(registries)
 	return &Containerd{
 		client:      client,
+		platform:    platforms.Default(),
 		listFilter:  listFilter,
 		eventFilter: eventFilter,
 	}, err
@@ -89,8 +92,9 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 
 func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, error) {
 	keys := []string{}
-	platform := platforms.Default()
 	err := images.Walk(ctx, images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		keys = append(keys, desc.Digest.String())
+
 		b, err := content.ReadBlob(ctx, c.client.ContentStore(), desc)
 		if err != nil {
 			return nil, err
@@ -106,14 +110,32 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 			if err := json.Unmarshal(b, &idx); err != nil {
 				return nil, err
 			}
-			for _, manifest := range idx.Manifests {
-				if !platform.Match(*manifest.Platform) {
+			var descs []ocispec.Descriptor
+			for _, m := range idx.Manifests {
+				if !c.platform.Match(*m.Platform) {
 					continue
 				}
-				keys = append(keys, manifest.Digest.String())
-				return []ocispec.Descriptor{manifest}, nil
+				descs = append(descs, m)
 			}
-			return nil, fmt.Errorf("could not find platform architecture in manifest: %v", desc.Digest)
+
+			if len(descs) == 0 {
+				return nil, fmt.Errorf("could not find platform architecture in manifest: %v", desc.Digest)
+			}
+
+			// Platform matching is a bit weird in that multiple platforms can match.
+			// There is however a "best" match that should be used.
+			// This logic is used by Containerd to determine which layer to pull so we should use the same logic.
+			sort.SliceStable(descs, func(i, j int) bool {
+				if descs[i].Platform == nil {
+					return false
+				}
+				if descs[j].Platform == nil {
+					return true
+				}
+				return c.platform.Less(*descs[i].Platform, *descs[j].Platform)
+			})
+
+			return []ocispec.Descriptor{descs[0]}, nil
 		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 			var manifest ocispec.Manifest
 			if err := json.Unmarshal(b, &manifest); err != nil {
@@ -123,7 +145,6 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 			for _, layer := range manifest.Layers {
 				keys = append(keys, layer.Digest.String())
 			}
-			// TODO: In the images.Manifest implementation there is a platform check that I do not understand
 			return nil, nil
 		}
 		return nil, fmt.Errorf("unexpected media type %v for digest: %v", ud.MediaType, desc.Digest)
@@ -134,7 +155,6 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("no image digests found")
 	}
-	keys = append(keys, img.Digest.String())
 	return keys, nil
 }
 
