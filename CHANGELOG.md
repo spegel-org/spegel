@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#141](https://github.com/XenitAB/spegel/pull/141) Fix platform matching and add tests for getting image digests.
+
 ### Security
 
 ## v0.0.8
