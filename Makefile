@@ -22,8 +22,15 @@ e2e: docker-build
 	TMP_DIR=$$(mktemp -d)
 	export KIND_KUBECONFIG=$$TMP_DIR/kind.kubeconfig
 	echo $$KIND_KUBECONFIG
-	kind create cluster --kubeconfig $$KIND_KUBECONFIG --config ./e2e/kind-config.yaml
+	kind create cluster --kubeconfig $$KIND_KUBECONFIG --config ./e2e/kind-config-cilium.yaml
 
+	# Install Cilium
+	CILIUM_VERSION="v1.13.4"
+	docker pull quay.io/cilium/cilium:$${CILIUM_VERSION}
+	kind load docker-image quay.io/cilium/cilium:$${CILIUM_VERSION}
+	helm repo add cilium https://helm.cilium.io/
+	helm --kubeconfig $$KIND_KUBECONFIG install cilium cilium/cilium --version $${CILIUM_VERSION} --namespace kube-system --set image.pullPolicy=IfNotPresent --set ipam.mode=kubernetes
+	
 	# Pull images onto single node which will never run workload.
 	docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.23.0
 	docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b
