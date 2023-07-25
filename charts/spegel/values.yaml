@@ -15,7 +15,7 @@ imagePullSecrets: []
 nameOverride: ""
 # -- Overrides the full name of the chart.
 fullnameOverride: ""
-# -- Overrides the namespace where spegel resources are installed
+# -- Overrides the namespace where spegel resources are installed.
 namespaceOverride: ""
 
 serviceAccount:
