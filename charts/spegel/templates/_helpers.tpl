@@ -24,6 +24,17 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
+Creates the namespace for the chart. 
+Defaults to the Release namespace unless the namespaceOverride is defined.
+*/}}
+{{- define "spegel.namespace" -}}
+{{- if .Values.namespaceOverride }}
+{{- printf "%s" .Values.namespaceOverride -}}
+{{- else }}
+{{- printf "%s" .Release.Namespace -}}
+{{- end }}
+
+{{/*
 Create chart name and version as used by the chart label.
 */}}
 {{- define "spegel.chart" -}}
