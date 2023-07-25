@@ -33,6 +33,8 @@ Defaults to the Release namespace unless the namespaceOverride is defined.
 {{- else }}
 {{- printf "%s" .Release.Namespace -}}
 {{- end }}
+{{- end }}
+
 
 {{/*
 Create chart name and version as used by the chart label.
