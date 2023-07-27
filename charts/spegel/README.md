@@ -63,6 +63,7 @@ spec:
 | image.tag | string | `""` | Overrides the image tag whose default is the chart appVersion. |
 | imagePullSecrets | list | `[]` | Image Pull Secrets |
 | nameOverride | string | `""` | Overrides the name of the chart. |
+| namespaceOverride | string | `""` | Overrides the namespace where spegel resources are installed. |
 | nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for pod assignment. |
 | podAnnotations | object | `{}` | Annotations to add to the pod. |
 | podSecurityContext | object | `{}` | Security context for the pod. |
