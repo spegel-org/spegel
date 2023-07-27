@@ -106,6 +106,8 @@ spegel:
     - https://gcr.io
     - https://registry.k8s.io
     - https://k8s.gcr.io
+  # -- If true mirror will be configured to resolve tags.
+  resolveEnabled: true
   # -- Extra target mirror registries other than Spegel.
   extraMirrorRegistries: []
   # -- Max ammount of mirrors to attempt.

@@ -230,12 +230,12 @@ func createFilters(registries []url.URL) (string, string) {
 // Refer to containerd registry configuration documentation for mor information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL) error {
+func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveEnabled bool) error {
 	if err := validate(registryURLs); err != nil {
 		return err
 	}
 	for _, registryURL := range registryURLs {
-		content := hostsFileContent(registryURL, mirrorURLs)
+		content := hostsFileContent(registryURL, mirrorURLs, resolveEnabled)
 		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
 		err := fs.MkdirAll(path.Dir(fp), 0755)
 		if err != nil {
@@ -264,7 +264,12 @@ func RemoveMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath stri
 	return errors.Join(errs...)
 }
 
-func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
+func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL, resolveEnabled bool) string {
+	capabilities := "[\"pull\", \"resolve\"]"
+	if !resolveEnabled {
+		capabilities = "[\"pull\"]"
+	}
+
 	server := registryURL.String()
 	// Need a special case for Docker Hub as docker.io is just an alias.
 	if registryURL.String() == "https://docker.io" {
@@ -275,10 +280,10 @@ func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
 		content = fmt.Sprintf(`%[1]s
 
 [host."%[3]s"]
-  capabilities = ["pull", "resolve"]
+  capabilities = %[6]s
 [host."%[3]s".header]
   %[4]s = ["%[2]s"]
-  %[5]s = ["true"]`, content, registryURL.String(), mirrorURL.String(), header.RegistryHeader, header.MirrorHeader)
+  %[5]s = ["true"]`, content, registryURL.String(), mirrorURL.String(), header.RegistryHeader, header.MirrorHeader, capabilities)
 
 		// We assume first mirror registry is local. All others are external.
 		if i != 0 {
