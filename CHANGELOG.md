@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#151](https://github.com/XenitAB/spegel/pull/151) Refactor containerd mirror tests and remove utils package.
+
 ### Deprecated
 
 ### Removed
