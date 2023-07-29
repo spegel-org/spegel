@@ -34,6 +34,10 @@ func NewImage(registry, repository, tag string, dgst digest.Digest) (Image, erro
 	}, nil
 }
 
+func (i Image) IsLatestTag() bool {
+	return i.Tag == "latest"
+}
+
 func (i Image) String() string {
 	tag := ""
 	if i.Tag != "" {
