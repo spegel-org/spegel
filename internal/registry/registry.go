@@ -9,6 +9,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -32,18 +33,20 @@ var mirrorRequestsTotal = promauto.NewCounterVec(
 )
 
 type Registry struct {
-	ociClient      oci.Client
-	router         routing.Router
-	resolveRetries int
-	resolveTimeout time.Duration
+	ociClient        oci.Client
+	router           routing.Router
+	resolveRetries   int
+	resolveTimeout   time.Duration
+	resolveLatestTag bool
 }
 
-func NewRegistry(ociClient oci.Client, router routing.Router, resolveRetries int, resolveTimeout time.Duration) *Registry {
+func NewRegistry(ociClient oci.Client, router routing.Router, resolveRetries int, resolveTimeout time.Duration, resolveLatestTag bool) *Registry {
 	return &Registry{
-		ociClient:      ociClient,
-		router:         router,
-		resolveRetries: resolveRetries,
-		resolveTimeout: resolveTimeout,
+		ociClient:        ociClient,
+		router:           router,
+		resolveRetries:   resolveRetries,
+		resolveTimeout:   resolveTimeout,
+		resolveLatestTag: resolveLatestTag,
 	}
 }
 
@@ -116,6 +119,14 @@ func (r *Registry) registryHandler(c *gin.Context) {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
+	}
+
+	if !r.resolveLatestTag && ref != "" {
+		_, tag, _ := strings.Cut(ref, ":")
+		if tag == "latest" {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
 	}
 
 	// Request with mirror header are proxied.

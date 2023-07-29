@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 
 
 - [#145](https://github.com/XenitAB/spegel/pull/145) Add new field to override Helm chart namespace.
+- [#153](https://github.com/XenitAB/spegel/pull/153) Add option to disable resolving latest tags.
 
 ### Changed
 
