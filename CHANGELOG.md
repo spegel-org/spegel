@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#152](https://github.com/XenitAB/spegel/pull/152) Fix image parsing to allow only passing digest through image reference.
+
 ### Security
 
 ## v0.0.9
