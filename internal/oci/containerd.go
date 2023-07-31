@@ -22,29 +22,66 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/afero"
 	"github.com/xenitab/pkg/channels"
+	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 
 	"github.com/xenitab/spegel/internal/header"
 )
 
 type Containerd struct {
-	client      *containerd.Client
-	platform    platforms.MatchComparer
-	listFilter  string
-	eventFilter string
+	client             *containerd.Client
+	platform           platforms.MatchComparer
+	listFilter         string
+	eventFilter        string
+	runtimeClient      runtimeapi.RuntimeServiceClient
+	registryConfigPath string
 }
 
-func NewContainerd(sock, namespace string, registries []url.URL) (*Containerd, error) {
+func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL) (*Containerd, error) {
 	client, err := containerd.New(sock, containerd.WithDefaultNamespace(namespace))
 	if err != nil {
 		return nil, fmt.Errorf("could not create containerd client: %w", err)
 	}
 	listFilter, eventFilter := createFilters(registries)
+	runtimeClient := runtimeapi.NewRuntimeServiceClient(client.Conn())
 	return &Containerd{
-		client:      client,
-		platform:    platforms.Default(),
-		listFilter:  listFilter,
-		eventFilter: eventFilter,
-	}, err
+		client:             client,
+		platform:           platforms.Default(),
+		listFilter:         listFilter,
+		eventFilter:        eventFilter,
+		runtimeClient:      runtimeClient,
+		registryConfigPath: registryConfigPath,
+	}, nil
+}
+
+func (c *Containerd) Verify(ctx context.Context) error {
+	ok, err := c.client.IsServing(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("could not reach Containerd service")
+	}
+	resp, err := c.runtimeClient.Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
+	if err != nil {
+		return err
+	}
+	str, ok := resp.Info["config"]
+	if !ok {
+		return fmt.Errorf("could not get config data from info response")
+	}
+	cfg := &struct {
+		Registry struct {
+			ConfigPath string `json:"configPath"`
+		} `json:"registry"`
+	}{}
+	err = json.Unmarshal([]byte(str), cfg)
+	if err != nil {
+		return err
+	}
+	if cfg.Registry.ConfigPath != c.registryConfigPath {
+		return fmt.Errorf("Containerd registry config path is %s but expected to be %s", cfg.Registry.ConfigPath, c.registryConfigPath)
+	}
+	return nil
 }
 
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error) {

@@ -17,6 +17,10 @@ func NewMockClient(images []Image) *MockClient {
 	}
 }
 
+func (m *MockClient) Verify(ctx context.Context) error {
+	return nil
+}
+
 func (m *MockClient) Subscribe(ctx context.Context) (<-chan Image, <-chan error) {
 	return nil, nil
 }
