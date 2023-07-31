@@ -75,6 +75,7 @@ spec:
           {{- end }}
           - --containerd-sock={{ .Values.spegel.containerdSock }}
           - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
+          - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
           {{- with .Values.spegel.kubeconfigPath }}
           - --kubeconfig-path={{ . }}
           {{- end }}
