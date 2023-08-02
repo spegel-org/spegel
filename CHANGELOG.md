@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#152](https://github.com/XenitAB/spegel/pull/152) Fix image parsing to allow only passing digest through image reference.
+- [#158](https://github.com/XenitAB/spegel/pull/158) Fix Containerd verify with check for empty configuration path.
 
 ### Security
 

@@ -78,8 +78,11 @@ func (c *Containerd) Verify(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if cfg.Registry.ConfigPath == "" {
+		return fmt.Errorf("Containerd registry config path needs to be set for mirror configuration to take effect")
+	}
 	if cfg.Registry.ConfigPath != c.registryConfigPath {
-		return fmt.Errorf("Containerd registry config path is %s but expected to be %s", cfg.Registry.ConfigPath, c.registryConfigPath)
+		return fmt.Errorf("Containerd registry config path is %s but needs to be %s for mirror configuration to take effect", cfg.Registry.ConfigPath, c.registryConfigPath)
 	}
 	return nil
 }
