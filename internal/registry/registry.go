@@ -19,7 +19,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	pkggin "github.com/xenitab/pkg/gin"
 
-	"github.com/xenitab/spegel/internal/header"
 	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
 )
@@ -42,15 +41,17 @@ type Registry struct {
 	resolveRetries   int
 	resolveTimeout   time.Duration
 	resolveLatestTag bool
+	localAddr        string
 }
 
-func NewRegistry(ociClient oci.Client, router routing.Router, resolveRetries int, resolveTimeout time.Duration, resolveLatestTag bool) *Registry {
+func NewRegistry(ociClient oci.Client, router routing.Router, localAddr string, resolveRetries int, resolveTimeout time.Duration, resolveLatestTag bool) *Registry {
 	return &Registry{
 		ociClient:        ociClient,
 		router:           router,
 		resolveRetries:   resolveRetries,
 		resolveTimeout:   resolveTimeout,
 		resolveLatestTag: resolveLatestTag,
+		localAddr:        localAddr,
 	}
 }
 
@@ -69,7 +70,7 @@ func (r *Registry) Server(addr string, log logr.Logger) *http.Server {
 	}
 	engine := pkggin.NewEngine(cfg)
 	engine.GET("/healthz", r.readyHandler)
-	engine.Any("/v2/*params", metricsHandler, r.registryHandler)
+	engine.Any("/v2/*params", r.metricsHandler, r.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: engine,
@@ -164,16 +165,14 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 
 	log := pkggin.FromContextOrDiscard(c)
 
-	// We should allow resolving to ourself if the mirror request is external.
-	isExternal := header.IsExternalRequest(c.Request.Header)
-	if isExternal {
-		log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
-	}
-
 	// Resolve mirror with the requested key
 	resolveCtx, cancel := context.WithTimeout(c, r.resolveTimeout)
 	defer cancel()
 	resolveCtx = logr.NewContext(resolveCtx, log)
+	isExternal := r.isExternalRequest(c)
+	if isExternal {
+		log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
+	}
 	mirrorCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
 	if err != nil {
 		//nolint:errcheck // ignore
@@ -268,7 +267,7 @@ func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 	}
 }
 
-func metricsHandler(c *gin.Context) {
+func (r *Registry) metricsHandler(c *gin.Context) {
 	c.Next()
 	handler, ok := c.Get("handler")
 	if !ok {
@@ -278,7 +277,7 @@ func metricsHandler(c *gin.Context) {
 		return
 	}
 	sourceType := "internal"
-	if header.IsExternalRequest(c.Request.Header) {
+	if r.isExternalRequest(c) {
 		sourceType = "external"
 	}
 	cacheType := "hit"
@@ -286,4 +285,8 @@ func metricsHandler(c *gin.Context) {
 		cacheType = "miss"
 	}
 	mirrorRequestsTotal.WithLabelValues(c.Query("ns"), cacheType, sourceType).Inc()
+}
+
+func (r *Registry) isExternalRequest(c *gin.Context) bool {
+	return c.Request.Host != r.localAddr
 }

@@ -23,8 +23,6 @@ import (
 	"github.com/spf13/afero"
 	"github.com/xenitab/pkg/channels"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
-
-	"github.com/xenitab/spegel/internal/header"
 )
 
 type Containerd struct {
@@ -311,18 +309,11 @@ func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
 		server = "https://registry-1.docker.io"
 	}
 	content := fmt.Sprintf(`server = "%s"`, server)
-	for i, mirrorURL := range mirrorURLs {
+	for _, mirrorURL := range mirrorURLs {
 		content = fmt.Sprintf(`%s
 
 [host."%s"]
   capabilities = ["pull", "resolve"]`, content, mirrorURL.String())
-
-		// We assume first mirror registry is local. All others are external.
-		if i != 0 {
-			content = fmt.Sprintf(`%s
-[host."%s".header]
-  %s = ["true"]`, content, mirrorURL.String(), header.ExternalHeader)
-		}
 	}
 	return content
 }
