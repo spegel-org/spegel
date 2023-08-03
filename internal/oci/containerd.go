@@ -314,11 +314,10 @@ func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
 	for i, mirrorURL := range mirrorURLs {
 		content = fmt.Sprintf(`%[1]s
 
-[host."%[3]s"]
+[host."%[2]s"]
   capabilities = ["pull", "resolve"]
-[host."%[3]s".header]
-  %[4]s = ["%[2]s"]
-  %[5]s = ["true"]`, content, registryURL.String(), mirrorURL.String(), header.RegistryHeader, header.MirrorHeader)
+[host."%[2]s".header]
+  %[3]s = ["true"]`, content, mirrorURL.String(), header.MirrorHeader)
 
 		// We assume first mirror registry is local. All others are external.
 		if i != 0 {

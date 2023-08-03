@@ -94,7 +94,6 @@ func (r *Registry) registryHandler(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-
 	// Quickly return 200 for /v2/ to indicate that registry supports v2.
 	if path.Clean(c.Request.URL.Path) == "/v2" {
 		if c.Request.Method != http.MethodGet {
@@ -105,16 +104,8 @@ func (r *Registry) registryHandler(c *gin.Context) {
 		return
 	}
 
-	// Always expect remoteRegistry header to be passed in request.
-	remoteRegistry, err := header.GetRemoteRegistry(c.Request.Header)
-	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
-		return
-	}
-
 	// Parse out path components from request.
-	ref, dgst, refType, err := oci.ParsePathComponents(remoteRegistry, c.Request.URL.Path)
+	ref, dgst, refType, err := oci.ParsePathComponents(c.Query("ns"), c.Request.URL.Path)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -282,10 +273,6 @@ func metricsHandler(c *gin.Context) {
 	if handler != "mirror" {
 		return
 	}
-	remoteRegistry, err := header.GetRemoteRegistry(c.Request.Header)
-	if err != nil {
-		return
-	}
 	sourceType := "internal"
 	if header.IsExternalRequest(c.Request.Header) {
 		sourceType = "external"
@@ -294,5 +281,5 @@ func metricsHandler(c *gin.Context) {
 	if c.Writer.Status() != http.StatusOK {
 		cacheType = "miss"
 	}
-	mirrorRequestsTotal.WithLabelValues(remoteRegistry, cacheType, sourceType).Inc()
+	mirrorRequestsTotal.WithLabelValues(c.Query("ns"), cacheType, sourceType).Inc()
 }
