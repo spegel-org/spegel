@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - [#160](https://github.com/XenitAB/spegel/pull/160) Remove X-Spegel-Registry header.
+- [#161](https://github.com/XenitAB/spegel/pull/161) Remove X-Spegel-Mirror header.
 
 ### Fixed
 

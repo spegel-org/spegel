@@ -24,6 +24,10 @@ import (
 	"github.com/xenitab/spegel/internal/routing"
 )
 
+const (
+	MirroredHeaderKey = "X-Spegel-Mirrored"
+)
+
 var mirrorRequestsTotal = promauto.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "spegel_mirror_requests_total",
@@ -121,7 +125,10 @@ func (r *Registry) registryHandler(c *gin.Context) {
 	}
 
 	// Request with mirror header are proxied.
-	if header.IsMirrorRequest(c.Request.Header) {
+	if c.Request.Header.Get(MirroredHeaderKey) != "true" {
+		// Set mirrored header in request to stop infinite loops
+		c.Request.Header.Set(MirroredHeaderKey, "true")
+
 		key := dgst.String()
 		if key == "" {
 			key = ref
@@ -156,9 +163,6 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 	c.Set("handler", "mirror")
 
 	log := pkggin.FromContextOrDiscard(c)
-
-	// Disable mirroring so we dont end with an infinite loop
-	c.Request.Header[header.MirrorHeader] = []string{"false"}
 
 	// We should allow resolving to ourself if the mirror request is external.
 	isExternal := header.IsExternalRequest(c.Request.Header)
