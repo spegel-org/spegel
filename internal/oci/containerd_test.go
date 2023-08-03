@@ -236,7 +236,6 @@ func TestHostFileContent(t *testing.T) {
 [host."http://127.0.0.1:5000"]
   capabilities = ["pull", "resolve"]
 [host."http://127.0.0.1:5000".header]
-  X-Spegel-Registry = ["https://example.com"]
   X-Spegel-Mirror = ["true"]`,
 		},
 		{
@@ -248,13 +247,11 @@ func TestHostFileContent(t *testing.T) {
 [host."http://127.0.0.1:5000"]
   capabilities = ["pull", "resolve"]
 [host."http://127.0.0.1:5000".header]
-  X-Spegel-Registry = ["https://example.com"]
   X-Spegel-Mirror = ["true"]
 
 [host."http://127.0.0.1:5001"]
   capabilities = ["pull", "resolve"]
 [host."http://127.0.0.1:5001".header]
-  X-Spegel-Registry = ["https://example.com"]
   X-Spegel-Mirror = ["true"]
   X-Spegel-External = ["true"]`,
 		},
@@ -267,7 +264,6 @@ func TestHostFileContent(t *testing.T) {
 [host."http://127.0.0.1:5000"]
   capabilities = ["pull", "resolve"]
 [host."http://127.0.0.1:5000".header]
-  X-Spegel-Registry = ["https://docker.io"]
   X-Spegel-Mirror = ["true"]`,
 		},
 	}

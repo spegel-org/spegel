@@ -30,6 +30,9 @@ var (
 func ParsePathComponents(registry, path string) (string, digest.Digest, ReferenceType, error) {
 	comps := manifestRegexTag.FindStringSubmatch(path)
 	if len(comps) == 6 {
+		if registry == "" {
+			return "", "", "", fmt.Errorf("registry parameter needs to be set for tag references")
+		}
 		ref := fmt.Sprintf("%s/%s:%s", registry, comps[1], comps[5])
 		return ref, "", ReferenceTypeManifest, nil
 	}
