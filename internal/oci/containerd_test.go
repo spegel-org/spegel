@@ -234,9 +234,7 @@ func TestHostFileContent(t *testing.T) {
 			expectedContent: `server = "https://example.com"
 
 [host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]
-[host."http://127.0.0.1:5000".header]
-  X-Spegel-Mirror = ["true"]`,
+  capabilities = ["pull", "resolve"]`,
 		},
 		{
 			name:     "multiple mirrors",
@@ -246,13 +244,10 @@ func TestHostFileContent(t *testing.T) {
 
 [host."http://127.0.0.1:5000"]
   capabilities = ["pull", "resolve"]
-[host."http://127.0.0.1:5000".header]
-  X-Spegel-Mirror = ["true"]
 
 [host."http://127.0.0.1:5001"]
   capabilities = ["pull", "resolve"]
 [host."http://127.0.0.1:5001".header]
-  X-Spegel-Mirror = ["true"]
   X-Spegel-External = ["true"]`,
 		},
 		{
@@ -262,9 +257,7 @@ func TestHostFileContent(t *testing.T) {
 			expectedContent: `server = "https://registry-1.docker.io"
 
 [host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]
-[host."http://127.0.0.1:5000".header]
-  X-Spegel-Mirror = ["true"]`,
+  capabilities = ["pull", "resolve"]`,
 		},
 	}
 
