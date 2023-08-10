@@ -23,8 +23,6 @@ import (
 	"github.com/spf13/afero"
 	"github.com/xenitab/pkg/channels"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
-
-	"github.com/xenitab/spegel/internal/header"
 )
 
 type Containerd struct {
@@ -78,8 +76,11 @@ func (c *Containerd) Verify(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if cfg.Registry.ConfigPath == "" {
+		return fmt.Errorf("Containerd registry config path needs to be set for mirror configuration to take effect")
+	}
 	if cfg.Registry.ConfigPath != c.registryConfigPath {
-		return fmt.Errorf("Containerd registry config path is %s but expected to be %s", cfg.Registry.ConfigPath, c.registryConfigPath)
+		return fmt.Errorf("Containerd registry config path is %s but needs to be %s for mirror configuration to take effect", cfg.Registry.ConfigPath, c.registryConfigPath)
 	}
 	return nil
 }
@@ -308,20 +309,11 @@ func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
 		server = "https://registry-1.docker.io"
 	}
 	content := fmt.Sprintf(`server = "%s"`, server)
-	for i, mirrorURL := range mirrorURLs {
-		content = fmt.Sprintf(`%[1]s
+	for _, mirrorURL := range mirrorURLs {
+		content = fmt.Sprintf(`%s
 
-[host."%[3]s"]
-  capabilities = ["pull", "resolve"]
-[host."%[3]s".header]
-  %[4]s = ["%[2]s"]
-  %[5]s = ["true"]`, content, registryURL.String(), mirrorURL.String(), header.RegistryHeader, header.MirrorHeader)
-
-		// We assume first mirror registry is local. All others are external.
-		if i != 0 {
-			content = fmt.Sprintf(`%s
-  %s = ["true"]`, content, header.ExternalHeader)
-		}
+[host."%s"]
+  capabilities = ["pull", "resolve"]`, content, mirrorURL.String())
 	}
 	return content
 }
