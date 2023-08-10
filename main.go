@@ -47,6 +47,7 @@ type RegistryCmd struct {
 	LeaderElectionNamespace      string        `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
 	LeaderElectionName           string        `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
 	ResolveLatestTag             bool          `arg:"--resolve-latest-tag" default:"true" help:"When true latest tags will be resolved to digests."`
+	LocalAddr                    string        `arg:"--local-addr,required" help:"Address that the local Spegel instance will be reached at."`
 }
 
 type Arguments struct {
@@ -148,7 +149,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return state.Track(ctx, ociClient, router, args.ResolveLatestTag)
 	})
 
-	reg := registry.NewRegistry(ociClient, router, args.MirrorResolveRetries, args.MirrorResolveTimeout, args.ResolveLatestTag)
+	reg := registry.NewRegistry(ociClient, router, args.LocalAddr, args.MirrorResolveRetries, args.MirrorResolveTimeout, args.ResolveLatestTag)
 	regSrv := reg.Server(args.RegistryAddr, log)
 	g.Go(func() error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

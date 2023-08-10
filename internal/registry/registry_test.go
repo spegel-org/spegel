@@ -60,7 +60,7 @@ func TestMirrorHandler(t *testing.T) {
 		"last-peer-working": {badSvr.URL, badSvr.URL, goodSvr.URL},
 	}
 	router := routing.NewMockRouter(resolver)
-	reg := NewRegistry(nil, router, 3, 5*time.Second, false)
+	reg := NewRegistry(nil, router, "", 3, 5*time.Second, false)
 
 	tests := []struct {
 		name            string

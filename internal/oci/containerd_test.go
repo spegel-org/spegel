@@ -246,9 +246,7 @@ func TestHostFileContent(t *testing.T) {
   capabilities = ["pull", "resolve"]
 
 [host."http://127.0.0.1:5001"]
-  capabilities = ["pull", "resolve"]
-[host."http://127.0.0.1:5001".header]
-  X-Spegel-External = ["true"]`,
+  capabilities = ["pull", "resolve"]`,
 		},
 		{
 			name:     "docker override",
