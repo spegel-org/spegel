@@ -36,7 +36,6 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ include "spegel.fullname" . }}
-  namespace: {{ include "spegel.namespace" . }}
 subjects:
   - kind: ServiceAccount
     name: {{ include "spegel.serviceAccountName" . }}

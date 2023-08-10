@@ -27,7 +27,7 @@ require (
 	go.uber.org/zap v1.25.0
 	golang.org/x/sync v0.3.0
 	k8s.io/client-go v0.27.2
-	k8s.io/cri-api v0.27.1
+	k8s.io/cri-api v0.27.4
 )
 
 require (
