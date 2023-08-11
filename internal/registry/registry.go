@@ -9,6 +9,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,9 +19,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	pkggin "github.com/xenitab/pkg/gin"
 
-	"github.com/xenitab/spegel/internal/header"
 	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
+)
+
+const (
+	MirroredHeaderKey = "X-Spegel-Mirrored"
 )
 
 var mirrorRequestsTotal = promauto.NewCounterVec(
@@ -32,18 +36,22 @@ var mirrorRequestsTotal = promauto.NewCounterVec(
 )
 
 type Registry struct {
-	ociClient      oci.Client
-	router         routing.Router
-	resolveRetries int
-	resolveTimeout time.Duration
+	ociClient        oci.Client
+	router           routing.Router
+	resolveRetries   int
+	resolveTimeout   time.Duration
+	resolveLatestTag bool
+	localAddr        string
 }
 
-func NewRegistry(ociClient oci.Client, router routing.Router, resolveRetries int, resolveTimeout time.Duration) *Registry {
+func NewRegistry(ociClient oci.Client, router routing.Router, localAddr string, resolveRetries int, resolveTimeout time.Duration, resolveLatestTag bool) *Registry {
 	return &Registry{
-		ociClient:      ociClient,
-		router:         router,
-		resolveRetries: resolveRetries,
-		resolveTimeout: resolveTimeout,
+		ociClient:        ociClient,
+		router:           router,
+		resolveRetries:   resolveRetries,
+		resolveTimeout:   resolveTimeout,
+		resolveLatestTag: resolveLatestTag,
+		localAddr:        localAddr,
 	}
 }
 
@@ -62,7 +70,7 @@ func (r *Registry) Server(addr string, log logr.Logger) *http.Server {
 	}
 	engine := pkggin.NewEngine(cfg)
 	engine.GET("/healthz", r.readyHandler)
-	engine.Any("/v2/*params", metricsHandler, r.registryHandler)
+	engine.Any("/v2/*params", r.metricsHandler, r.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: engine,
@@ -91,7 +99,6 @@ func (r *Registry) registryHandler(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-
 	// Quickly return 200 for /v2/ to indicate that registry supports v2.
 	if path.Clean(c.Request.URL.Path) == "/v2" {
 		if c.Request.Method != http.MethodGet {
@@ -102,24 +109,27 @@ func (r *Registry) registryHandler(c *gin.Context) {
 		return
 	}
 
-	// Always expect remoteRegistry header to be passed in request.
-	remoteRegistry, err := header.GetRemoteRegistry(c.Request.Header)
+	// Parse out path components from request.
+	ref, dgst, refType, err := oci.ParsePathComponents(c.Query("ns"), c.Request.URL.Path)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
 		return
 	}
 
-	// Parse out path components from request.
-	ref, dgst, refType, err := oci.ParsePathComponents(remoteRegistry, c.Request.URL.Path)
-	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
-		return
+	if !r.resolveLatestTag && ref != "" {
+		_, tag, _ := strings.Cut(ref, ":")
+		if tag == "latest" {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
 	}
 
 	// Request with mirror header are proxied.
-	if header.IsMirrorRequest(c.Request.Header) {
+	if c.Request.Header.Get(MirroredHeaderKey) != "true" {
+		// Set mirrored header in request to stop infinite loops
+		c.Request.Header.Set(MirroredHeaderKey, "true")
+
 		key := dgst.String()
 		if key == "" {
 			key = ref
@@ -155,19 +165,14 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 
 	log := pkggin.FromContextOrDiscard(c)
 
-	// Disable mirroring so we dont end with an infinite loop
-	c.Request.Header[header.MirrorHeader] = []string{"false"}
-
-	// We should allow resolving to ourself if the mirror request is external.
-	isExternal := header.IsExternalRequest(c.Request.Header)
-	if isExternal {
-		log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
-	}
-
 	// Resolve mirror with the requested key
 	resolveCtx, cancel := context.WithTimeout(c, r.resolveTimeout)
 	defer cancel()
 	resolveCtx = logr.NewContext(resolveCtx, log)
+	isExternal := r.isExternalRequest(c)
+	if isExternal {
+		log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
+	}
 	mirrorCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
 	if err != nil {
 		//nolint:errcheck // ignore
@@ -262,7 +267,7 @@ func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 	}
 }
 
-func metricsHandler(c *gin.Context) {
+func (r *Registry) metricsHandler(c *gin.Context) {
 	c.Next()
 	handler, ok := c.Get("handler")
 	if !ok {
@@ -271,17 +276,17 @@ func metricsHandler(c *gin.Context) {
 	if handler != "mirror" {
 		return
 	}
-	remoteRegistry, err := header.GetRemoteRegistry(c.Request.Header)
-	if err != nil {
-		return
-	}
 	sourceType := "internal"
-	if header.IsExternalRequest(c.Request.Header) {
+	if r.isExternalRequest(c) {
 		sourceType = "external"
 	}
 	cacheType := "hit"
 	if c.Writer.Status() != http.StatusOK {
 		cacheType = "miss"
 	}
-	mirrorRequestsTotal.WithLabelValues(remoteRegistry, cacheType, sourceType).Inc()
+	mirrorRequestsTotal.WithLabelValues(c.Query("ns"), cacheType, sourceType).Inc()
+}
+
+func (r *Registry) isExternalRequest(c *gin.Context) bool {
+	return c.Request.Host != r.localAddr
 }

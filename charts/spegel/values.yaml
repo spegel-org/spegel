@@ -15,6 +15,8 @@ imagePullSecrets: []
 nameOverride: ""
 # -- Overrides the full name of the chart.
 fullnameOverride: ""
+# -- Overrides the namespace where spegel resources are installed.
+namespaceOverride: ""
 
 serviceAccount:
   # -- Annotations to add to the service account
@@ -120,3 +122,5 @@ spegel:
   containerdMirrorAdd: true
   # -- Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC.
   kubeconfigPath: ""
+  # -- When true latest tags will be resolved to digests.
+  resolveLatestTag: true

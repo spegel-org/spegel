@@ -11,8 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- [#138](https://github.com/XenitAB/spegel/pull/138) Set image digest in Helm chart.
-
 ### Deprecated
 
 ### Removed
@@ -20,6 +18,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 ### Security
+
+## v0.0.10
+
+### Added 
+
+- [#145](https://github.com/XenitAB/spegel/pull/145) Add new field to override Helm chart namespace.
+- [#153](https://github.com/XenitAB/spegel/pull/153) Add option to disable resolving latest tags.
+- [#156](https://github.com/XenitAB/spegel/pull/156) Add validation of mirror configuration on start.
+
+### Changed
+
+- [#151](https://github.com/XenitAB/spegel/pull/151) Refactor containerd mirror tests and remove utils package.
+
+### Removed
+
+- [#160](https://github.com/XenitAB/spegel/pull/160) Remove X-Spegel-Registry header.
+- [#161](https://github.com/XenitAB/spegel/pull/161) Remove X-Spegel-Mirror header.
+- [#162](https://github.com/XenitAB/spegel/pull/162) Remove X-Spegel-External header.
+
+### Fixed
+
+- [#152](https://github.com/XenitAB/spegel/pull/152) Fix image parsing to allow only passing digest through image reference.
+- [#158](https://github.com/XenitAB/spegel/pull/158) Fix Containerd verify with check for empty configuration path.
+- [#163](https://github.com/XenitAB/spegel/pull/163) Remove unneeded namespace in role binding.
+
+## v0.0.9
+
+### Changed
+
+- [#138](https://github.com/XenitAB/spegel/pull/138) Set image digest in Helm chart.
+
+### Fixed
+
+- [#141](https://github.com/XenitAB/spegel/pull/141) Fix platform matching and add tests for getting image digests.
 
 ## v0.0.8
 

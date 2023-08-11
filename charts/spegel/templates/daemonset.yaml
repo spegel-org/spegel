@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: {{ include "spegel.fullname" . }}
+  namespace: {{ include "spegel.namespace" . }}
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
 spec:
@@ -74,11 +75,14 @@ spec:
           {{- end }}
           - --containerd-sock={{ .Values.spegel.containerdSock }}
           - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
+          - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
           {{- with .Values.spegel.kubeconfigPath }}
           - --kubeconfig-path={{ . }}
           {{- end }}
           - --leader-election-namespace={{ .Release.Namespace }}
           - --leader-election-name={{ .Release.Namespace }}-leader-election
+          - --resolve-latest-tag={{ .Values.spegel.resolveLatestTag }}
+          - --local-addr=127.0.0.1:{{ .Values.service.registry.hostPort }}
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
