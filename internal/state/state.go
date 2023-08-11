@@ -25,30 +25,27 @@ var advertisedKeys = promauto.NewGaugeVec(prometheus.GaugeOpts{
 }, []string{"registry"})
 
 // TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
-func Track(ctx context.Context, ociClient oci.Client, router routing.Router) error {
+func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
 	log := logr.FromContextOrDiscard(ctx)
-
-	// Setup event channels
 	eventCh, errCh := ociClient.Subscribe(ctx)
 	immediate := make(chan time.Time, 1)
 	immediate <- time.Now()
 	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
 	defer expirationTicker.Stop()
 	ticker := channels.Merge(immediate, expirationTicker.C)
-
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker:
 			log.Info("running scheduled image state update")
-			err := all(ctx, ociClient, router)
+			err := all(ctx, ociClient, router, resolveLatestTag)
 			if err != nil {
 				return fmt.Errorf("failed to update all images: %w", err)
 			}
 		case img := <-eventCh:
 			log.Info("received image event", "image", img)
-			_, err := update(ctx, ociClient, router, img, false)
+			_, err := update(ctx, ociClient, router, img, false, resolveLatestTag)
 			if err != nil {
 				return err
 			}
@@ -58,7 +55,7 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router) err
 	}
 }
 
-func all(ctx context.Context, ociClient oci.Client, router routing.Router) error {
+func all(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
 	imgs, err := ociClient.ListImages(ctx)
 	if err != nil {
 		return err
@@ -68,7 +65,7 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router) error
 	targets := map[string]interface{}{}
 	for _, img := range imgs {
 		_, skipDigests := targets[img.Digest.String()]
-		keyTotal, err := update(ctx, ociClient, router, img, skipDigests)
+		keyTotal, err := update(ctx, ociClient, router, img, skipDigests, resolveLatestTag)
 		if err != nil {
 			return err
 		}
@@ -79,10 +76,12 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router) error
 	return nil
 }
 
-func update(ctx context.Context, ociClient oci.Client, router routing.Router, img oci.Image, skipDigests bool) (int, error) {
+func update(ctx context.Context, ociClient oci.Client, router routing.Router, img oci.Image, skipDigests, resolveLatestTag bool) (int, error) {
 	keys := []string{}
-	if tagRef, ok := img.TagName(); ok {
-		keys = append(keys, tagRef)
+	if !(!resolveLatestTag && img.IsLatestTag()) {
+		if tagRef, ok := img.TagName(); ok {
+			keys = append(keys, tagRef)
+		}
 	}
 	if !skipDigests {
 		dgsts, err := ociClient.GetImageDigests(ctx, img)

@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/alexflint/go-arg v1.4.3
-	github.com/containerd/containerd v1.7.2
+	github.com/containerd/containerd v1.7.3
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-logr/logr v1.2.4
@@ -24,9 +24,10 @@ require (
 	github.com/xenitab/pkg/channels v0.0.1
 	github.com/xenitab/pkg/gin v0.0.9
 	github.com/xenitab/pkg/kubernetes v0.0.4
-	go.uber.org/zap v1.24.0
+	go.uber.org/zap v1.25.0
 	golang.org/x/sync v0.3.0
-	k8s.io/client-go v0.27.2
+	k8s.io/client-go v0.27.4
+	k8s.io/cri-api v0.27.4
 )
 
 require (
@@ -178,10 +179,8 @@ require (
 	go.opentelemetry.io/otel v1.16.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.17.0 // indirect
 	go.uber.org/fx v1.19.2 // indirect
-	go.uber.org/goleak v1.2.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/crypto v0.10.0 // indirect
@@ -203,8 +202,8 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.27.2 // indirect
-	k8s.io/apimachinery v0.27.2 // indirect
+	k8s.io/api v0.27.4 // indirect
+	k8s.io/apimachinery v0.27.4 // indirect
 	k8s.io/helm v2.17.0+incompatible // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f // indirect

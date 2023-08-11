@@ -22,29 +22,67 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/afero"
 	"github.com/xenitab/pkg/channels"
-
-	"github.com/xenitab/spegel/internal/header"
+	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
 type Containerd struct {
-	client      *containerd.Client
-	platform    platforms.MatchComparer
-	listFilter  string
-	eventFilter string
+	client             *containerd.Client
+	platform           platforms.MatchComparer
+	listFilter         string
+	eventFilter        string
+	runtimeClient      runtimeapi.RuntimeServiceClient
+	registryConfigPath string
 }
 
-func NewContainerd(sock, namespace string, registries []url.URL) (*Containerd, error) {
+func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL) (*Containerd, error) {
 	client, err := containerd.New(sock, containerd.WithDefaultNamespace(namespace))
 	if err != nil {
 		return nil, fmt.Errorf("could not create containerd client: %w", err)
 	}
 	listFilter, eventFilter := createFilters(registries)
+	runtimeClient := runtimeapi.NewRuntimeServiceClient(client.Conn())
 	return &Containerd{
-		client:      client,
-		platform:    platforms.Default(),
-		listFilter:  listFilter,
-		eventFilter: eventFilter,
-	}, err
+		client:             client,
+		platform:           platforms.Default(),
+		listFilter:         listFilter,
+		eventFilter:        eventFilter,
+		runtimeClient:      runtimeClient,
+		registryConfigPath: registryConfigPath,
+	}, nil
+}
+
+func (c *Containerd) Verify(ctx context.Context) error {
+	ok, err := c.client.IsServing(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("could not reach Containerd service")
+	}
+	resp, err := c.runtimeClient.Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
+	if err != nil {
+		return err
+	}
+	str, ok := resp.Info["config"]
+	if !ok {
+		return fmt.Errorf("could not get config data from info response")
+	}
+	cfg := &struct {
+		Registry struct {
+			ConfigPath string `json:"configPath"`
+		} `json:"registry"`
+	}{}
+	err = json.Unmarshal([]byte(str), cfg)
+	if err != nil {
+		return err
+	}
+	if cfg.Registry.ConfigPath == "" {
+		return fmt.Errorf("Containerd registry config path needs to be set for mirror configuration to take effect")
+	}
+	if cfg.Registry.ConfigPath != c.registryConfigPath {
+		return fmt.Errorf("Containerd registry config path is %s but needs to be %s for mirror configuration to take effect", cfg.Registry.ConfigPath, c.registryConfigPath)
+	}
+	return nil
 }
 
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error) {
@@ -271,20 +309,11 @@ func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
 		server = "https://registry-1.docker.io"
 	}
 	content := fmt.Sprintf(`server = "%s"`, server)
-	for i, mirrorURL := range mirrorURLs {
-		content = fmt.Sprintf(`%[1]s
+	for _, mirrorURL := range mirrorURLs {
+		content = fmt.Sprintf(`%s
 
-[host."%[3]s"]
-  capabilities = ["pull", "resolve"]
-[host."%[3]s".header]
-  %[4]s = ["%[2]s"]
-  %[5]s = ["true"]`, content, registryURL.String(), mirrorURL.String(), header.RegistryHeader, header.MirrorHeader)
-
-		// We assume first mirror registry is local. All others are external.
-		if i != 0 {
-			content = fmt.Sprintf(`%s
-  %s = ["true"]`, content, header.ExternalHeader)
-		}
+[host."%s"]
+  capabilities = ["pull", "resolve"]`, content, mirrorURL.String())
 	}
 	return content
 }

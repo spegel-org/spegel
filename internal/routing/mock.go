@@ -2,9 +2,11 @@ package routing
 
 import (
 	"context"
+	"sync"
 )
 
 type MockRouter struct {
+	mx       sync.RWMutex
 	resolver map[string][]string
 }
 
@@ -19,7 +21,9 @@ func (m *MockRouter) Close() error {
 }
 
 func (m *MockRouter) HasMirrors() (bool, error) {
-	return true, nil
+	m.mx.RLock()
+	defer m.mx.RUnlock()
+	return len(m.resolver) > 0, nil
 }
 
 func (m *MockRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan string, error) {
@@ -30,6 +34,8 @@ func (m *MockRouter) Resolve(ctx context.Context, key string, allowSelf bool, co
 		return peerCh, nil
 	}
 	go func() {
+		m.mx.RLock()
+		defer m.mx.RUnlock()
 		for _, peer := range peers {
 			peerCh <- peer
 		}
@@ -39,5 +45,17 @@ func (m *MockRouter) Resolve(ctx context.Context, key string, allowSelf bool, co
 }
 
 func (m *MockRouter) Advertise(ctx context.Context, keys []string) error {
+	m.mx.Lock()
+	defer m.mx.Unlock()
+	for _, key := range keys {
+		m.resolver[key] = []string{"localhost"}
+	}
 	return nil
+}
+
+func (m *MockRouter) LookupKey(key string) ([]string, bool) {
+	m.mx.RLock()
+	defer m.mx.RUnlock()
+	v, ok := m.resolver[key]
+	return v, ok
 }
