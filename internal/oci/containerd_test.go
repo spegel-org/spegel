@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	iofs "io/fs"
 	"net/url"
-	"os"
-	"path"
 	"testing"
 
 	"github.com/containerd/containerd"
@@ -17,58 +16,6 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
-
-type readerAt struct {
-	bytes.Reader
-}
-
-func (r *readerAt) Close() error {
-	return nil
-}
-
-type mockContentStore struct {
-	data map[string]string
-}
-
-func (*mockContentStore) Info(ctx context.Context, dgst digest.Digest) (content.Info, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Walk(ctx context.Context, fn content.WalkFunc, filters ...string) error {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Delete(ctx context.Context, dgst digest.Digest) error {
-	panic("not implemented")
-}
-
-func (m *mockContentStore) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (content.ReaderAt, error) {
-	s, ok := m.data[desc.Digest.String()]
-	if !ok {
-		return nil, fmt.Errorf("digest not found: %s", desc.Digest.String())
-	}
-	return &readerAt{*bytes.NewReader([]byte(s))}, nil
-}
-
-func (*mockContentStore) Status(ctx context.Context, ref string) (content.Status, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Update(ctx context.Context, info content.Info, fieldpaths ...string) (content.Info, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) ListStatuses(ctx context.Context, filters ...string) ([]content.Status, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Abort(ctx context.Context, ref string) error {
-	panic("not implemented")
-}
 
 func TestGetImageDigests(t *testing.T) {
 	tests := []struct {
@@ -271,29 +218,122 @@ func TestHostFileContent(t *testing.T) {
 }
 
 func TestMirrorConfiguration(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
-
 	registryConfigPath := "/etc/containerd/certs.d"
+	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 	registries := stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"})
-	err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, registries, mirrors)
-	require.NoError(t, err)
-	for _, registry := range registries {
-		fp := path.Join(registryConfigPath, registry.Host, "hosts.toml")
-		_, err = fs.Stat(fp)
-		require.NoError(t, err)
+
+	tests := []struct {
+		name                string
+		createConfigPathDir bool
+		existingFiles       map[string]string
+		expectedFiles       map[string]string
+	}{
+		{
+			name:                "config path directory does not exist",
+			createConfigPathDir: false,
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = "https://registry-1.docker.io"
+
+[host."http://127.0.0.1:5000"]
+  capabilities = ["pull", "resolve"]`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = "http://foo.bar:5000"
+
+[host."http://127.0.0.1:5000"]
+  capabilities = ["pull", "resolve"]`,
+			},
+		},
+		{
+			name:                "config path directory does exist",
+			createConfigPathDir: true,
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = "https://registry-1.docker.io"
+
+[host."http://127.0.0.1:5000"]
+  capabilities = ["pull", "resolve"]`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = "http://foo.bar:5000"
+
+[host."http://127.0.0.1:5000"]
+  capabilities = ["pull", "resolve"]`,
+			},
+		},
+		{
+			name:                "config path directory contains configuration",
+			createConfigPathDir: true,
+			existingFiles: map[string]string{
+				"/etc/containerd/certs.d/docker.io/hosts.toml": "Hello World",
+				"/etc/containerd/certs.d/ghcr.io/hosts.toml":   "Foo Bar",
+			},
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
+				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "Foo Bar",
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = "https://registry-1.docker.io"
+
+[host."http://127.0.0.1:5000"]
+  capabilities = ["pull", "resolve"]`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = "http://foo.bar:5000"
+
+[host."http://127.0.0.1:5000"]
+  capabilities = ["pull", "resolve"]`,
+			},
+		},
+		{
+			name:                "config path directory contains backup",
+			createConfigPathDir: true,
+			existingFiles: map[string]string{
+				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
+				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "Foo Bar",
+				"/etc/containerd/certs.d/test.txt":                     "test",
+				"/etc/containerd/certs.d/foo":                          "bar",
+			},
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
+				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "Foo Bar",
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = "https://registry-1.docker.io"
+
+[host."http://127.0.0.1:5000"]
+  capabilities = ["pull", "resolve"]`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = "http://foo.bar:5000"
+
+[host."http://127.0.0.1:5000"]
+  capabilities = ["pull", "resolve"]`,
+			},
+		},
 	}
-	err = RemoveMirrorConfiguration(context.TODO(), fs, registryConfigPath, registries)
-	require.NoError(t, err)
-	for _, registry := range registries {
-		fp := path.Join(registryConfigPath, registry.Host)
-		_, err = fs.Stat(fp)
-		require.Error(t, err)
-		require.True(t, os.IsNotExist(err))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			if tt.createConfigPathDir {
+				err := fs.Mkdir(registryConfigPath, 0755)
+				require.NoError(t, err)
+			}
+			for k, v := range tt.existingFiles {
+				err := afero.WriteFile(fs, k, []byte(v), 0644)
+				require.NoError(t, err)
+			}
+			err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, registries, mirrors)
+			require.NoError(t, err)
+			if len(tt.existingFiles) == 0 {
+				ok, err := afero.DirExists(fs, "/etc/containerd/certs.d/_backup")
+				require.NoError(t, err)
+				require.False(t, ok)
+			}
+			err = afero.Walk(fs, registryConfigPath, func(path string, fi iofs.FileInfo, _ error) error {
+				if fi.IsDir() {
+					return nil
+				}
+				expectedContent, ok := tt.expectedFiles[path]
+				require.True(t, ok, path)
+				b, err := afero.ReadFile(fs, path)
+				require.NoError(t, err)
+				require.Equal(t, expectedContent, string(b))
+				return nil
+			})
+			require.NoError(t, err)
+		})
 	}
 }
 
-func TestInvalidMirrorURL(t *testing.T) {
+func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 
@@ -323,4 +363,56 @@ func stringListToUrlList(t *testing.T, list []string) []url.URL {
 		urls = append(urls, *u)
 	}
 	return urls
+}
+
+type readerAt struct {
+	bytes.Reader
+}
+
+func (r *readerAt) Close() error {
+	return nil
+}
+
+type mockContentStore struct {
+	data map[string]string
+}
+
+func (*mockContentStore) Info(ctx context.Context, dgst digest.Digest) (content.Info, error) {
+	panic("not implemented")
+}
+
+func (*mockContentStore) Walk(ctx context.Context, fn content.WalkFunc, filters ...string) error {
+	panic("not implemented")
+}
+
+func (*mockContentStore) Delete(ctx context.Context, dgst digest.Digest) error {
+	panic("not implemented")
+}
+
+func (m *mockContentStore) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (content.ReaderAt, error) {
+	s, ok := m.data[desc.Digest.String()]
+	if !ok {
+		return nil, fmt.Errorf("digest not found: %s", desc.Digest.String())
+	}
+	return &readerAt{*bytes.NewReader([]byte(s))}, nil
+}
+
+func (*mockContentStore) Status(ctx context.Context, ref string) (content.Status, error) {
+	panic("not implemented")
+}
+
+func (*mockContentStore) Update(ctx context.Context, info content.Info, fieldpaths ...string) (content.Info, error) {
+	panic("not implemented")
+}
+
+func (*mockContentStore) ListStatuses(ctx context.Context, filters ...string) ([]content.Status, error) {
+	panic("not implemented")
+}
+
+func (*mockContentStore) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
+	panic("not implemented")
+}
+
+func (*mockContentStore) Abort(ctx context.Context, ref string) error {
+	panic("not implemented")
 }

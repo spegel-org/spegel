@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -23,6 +24,10 @@ import (
 	"github.com/spf13/afero"
 	"github.com/xenitab/pkg/channels"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
+)
+
+const (
+	backupDir = "_backup"
 )
 
 type Containerd struct {
@@ -269,9 +274,65 @@ func createFilters(registries []url.URL) (string, string) {
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
 func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL) error {
+	log := logr.FromContextOrDiscard(ctx)
+
 	if err := validate(registryURLs); err != nil {
 		return err
 	}
+
+	// Create config path dir if it does not exist
+	ok, err := afero.DirExists(fs, configPath)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		err := fs.MkdirAll(configPath, 0755)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Backup files and directories in config path
+	backupDirPath := path.Join(configPath, backupDir)
+	if _, err := fs.Stat(backupDirPath); os.IsNotExist(err) {
+		files, err := afero.ReadDir(fs, configPath)
+		if err != nil {
+			return err
+		}
+		if len(files) > 0 {
+			err = fs.MkdirAll(backupDirPath, 0755)
+			if err != nil {
+				return err
+			}
+			for _, fi := range files {
+				oldPath := path.Join(configPath, fi.Name())
+				newPath := path.Join(backupDirPath, fi.Name())
+				err := fs.Rename(oldPath, newPath)
+				if err != nil {
+					return err
+				}
+				log.Info("backing up Containerd host configuration", "path", oldPath)
+			}
+		}
+	}
+
+	// Remove all content from config path to start from clean slate
+	files, err := afero.ReadDir(fs, configPath)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		if fi.Name() == backupDir {
+			continue
+		}
+		filePath := path.Join(configPath, fi.Name())
+		err := fs.RemoveAll(filePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Write mirror configuration
 	for _, registryURL := range registryURLs {
 		content := hostsFileContent(registryURL, mirrorURLs)
 		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
@@ -283,23 +344,9 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		if err != nil {
 			return err
 		}
-		logr.FromContextOrDiscard(ctx).Info("added containerd mirror configuration", "registry", registryURL.String(), "path", fp)
+		log.Info("added containerd mirror configuration", "registry", registryURL.String(), "path", fp)
 	}
 	return nil
-}
-
-func RemoveMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs []url.URL) error {
-	errs := []error{}
-	for _, registryURL := range registryURLs {
-		dp := path.Join(configPath, registryURL.Host)
-		err := fs.RemoveAll(dp)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		logr.FromContextOrDiscard(ctx).Info("removed containerd mirror configuration", "registry", registryURL.String(), "path", dp)
-	}
-	return errors.Join(errs...)
 }
 
 func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
