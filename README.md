@@ -49,6 +49,10 @@ helm upgrade --create-namespace --namespace spegel --install --version v0.0.11 s
 
 Refer to the [Helm Chart](./charts/spegel) for detailed configuration documentation.
 
+## FAQ
+
+Please consult the [FAQ](./docs/FAQ.md) if you have run into any problems.
+
 ## Architecture
 
 Spegel can run as a stateless application by exploiting the fact that an image pulled by a node is not immediately garbage collected. Spegel is deployed as a Daemonset on each node which acts as both the registry and mirror. Each instance is reachable both locally through a host port and a Service. This enables Containerd to be configured to use the localhost interface as a registry mirror and for Spegel instances to forward requests to each other.
