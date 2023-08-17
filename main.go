@@ -31,6 +31,7 @@ type ConfigurationCmd struct {
 	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
 	Registries                   []url.URL `arg:"--registries,required" help:"registries that are configured to be mirrored."`
 	MirrorRegistries             []url.URL `arg:"--mirror-registries,required" help:"registries that are configured to act as mirrors."`
+	ResolveTags                  bool      `arg:"--resolve-tags" default:"true" help:"When true Spegel will resolve tags to digests."`
 }
 
 type RegistryCmd struct {
@@ -89,7 +90,7 @@ func run(ctx context.Context, args *Arguments) error {
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	fs := afero.NewOsFs()
-	err := oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries)
+	err := oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries, args.ResolveTags)
 	if err != nil {
 		return err
 	}

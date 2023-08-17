@@ -18,6 +18,7 @@ require (
 	github.com/norwoodj/helm-docs v1.11.1
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0-rc2.0.20221005185240-3a7f492d3f1b
+	github.com/pelletier/go-toml/v2 v2.0.8
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/afero v1.9.5
 	github.com/stretchr/testify v1.8.4
@@ -149,7 +150,6 @@ require (
 	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
-	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
