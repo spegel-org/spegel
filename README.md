@@ -25,23 +25,9 @@ Spegel enables each node in a Kubernetes cluster to act as a local registry mirr
 
 This has the benefit of reducing workload startup times and egress traffic as images will be stored locally within the cluster. On top of that it allows the scheduling of new workloads even when external registries are down.
 
-## Prerequisites
-
-Spegel relies on [Containerd registry mirroring](https://github.com/containerd/containerd/blob/main/docs/hosts.md#cri) to route requests to the correct destination. It is capable of writing the mirror configuration on startup, as it is loaded on the fly by Containerd.
-It is however not capable of setting the registry mirror `config_path` in the Containerd configuration as it requires a restart of Containerd for the change to be picked up.
-
-Spegel has been verified with AKS and EKS as they come with the expected configuration out of the box. Any other Kuberentes deployment should make the following configuration change to Containerd.
-
-```toml
-version = 2
-
-[plugins."io.containerd.grpc.v1.cri".registry]
-   config_path = "/etc/containerd/certs.d"
-```
-
 ## Installation
 
-The easiest method to deploy Spegel is with Helm. 
+Before installing Spegel check the [compatibility guide](./docs/COMPATIBILITY.md) to make sure that it will work with your specific Kubernetes flavor. If everything checks out, the easiest method to deploy Spegel is with Helm.
 
 ```shell
 helm upgrade --create-namespace --namespace spegel --install --version v0.0.11 spegel oci://ghcr.io/xenitab/helm-charts/spegel
@@ -51,7 +37,7 @@ Refer to the [Helm Chart](./charts/spegel) for detailed configuration documentat
 
 ## FAQ
 
-Please consult the [FAQ](./docs/FAQ.md) if you have run into any problems.
+Please consult the [FAQ](./docs/FAQ.md) if you run into any problems.
 
 ## Architecture
 
