@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#174](https://github.com/XenitAB/spegel/pull/174) Modify error handling in state tracking to avoid exiting.
+
 ### Deprecated
 
 ### Removed

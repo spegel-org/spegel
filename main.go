@@ -147,7 +147,8 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return router.Close()
 	})
 	g.Go(func() error {
-		return state.Track(ctx, ociClient, router, args.ResolveLatestTag)
+		state.Track(ctx, ociClient, router, args.ResolveLatestTag)
+		return nil
 	})
 
 	reg := registry.NewRegistry(ociClient, router, args.LocalAddr, args.MirrorResolveRetries, args.MirrorResolveTimeout, args.ResolveLatestTag)
