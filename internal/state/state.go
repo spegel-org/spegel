@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -25,7 +26,7 @@ var advertisedKeys = promauto.NewGaugeVec(prometheus.GaugeOpts{
 }, []string{"registry"})
 
 // TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
-func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
+func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) {
 	log := logr.FromContextOrDiscard(ctx)
 	eventCh, errCh := ociClient.Subscribe(ctx)
 	immediate := make(chan time.Time, 1)
@@ -36,21 +37,24 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		case <-ticker:
 			log.Info("running scheduled image state update")
 			err := all(ctx, ociClient, router, resolveLatestTag)
 			if err != nil {
-				return fmt.Errorf("failed to update all images: %w", err)
+				log.Error(err, "received errors when updating all images")
+				continue
 			}
 		case img := <-eventCh:
 			log.Info("received image event", "image", img)
 			_, err := update(ctx, ociClient, router, img, false, resolveLatestTag)
 			if err != nil {
-				return err
+				log.Error(err, "received error when updating image")
+				continue
 			}
 		case err := <-errCh:
-			return err
+			log.Error(err, "event channel error")
+			continue
 		}
 	}
 }
@@ -62,18 +66,20 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 	}
 	advertisedImages.Reset()
 	advertisedKeys.Reset()
+	errs := []error{}
 	targets := map[string]interface{}{}
 	for _, img := range imgs {
 		_, skipDigests := targets[img.Digest.String()]
 		keyTotal, err := update(ctx, ociClient, router, img, skipDigests, resolveLatestTag)
 		if err != nil {
-			return err
+			errs = append(errs, err)
+			continue
 		}
 		targets[img.Digest.String()] = nil
 		advertisedImages.WithLabelValues(img.Registry).Add(1)
 		advertisedKeys.WithLabelValues(img.Registry).Add(float64(keyTotal))
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func update(ctx context.Context, ociClient oci.Client, router routing.Router, img oci.Image, skipDigests, resolveLatestTag bool) (int, error) {
@@ -86,13 +92,13 @@ func update(ctx context.Context, ociClient oci.Client, router routing.Router, im
 	if !skipDigests {
 		dgsts, err := ociClient.GetImageDigests(ctx, img)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("could not get digests for image %s: %w", img.String(), err)
 		}
 		keys = append(keys, dgsts...)
 	}
 	err := router.Advertise(ctx, keys)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("could not advertise image %s: %w", img.String(), err)
 	}
 	return len(keys), nil
 }
