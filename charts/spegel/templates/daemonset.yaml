@@ -50,6 +50,7 @@ spec:
           - {{ . | quote }}
           {{- end }}
           {{- end }}
+          - --resolve-tags={{ .Values.spegel.resolveTags }}
         volumeMounts:
           - name: containerd-config
             mountPath: {{ .Values.spegel.containerdRegistryConfigPath }}

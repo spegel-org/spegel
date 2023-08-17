@@ -167,97 +167,102 @@ func TestCreateFilter(t *testing.T) {
 	}
 }
 
-func TestHostFileContent(t *testing.T) {
-	tests := []struct {
-		name            string
-		registry        string
-		mirrors         []string
-		expectedContent string
-	}{
-		{
-			name:     "example registry",
-			registry: "https://example.com",
-			mirrors:  []string{"http://127.0.0.1:5000"},
-			expectedContent: `server = "https://example.com"
-
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
-		},
-		{
-			name:     "multiple mirrors",
-			registry: "https://example.com",
-			mirrors:  []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"},
-			expectedContent: `server = "https://example.com"
-
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]
-
-[host."http://127.0.0.1:5001"]
-  capabilities = ["pull", "resolve"]`,
-		},
-		{
-			name:     "docker override",
-			registry: "https://docker.io",
-			mirrors:  []string{"http://127.0.0.1:5000"},
-			expectedContent: `server = "https://registry-1.docker.io"
-
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			registryURL, err := url.Parse(tt.registry)
-			require.NoError(t, err)
-			mirrorUrls := stringListToUrlList(t, tt.mirrors)
-			content := hostsFileContent(*registryURL, mirrorUrls)
-			require.Equal(t, tt.expectedContent, content)
-		})
-	}
-}
-
 func TestMirrorConfiguration(t *testing.T) {
 	registryConfigPath := "/etc/containerd/certs.d"
-	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
-	registries := stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"})
 
 	tests := []struct {
 		name                string
+		resolveTags         bool
+		registries          []url.URL
+		mirrors             []url.URL
 		createConfigPathDir bool
 		existingFiles       map[string]string
 		expectedFiles       map[string]string
 	}{
 		{
+			name:        "multiple mirros",
+			resolveTags: true,
+			registries:  stringListToUrlList(t, []string{"http://foo.bar:5000"}),
+			mirrors:     stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"}),
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://127.0.0.1:5001']
+capabilities = ['pull', 'resolve']
+`,
+			},
+		},
+		{
+			name:        "resolve tags disabled",
+			resolveTags: false,
+			registries:  stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
+			mirrors:     stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull']
+`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull']
+`,
+			},
+		},
+		{
 			name:                "config path directory does not exist",
+			resolveTags:         true,
+			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
+			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: false,
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = "https://registry-1.docker.io"
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = "http://foo.bar:5000"
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
 			},
 		},
 		{
 			name:                "config path directory does exist",
+			resolveTags:         true,
+			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
+			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: true,
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = "https://registry-1.docker.io"
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = "http://foo.bar:5000"
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
 			},
 		},
 		{
 			name:                "config path directory contains configuration",
+			resolveTags:         true,
+			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
+			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: true,
 			existingFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": "Hello World",
@@ -266,18 +271,25 @@ func TestMirrorConfiguration(t *testing.T) {
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
 				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "Foo Bar",
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = "https://registry-1.docker.io"
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = "http://foo.bar:5000"
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
 			},
 		},
 		{
 			name:                "config path directory contains backup",
+			resolveTags:         true,
+			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
+			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: true,
 			existingFiles: map[string]string{
 				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
@@ -288,14 +300,18 @@ func TestMirrorConfiguration(t *testing.T) {
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
 				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "Foo Bar",
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = "https://registry-1.docker.io"
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = "http://foo.bar:5000"
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host."http://127.0.0.1:5000"]
-  capabilities = ["pull", "resolve"]`,
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
 			},
 		},
 	}
@@ -310,7 +326,7 @@ func TestMirrorConfiguration(t *testing.T) {
 				err := afero.WriteFile(fs, k, []byte(v), 0644)
 				require.NoError(t, err)
 			}
-			err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, registries, mirrors)
+			err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags)
 			require.NoError(t, err)
 			if len(tt.existingFiles) == 0 {
 				ok, err := afero.DirExists(fs, "/etc/containerd/certs.d/_backup")
@@ -338,19 +354,19 @@ func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
 	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 
 	registries := stringListToUrlList(t, []string{"ftp://docker.io"})
-	err := AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
+	err := AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true)
 	require.EqualError(t, err, "invalid registry url scheme must be http or https: ftp://docker.io")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io/foo/bar"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
+	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true)
 	require.EqualError(t, err, "invalid registry url path has to be empty: https://docker.io/foo/bar")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io?foo=bar"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
+	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true)
 	require.EqualError(t, err, "invalid registry url query has to be empty: https://docker.io?foo=bar")
 
 	registries = stringListToUrlList(t, []string{"https://foo@docker.io"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors)
+	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true)
 	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
 }
 

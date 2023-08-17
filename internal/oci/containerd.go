@@ -21,6 +21,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/afero"
 	"github.com/xenitab/pkg/channels"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -270,10 +271,19 @@ func createFilters(registries []url.URL) (string, string) {
 	return listFilter, eventFilter
 }
 
+type hostFile struct {
+	Server      string                `toml:"server"`
+	HostConfigs map[string]hostConfig `toml:"host"`
+}
+
+type hostConfig struct {
+	Capabilities []string `toml:"capabilities"`
+}
+
 // Refer to containerd registry configuration documentation for mor information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL) error {
+func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveTags bool) error {
 	log := logr.FromContextOrDiscard(ctx)
 
 	if err := validate(registryURLs); err != nil {
@@ -333,36 +343,40 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 	}
 
 	// Write mirror configuration
+	capabilities := []string{"pull"}
+	if resolveTags {
+		capabilities = append(capabilities, "resolve")
+	}
 	for _, registryURL := range registryURLs {
-		content := hostsFileContent(registryURL, mirrorURLs)
-		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
-		err := fs.MkdirAll(path.Dir(fp), 0755)
+		// Need a special case for Docker Hub as docker.io is just an alias.
+		server := registryURL.String()
+		if registryURL.String() == "https://docker.io" {
+			server = "https://registry-1.docker.io"
+		}
+		hostConfigs := map[string]hostConfig{}
+		for _, u := range mirrorURLs {
+			hostConfigs[u.String()] = hostConfig{Capabilities: capabilities}
+		}
+		cfg := hostFile{
+			Server:      server,
+			HostConfigs: hostConfigs,
+		}
+		b, err := toml.Marshal(&cfg)
 		if err != nil {
 			return err
 		}
-		err = afero.WriteFile(fs, fp, []byte(content), 0644)
+		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
+		err = fs.MkdirAll(path.Dir(fp), 0755)
+		if err != nil {
+			return err
+		}
+		err = afero.WriteFile(fs, fp, b, 0644)
 		if err != nil {
 			return err
 		}
 		log.Info("added containerd mirror configuration", "registry", registryURL.String(), "path", fp)
 	}
 	return nil
-}
-
-func hostsFileContent(registryURL url.URL, mirrorURLs []url.URL) string {
-	server := registryURL.String()
-	// Need a special case for Docker Hub as docker.io is just an alias.
-	if registryURL.String() == "https://docker.io" {
-		server = "https://registry-1.docker.io"
-	}
-	content := fmt.Sprintf(`server = "%s"`, server)
-	for _, mirrorURL := range mirrorURLs {
-		content = fmt.Sprintf(`%s
-
-[host."%s"]
-  capabilities = ["pull", "resolve"]`, content, mirrorURL.String())
-	}
-	return content
 }
 
 func validate(urls []url.URL) error {

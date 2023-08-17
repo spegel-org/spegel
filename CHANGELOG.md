@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 
 
 - [#170](https://github.com/XenitAB/spegel/pull/170) Backup existing Containerd mirror configuration.
+- [#171](https://github.com/XenitAB/spegel/pull/171) Add option to disable resolve.
 
 ### Changed
 
