@@ -11,7 +11,7 @@ require (
 	github.com/go-logr/zapr v1.2.4
 	github.com/ipfs/go-cid v0.4.1
 	github.com/libp2p/go-libp2p v0.27.7
-	github.com/libp2p/go-libp2p-kad-dht v0.24.3
+	github.com/libp2p/go-libp2p-kad-dht v0.25.0
 	github.com/multiformats/go-multiaddr v0.11.0
 	github.com/multiformats/go-multicodec v0.9.0
 	github.com/multiformats/go-multihash v0.2.3
