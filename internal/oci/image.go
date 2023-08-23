@@ -10,13 +10,17 @@ import (
 )
 
 type Image struct {
+	Name       string
 	Registry   string
 	Repository string
 	Tag        string
 	Digest     digest.Digest
 }
 
-func NewImage(registry, repository, tag string, dgst digest.Digest) (Image, error) {
+func NewImage(name, registry, repository, tag string, dgst digest.Digest) (Image, error) {
+	if name == "" {
+		return Image{}, fmt.Errorf("image needs to contain a name")
+	}
 	if registry == "" {
 		return Image{}, fmt.Errorf("image needs to contain a registry")
 	}
@@ -27,6 +31,7 @@ func NewImage(registry, repository, tag string, dgst digest.Digest) (Image, erro
 		return Image{}, fmt.Errorf("image needs to contain a digest")
 	}
 	return Image{
+		Name:       name,
 		Registry:   registry,
 		Repository: repository,
 		Tag:        tag,
@@ -93,8 +98,7 @@ func Parse(s string, extraDgst digest.Digest) (Image, error) {
 	if extraDgst != "" && dgst != extraDgst {
 		return Image{}, fmt.Errorf("invalid digest set does not match parsed digest: %v %v", s, dgst)
 	}
-
-	img, err := NewImage(u.Host, repository, tag, dgst)
+	img, err := NewImage(s, u.Host, repository, tag, dgst)
 	if err != nil {
 		return Image{}, err
 	}

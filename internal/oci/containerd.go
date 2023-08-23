@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -135,20 +136,18 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 }
 
 func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, error) {
+	cImg, err := c.client.ImageService().Get(ctx, img.Name)
+	if err != nil {
+		return nil, err
+	}
 	keys := []string{}
-	err := images.Walk(ctx, images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+	err = images.Walk(ctx, images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 		keys = append(keys, desc.Digest.String())
-
 		b, err := content.ReadBlob(ctx, c.client.ContentStore(), desc)
 		if err != nil {
 			return nil, err
 		}
-		var ud UnknownDocument
-		if err := json.Unmarshal(b, &ud); err != nil {
-			return nil, err
-		}
-
-		switch ud.MediaType {
+		switch desc.MediaType {
 		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 			var idx ocispec.Index
 			if err := json.Unmarshal(b, &idx); err != nil {
@@ -161,11 +160,9 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 				}
 				descs = append(descs, m)
 			}
-
 			if len(descs) == 0 {
 				return nil, fmt.Errorf("could not find platform architecture in manifest: %v", desc.Digest)
 			}
-
 			// Platform matching is a bit weird in that multiple platforms can match.
 			// There is however a "best" match that should be used.
 			// This logic is used by Containerd to determine which layer to pull so we should use the same logic.
@@ -178,7 +175,6 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 				}
 				return c.platform.Less(*descs[i].Platform, *descs[j].Platform)
 			})
-
 			return []ocispec.Descriptor{descs[0]}, nil
 		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 			var manifest ocispec.Manifest
@@ -190,9 +186,10 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 				keys = append(keys, layer.Digest.String())
 			}
 			return nil, nil
+		default:
+			return nil, fmt.Errorf("unexpected media type %v for digest: %v", desc.MediaType, desc.Digest)
 		}
-		return nil, fmt.Errorf("unexpected media type %v for digest: %v", ud.MediaType, desc.Digest)
-	}), ocispec.Descriptor{Digest: img.Digest})
+	}), cImg.Target)
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk image manifests: %w", err)
 	}
@@ -227,10 +224,15 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) ([]byte, s
 	if err := json.Unmarshal(b, &ud); err != nil {
 		return nil, "", err
 	}
-	if ud.MediaType == "" {
-		return nil, "", fmt.Errorf("blob manifest cannot be empty")
+	if ud.MediaType != "" {
+		return b, ud.MediaType, nil
 	}
-	return b, ud.MediaType, nil
+	// Media type is not a required field. We need a fallback method if the field is not set.
+	mt, err := c.lookupMediaType(ctx, dgst)
+	if err != nil {
+		return nil, "", fmt.Errorf("could not get media type for %s: %w", dgst.String(), err)
+	}
+	return b, mt, nil
 }
 
 func (c *Containerd) WriteBlob(ctx context.Context, dst io.Writer, dgst digest.Digest) error {
@@ -244,6 +246,81 @@ func (c *Containerd) WriteBlob(ctx context.Context, dst io.Writer, dgst digest.D
 		return err
 	}
 	return nil
+}
+
+// lookupMediaType will resolve the media type for a digest without looking at the content.
+// Only use this as a fallback method as it is a lot slower than reading it from the file.
+// TODO: A cache would be helpful to speed up lookups for the same digets.
+func (c *Containerd) lookupMediaType(ctx context.Context, dgst digest.Digest) (string, error) {
+	logr.FromContextOrDiscard(ctx).Info("using Containerd fallback method to determine media type", "digest", dgst.String())
+	images, err := c.client.ImageService().List(ctx, fmt.Sprintf("target.digest==%s", dgst.String()))
+	if err != nil {
+		return "", err
+	}
+	if len(images) > 0 {
+		return images[0].Target.MediaType, nil
+	}
+	info, err := c.client.ContentStore().Info(ctx, dgst)
+	if err != nil {
+		return "", err
+	}
+	filter, err := getContentFilter(info.Labels)
+	if err != nil {
+		return "", err
+	}
+	var parentDgst digest.Digest
+	err = c.client.ContentStore().Walk(ctx, func(info content.Info) error {
+		for _, v := range info.Labels {
+			if v != dgst.String() {
+				continue
+			}
+			parentDgst = info.Digest
+			return filepath.SkipAll
+		}
+		return nil
+	}, filter)
+	if err != nil && !errors.Is(err, filepath.SkipAll) {
+		return "", err
+	}
+	if parentDgst == "" {
+		return "", fmt.Errorf("could not find parent")
+	}
+	b, err := content.ReadBlob(ctx, c.client.ContentStore(), ocispec.Descriptor{Digest: parentDgst})
+	if err != nil {
+		return "", err
+	}
+	var idx ocispec.Index
+	if err := json.Unmarshal(b, &idx); err != nil {
+		return "", err
+	}
+	for _, desc := range idx.Manifests {
+		if desc.Digest == dgst {
+			return desc.MediaType, nil
+		}
+	}
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(b, &manifest); err != nil {
+		return "", err
+	}
+	if manifest.Config.Digest == dgst {
+		return manifest.Config.MediaType, nil
+	}
+	for _, layer := range manifest.Layers {
+		if layer.Digest == dgst {
+			return layer.MediaType, nil
+		}
+	}
+	return "", fmt.Errorf("could not find reference in parent")
+}
+
+func getContentFilter(labels map[string]string) (string, error) {
+	for k, v := range labels {
+		if !strings.HasPrefix(k, "containerd.io/distribution.source") {
+			continue
+		}
+		return fmt.Sprintf(`labels."%s"==%s`, k, v), nil
+	}
+	return "", fmt.Errorf("could not find distribution label to create content filter")
 }
 
 func getEventImage(e typeurl.Any) (string, error) {

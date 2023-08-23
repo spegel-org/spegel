@@ -31,6 +31,7 @@ e2e: docker-build
 	# Pull images onto single node which will never run workload.
 	docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.23.0
 	docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b
+	docker exec kind-worker ctr -n k8s.io image pull mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416
 
 	# Deploy Spegel
 	kind load docker-image ${IMG}
@@ -71,6 +72,9 @@ e2e: docker-build
 		docker exec $$NODE iptables -A OUTPUT -o eth0 -d 192.168.0.0/16 -j ACCEPT
 		docker exec $$NODE iptables -A OUTPUT -o eth0 -j REJECT
 	done
+
+	# Pull test image that does not contain any media types
+	docker exec kind-worker3 crictl pull mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416
 
 	# Deploy test Nginx pods and verify deployment status
 	kubectl --kubeconfig $$KIND_KUBECONFIG apply -f ./e2e/test-nginx.yaml
