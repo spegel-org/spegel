@@ -4,7 +4,7 @@ Stateless cluster local OCI registry mirror.
 
 ## Installation
 
-Make sure that you have read and understood the [prerequisites](../../README.md#prerequisites) before proceeding the with the installation.
+Make sure that you have read the [compatibility guide](../../docs/COMPATIBILITY.md) before proceeding the with the installation.
 
 ### CLI
 
