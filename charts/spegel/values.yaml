@@ -106,6 +106,7 @@ spegel:
     - https://gcr.io
     - https://registry.k8s.io
     - https://k8s.gcr.io
+    - https://lscr.io
   # -- Extra target mirror registries other than Spegel.
   extraMirrorRegistries: []
   # -- Max ammount of mirrors to attempt.
