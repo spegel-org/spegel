@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- [#184](https://github.com/XenitAB/spegel/pull/184) Bump github.com/libp2p/go-libp2p from 0.27.7 to 0.30.0.
+
 ## v0.0.11
 
 ### Added 
