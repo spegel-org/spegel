@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#181](https://github.com/XenitAB/spegel/pull/181) Fix mirroring images using index files without a media type.
+- [#191](https://github.com/XenitAB/spegel/pull/191) Fix Containerd config path verification.
 
 ### Security
 

@@ -70,6 +70,14 @@ func (c *Containerd) Verify(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	err = verifyStatusResponse(resp, c.registryConfigPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) error {
 	str, ok := resp.Info["config"]
 	if !ok {
 		return fmt.Errorf("could not get config data from info response")
@@ -79,17 +87,21 @@ func (c *Containerd) Verify(ctx context.Context) error {
 			ConfigPath string `json:"configPath"`
 		} `json:"registry"`
 	}{}
-	err = json.Unmarshal([]byte(str), cfg)
+	err := json.Unmarshal([]byte(str), cfg)
 	if err != nil {
 		return err
 	}
 	if cfg.Registry.ConfigPath == "" {
 		return fmt.Errorf("Containerd registry config path needs to be set for mirror configuration to take effect")
 	}
-	if cfg.Registry.ConfigPath != c.registryConfigPath {
-		return fmt.Errorf("Containerd registry config path is %s but needs to be %s for mirror configuration to take effect", cfg.Registry.ConfigPath, c.registryConfigPath)
+	paths := filepath.SplitList(cfg.Registry.ConfigPath)
+	for _, path := range paths {
+		if path != configPath {
+			continue
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", cfg.Registry.ConfigPath, configPath)
 }
 
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error) {

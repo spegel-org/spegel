@@ -17,7 +17,62 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
+
+func TestVerifyStatusResponse(t *testing.T) {
+	tests := []struct {
+		name           string
+		infoConfigPath string
+		configPath     string
+		expectedErrMsg string
+	}{
+		{
+			name:           "empty config path",
+			infoConfigPath: "",
+			configPath:     "/etc/containerd/certs.d",
+			expectedErrMsg: "Containerd registry config path needs to be set for mirror configuration to take effect",
+		},
+		{
+			name:           "single config path",
+			infoConfigPath: "/etc/containerd/certs.d",
+			configPath:     "/etc/containerd/certs.d",
+		},
+		{
+			name:           "missing single config path",
+			infoConfigPath: "/etc/containerd/certs.d",
+			configPath:     "/var/lib/containerd/certs.d",
+			expectedErrMsg: "Containerd registry config path is /etc/containerd/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
+		},
+		{
+			name:           "multiple config paths",
+			infoConfigPath: "/etc/containerd/certs.d:/etc/docker/certs.d",
+			configPath:     "/etc/containerd/certs.d",
+		},
+		{
+			name:           "missing multiple config paths",
+			infoConfigPath: "/etc/containerd/certs.d:/etc/docker/certs.d",
+			configPath:     "/var/lib/containerd/certs.d",
+			expectedErrMsg: "Containerd registry config path is /etc/containerd/certs.d:/etc/docker/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &runtimeapi.StatusResponse{
+				Info: map[string]string{
+					"config": fmt.Sprintf(`{"registry": {"configPath": "%s"}}`, tt.infoConfigPath),
+				},
+			}
+			err := verifyStatusResponse(resp, tt.configPath)
+			if tt.expectedErrMsg != "" {
+				require.EqualError(t, err, tt.expectedErrMsg)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
 
 func TestGetImageDigests(t *testing.T) {
 	tests := []struct {
