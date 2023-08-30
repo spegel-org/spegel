@@ -9,13 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
-- [#182](https://github.com/XenitAB/spegel/pull/182) Add lscr.io as default registry.
-
 ### Changed
 
 ### Deprecated
 
 ### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.12
+
+### Added 
+
+- [#182](https://github.com/XenitAB/spegel/pull/182) Add lscr.io as default registry.
 
 ### Fixed
 
