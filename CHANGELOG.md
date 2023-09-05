@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#195](https://github.com/XenitAB/spegel/pull/195) Fix daemonset argument namespace to use helper-defined namespace value.
+
 ### Changed
 
 ### Deprecated
