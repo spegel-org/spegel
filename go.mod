@@ -11,7 +11,7 @@ require (
 	github.com/go-logr/zapr v1.2.4
 	github.com/ipfs/go-cid v0.4.1
 	github.com/libp2p/go-libp2p v0.30.0
-	github.com/libp2p/go-libp2p-kad-dht v0.25.0
+	github.com/libp2p/go-libp2p-kad-dht v0.25.1
 	github.com/multiformats/go-multiaddr v0.11.0
 	github.com/multiformats/go-multicodec v0.9.0
 	github.com/multiformats/go-multihash v0.2.3
@@ -81,7 +81,7 @@ require (
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
-	github.com/google/pprof v0.0.0-20230817174616-7a8ec2ada47b // indirect
+	github.com/google/pprof v0.0.0-20230821062121-407c9e7a662f // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -112,6 +112,7 @@ require (
 	github.com/libp2p/go-libp2p-asn-util v0.3.0 // indirect
 	github.com/libp2p/go-libp2p-kbucket v0.6.3 // indirect
 	github.com/libp2p/go-libp2p-record v0.2.0 // indirect
+	github.com/libp2p/go-libp2p-routing-helpers v0.7.2 // indirect
 	github.com/libp2p/go-msgio v0.3.0 // indirect
 	github.com/libp2p/go-nat v0.2.0 // indirect
 	github.com/libp2p/go-netroute v0.2.1 // indirect
@@ -154,11 +155,11 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
-	github.com/prometheus/common v0.42.0 // indirect
-	github.com/prometheus/procfs v0.10.1 // indirect
+	github.com/prometheus/common v0.44.0 // indirect
+	github.com/prometheus/procfs v0.11.1 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-20 v0.3.2 // indirect
-	github.com/quic-go/quic-go v0.37.6 // indirect
+	github.com/quic-go/quic-go v0.38.0 // indirect
 	github.com/quic-go/webtransport-go v0.5.3 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
@@ -186,7 +187,7 @@ require (
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.14.0 // indirect
-	golang.org/x/oauth2 v0.6.0 // indirect
+	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/term v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
@@ -196,7 +197,7 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230323212658-478b75c54725 // indirect
 	google.golang.org/grpc v1.54.0 // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
