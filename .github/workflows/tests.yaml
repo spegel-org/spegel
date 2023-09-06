@@ -13,12 +13,13 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.20.x
+          go-version: 1.21.x
           check-latest: true
           cache: true
       - name: Setup golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
+          version: v1.54.2
           args: --timeout 3m0s
   unit:
     needs: lint
@@ -29,7 +30,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.20.x
+          go-version: 1.21.x
           check-latest: true
           cache: true
       - name: Run tests
@@ -43,7 +44,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.20.x
+          go-version: 1.21.x
           check-latest: true
           cache: true
       - name: Run e2e
@@ -57,7 +58,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.20.x
+          go-version: 1.21.x
           check-latest: true
           cache: true
       - name: Run helm-docs
