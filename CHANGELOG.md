@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - [#164](https://github.com/XenitAB/spegel/pull/164) Update Go to 1.21.
+- [#211](https://github.com/XenitAB/spegel/pull/211) Replace factory with adress filter to remove loopback addresses.
 
 ### Deprecated
 
