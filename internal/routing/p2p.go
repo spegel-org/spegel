@@ -12,7 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
 	mh "github.com/multiformats/go-multihash"
 )
@@ -35,27 +36,11 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 	if h == "" {
 		h = "0.0.0.0"
 	}
-	multiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", h, p))
+	multiAddr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", h, p))
 	if err != nil {
 		return nil, fmt.Errorf("could not create host multi address: %w", err)
 	}
-	factory := libp2p.AddrsFactory(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
-		for _, addr := range addrs {
-			v, err := addr.ValueForProtocol(multiaddr.P_IP4)
-			if err != nil {
-				continue
-			}
-			if v == "" {
-				continue
-			}
-			if v == "127.0.0.1" {
-				continue
-			}
-			return []multiaddr.Multiaddr{addr}
-		}
-		return nil
-	})
-	host, err := libp2p.New(libp2p.ListenAddrs(multiAddr), factory)
+	host, err := libp2p.New(libp2p.ListenAddrs(multiAddr))
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
 	}
@@ -67,7 +52,6 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 		return nil, err
 	}
 
-	dhtOpts := []dht.Option{dht.Mode(dht.ModeServer), dht.ProtocolPrefix("/spegel"), dht.DisableValues(), dht.MaxRecordAge(KeyTTL)}
 	bootstrapPeerOpt := dht.BootstrapPeersFunc(func() []peer.AddrInfo {
 		addrInfo, err := b.GetAddress()
 		if err != nil {
@@ -80,7 +64,16 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 		}
 		return []peer.AddrInfo{*addrInfo}
 	})
-	dhtOpts = append(dhtOpts, bootstrapPeerOpt)
+	dhtOpts := []dht.Option{
+		dht.Mode(dht.ModeServer),
+		dht.ProtocolPrefix("/spegel"),
+		dht.DisableValues(),
+		dht.MaxRecordAge(KeyTTL),
+		dht.AddressFilter(func(addrs []ma.Multiaddr) []ma.Multiaddr {
+			return ma.FilterAddrs(addrs, func(a ma.Multiaddr) bool { return !manet.IsIPLoopback(a) })
+		}),
+		bootstrapPeerOpt,
+	}
 	kdht, err := dht.New(ctx, host, dhtOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create distributed hash table: %w", err)
@@ -134,7 +127,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				log.Info("expected address list to only contain a single item")
 				continue
 			}
-			v, err := info.Addrs[0].ValueForProtocol(multiaddr.P_IP4)
+			v, err := info.Addrs[0].ValueForProtocol(ma.P_IP4)
 			if err != nil {
 				log.Error(err, "could not get IPV4 address")
 				continue
