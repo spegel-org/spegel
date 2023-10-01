@@ -91,6 +91,9 @@ affinity: {}
 serviceMonitor:
   # -- If true creates a Prometheus Service Monitor.
   enabled: false
+  interval: 60s
+  scrapeTimeout: 30s
+  labels: {}
 
 # -- Priority class name to use for the pod.
 priorityClassName: system-node-critical
