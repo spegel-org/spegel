@@ -6,9 +6,9 @@ metadata:
   namespace: {{ include "spegel.namespace" . }}
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
-    {{- if .Values.serviceMonitor.labels }}
+    {{- if .Values.serviceMonitor.labels -}}
     {{ toYaml .Values.serviceMonitor.labels | nindent 4}}
-    {{- end }}    
+    {{- end }}
 spec:
   selector:
     matchLabels:
