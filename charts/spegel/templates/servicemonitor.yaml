@@ -7,7 +7,7 @@ metadata:
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
     {{- if .Values.serviceMonitor.labels }}
-    {{ toYaml .Values.serviceMonitor.labels | indent 4}}
+    {{ toYaml .Values.serviceMonitor.labels | nindent 4}}
     {{- end }}    
 spec:
   selector:
@@ -15,4 +15,6 @@ spec:
       {{- include "spegel.selectorLabels" . | nindent 6 }}
   endpoints:
     - port: metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
 {{- end }}
