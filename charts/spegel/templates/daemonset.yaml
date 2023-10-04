@@ -81,7 +81,7 @@ spec:
           - --kubeconfig-path={{ . }}
           {{- end }}
           - --leader-election-namespace={{ include "spegel.namespace" . }}
-          - --leader-election-name={{ include "spegel.namespace" . }}-leader-election
+          - --leader-election-name={{ .Release.Name }}-leader-election
           - --resolve-latest-tag={{ .Values.spegel.resolveLatestTag }}
           - --local-addr=127.0.0.1:{{ .Values.service.registry.hostPort }}
         ports:
