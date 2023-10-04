@@ -91,6 +91,12 @@ affinity: {}
 serviceMonitor:
   # -- If true creates a Prometheus Service Monitor.
   enabled: false
+  # -- Prometheus scrape interval.
+  interval: 60s
+  # -- Prometheus scrape interval timeout.
+  scrapeTimeout: 30s
+  # -- Service monitor specific labels for prometheus to discover servicemonitor.
+  labels: {}
 
 # -- Priority class name to use for the pod.
 priorityClassName: system-node-critical
