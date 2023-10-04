@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#164](https://github.com/XenitAB/spegel/pull/164) Update Go to 1.21.
 - [#211](https://github.com/XenitAB/spegel/pull/211) Replace factory with adress filter to remove loopback addresses.
 - [#219](https://github.com/XenitAB/spegel/pull/219) Use release name instead of namespace for name of leader election configmap.
+- [#215](https://github.com/XenitAB/spegel/pull/215) Support for servicemonitor labels, interval and timeout in helm chart.
 
 ### Deprecated
 
