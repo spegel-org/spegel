@@ -147,6 +147,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 			// Combine peer with registry port to create mirror endpoint.
 			peerCh <- fmt.Sprintf("http://%s:%s", v, r.registryPort)
 		}
+		close(peerCh)
 	}()
 	return peerCh, nil
 }

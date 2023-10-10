@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#241](https://github.com/XenitAB/spegel/pull/241) Fix missing return on resolve error.
+- [#223](https://github.com/XenitAB/spegel/pull/223) Propagate closing channel before resolve timeout.
 
 ### Security
 
