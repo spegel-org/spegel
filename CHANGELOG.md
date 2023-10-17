@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#233](https://github.com/XenitAB/spegel/pull/233) Fix address filtering to remove localhost from host.
+
 ### Security
 
 ## v0.0.12
