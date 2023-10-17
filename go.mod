@@ -20,7 +20,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.0-rc4
 	github.com/pelletier/go-toml/v2 v2.0.9
 	github.com/prometheus/client_golang v1.16.0
-	github.com/spf13/afero v1.9.5
+	github.com/spf13/afero v1.10.0
 	github.com/stretchr/testify v1.8.4
 	github.com/xenitab/pkg/channels v0.0.2
 	github.com/xenitab/pkg/gin v0.0.9
