@@ -25,7 +25,7 @@ require (
 	github.com/xenitab/pkg/channels v0.0.2
 	github.com/xenitab/pkg/gin v0.0.9
 	github.com/xenitab/pkg/kubernetes v0.0.4
-	go.uber.org/zap v1.25.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/sync v0.4.0
 	k8s.io/client-go v0.27.4
 	k8s.io/cri-api v0.27.4
