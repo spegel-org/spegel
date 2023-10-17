@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/go-logr/logr"
 	cid "github.com/ipfs/go-cid"
@@ -40,9 +41,19 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 	if err != nil {
 		return nil, fmt.Errorf("could not create host multi address: %w", err)
 	}
-	host, err := libp2p.New(libp2p.ListenAddrs(multiAddr))
+	addrFactoryOpt := libp2p.AddrsFactory(func(addrs []ma.Multiaddr) []ma.Multiaddr {
+		return ma.FilterAddrs(addrs, func(a ma.Multiaddr) bool { return !manet.IsIPLoopback(a) })
+	})
+	host, err := libp2p.New(libp2p.ListenAddrs(multiAddr), addrFactoryOpt)
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
+	}
+	if len(host.Addrs()) > 1 {
+		addrs := []string{}
+		for _, addr := range host.Addrs() {
+			addrs = append(addrs, addr.String())
+		}
+		return nil, fmt.Errorf("expected singled host address got %s", strings.Join(addrs, ", "))
 	}
 	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().Pretty())
 	log.Info("starting p2p router", "id", self)
@@ -69,9 +80,6 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 		dht.ProtocolPrefix("/spegel"),
 		dht.DisableValues(),
 		dht.MaxRecordAge(KeyTTL),
-		dht.AddressFilter(func(addrs []ma.Multiaddr) []ma.Multiaddr {
-			return ma.FilterAddrs(addrs, func(a ma.Multiaddr) bool { return !manet.IsIPLoopback(a) })
-		}),
 		bootstrapPeerOpt,
 	}
 	kdht, err := dht.New(ctx, host, dhtOpts...)
@@ -124,7 +132,11 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				continue
 			}
 			if len(info.Addrs) != 1 {
-				log.Info("expected address list to only contain a single item")
+				addrs := []string{}
+				for _, addr := range info.Addrs {
+					addrs = append(addrs, addr.String())
+				}
+				log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
 				continue
 			}
 			v, err := info.Addrs[0].ValueForProtocol(ma.P_IP4)
