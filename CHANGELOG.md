@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- [#235](https://github.com/XenitAB/spegel/pull/235) Bump golang.org/x/net from 0.14.0 to 0.17.0.
+
 ## v0.0.12
 
 ### Added 
