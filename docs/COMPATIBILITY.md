@@ -20,3 +20,4 @@ Spegel has been tested on the following Kubernetes flavors for compatibility. So
 | AKS | :green_circle: | Verified to work out of the box. |
 | EKS | :yellow_circle: | Discard unpacked layers is enabled by default and needs to be disabled. |
 | GKE | :red_circle: | Not supported due to registry config path not being set. |
+| Minikube | :green_circle: | Verified to work out of the box. |
