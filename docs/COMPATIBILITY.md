@@ -1,25 +1,22 @@
 # Compatibility 
 
-Currently Spegel only works with Containerd, in future other container runtime interfaces may be supported. Spegel relies on [Containerd registry mirroring](https://github.com/containerd/containerd/blob/main/docs/hosts.md#cri) to route requests to the correct destination.
-This requires Containerd to be properly configured with a registry config path, without this Spegel will not be able to start. Some Kubernetes flavors come with this setting out of the box, while others do not. Spegel is not able to write this configuration for you as it requires a restart of Containerd to take effect.
+Currently, Spegel only works with Containerd, in the future other container runtime interfaces may be supported. Spegel relies on [Containerd registry mirroring](https://github.com/containerd/containerd/blob/main/docs/hosts.md#cri) to route requests to the correct destination.
+This requires Containerd to be properly configured, if it is not Spegel will exit. First of all the registry config path needs to be set, this is not done by default in Containerd. Second of all discarding unpacked layers cannot be enabled.
+Some Kubernetes flavors come with this setting out of the box, while others do not. Spegel is not able to write this configuration for you as it requires a restart of Containerd to take effect.
 
 ```toml
 version = 2
 
 [plugins."io.containerd.grpc.v1.cri".registry]
    config_path = "/etc/containerd/certs.d"
+[plugins."io.containerd.grpc.v1.cri".containerd]
+   discard_unpacked_layers = false
 ```
 
-Below is a list of Kubernetes flavors that Spegel has been tested on. Some flavors may require additional steps while other will work right out of the box.
+Spegel has been tested on the following Kubernetes flavors for compatibility. Some flavors may require additional steps while others will work right out of the box.
 
-## AKS
-
-AKS will work out of the box as it comes with the required registry config path set out of the box.
-
-## EKS
-
-EKS will work out of the box as it comes with the required registry config path set out of the box.
-
-## GKE
-
-GKE will currently not work with Spegel. This is due to GKE using the old registry configuration format, that lacks certain settings Spegel relies on.
+| Flavor | Status | Comment |
+| --- | :---: | --- |
+| AKS | :green_circle: | Verified to work out of the box. |
+| EKS | :yellow_circle: | Discard unpacked layers is enabled by default and needs to be disabled. |
+| GKE | :red_circle: | Not supported due to registry config path not being set. |
