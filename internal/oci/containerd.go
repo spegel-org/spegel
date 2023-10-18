@@ -86,10 +86,18 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 		Registry struct {
 			ConfigPath string `json:"configPath"`
 		} `json:"registry"`
+		Containerd struct {
+			Runtimes struct {
+				DiscardUnpackedLayers bool `json:"discardUnpackedLayers"`
+			} `json:"runtimes"`
+		} `json:"containerd"`
 	}{}
 	err := json.Unmarshal([]byte(str), cfg)
 	if err != nil {
 		return err
+	}
+	if cfg.Containerd.Runtimes.DiscardUnpackedLayers {
+		return fmt.Errorf("Containerd discard unpacked layers cannot be enabled")
 	}
 	if cfg.Registry.ConfigPath == "" {
 		return fmt.Errorf("Containerd registry config path needs to be set for mirror configuration to take effect")
