@@ -34,10 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#219](https://github.com/XenitAB/spegel/pull/219) Use release name instead of namespace for name of leader election configmap.
 - [#215](https://github.com/XenitAB/spegel/pull/215) Support for servicemonitor labels, interval and timeout in helm chart.
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - [#233](https://github.com/XenitAB/spegel/pull/233) Fix address filtering to remove localhost from host.
