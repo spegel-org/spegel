@@ -177,6 +177,7 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)
+		return
 	}
 	for {
 		select {
