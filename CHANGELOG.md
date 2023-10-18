@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#241](https://github.com/XenitAB/spegel/pull/241) Fix missing return on resolve error.
+
 ### Security
 
 ## v0.0.13
