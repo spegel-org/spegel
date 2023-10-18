@@ -22,38 +22,44 @@ import (
 
 func TestVerifyStatusResponse(t *testing.T) {
 	tests := []struct {
-		name           string
-		infoConfigPath string
-		configPath     string
-		expectedErrMsg string
+		name                  string
+		configPath            string
+		discardUnpackedLayers bool
+		requiredConfigPath    string
+		expectedErrMsg        string
 	}{
 		{
-			name:           "empty config path",
-			infoConfigPath: "",
-			configPath:     "/etc/containerd/certs.d",
-			expectedErrMsg: "Containerd registry config path needs to be set for mirror configuration to take effect",
+			name:               "empty config path",
+			configPath:         "",
+			requiredConfigPath: "/etc/containerd/certs.d",
+			expectedErrMsg:     "Containerd registry config path needs to be set for mirror configuration to take effect",
 		},
 		{
-			name:           "single config path",
-			infoConfigPath: "/etc/containerd/certs.d",
-			configPath:     "/etc/containerd/certs.d",
+			name:               "single config path",
+			configPath:         "/etc/containerd/certs.d",
+			requiredConfigPath: "/etc/containerd/certs.d",
 		},
 		{
-			name:           "missing single config path",
-			infoConfigPath: "/etc/containerd/certs.d",
-			configPath:     "/var/lib/containerd/certs.d",
-			expectedErrMsg: "Containerd registry config path is /etc/containerd/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
+			name:               "missing single config path",
+			configPath:         "/etc/containerd/certs.d",
+			requiredConfigPath: "/var/lib/containerd/certs.d",
+			expectedErrMsg:     "Containerd registry config path is /etc/containerd/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
 		},
 		{
-			name:           "multiple config paths",
-			infoConfigPath: "/etc/containerd/certs.d:/etc/docker/certs.d",
-			configPath:     "/etc/containerd/certs.d",
+			name:               "multiple config paths",
+			configPath:         "/etc/containerd/certs.d:/etc/docker/certs.d",
+			requiredConfigPath: "/etc/containerd/certs.d",
 		},
 		{
-			name:           "missing multiple config paths",
-			infoConfigPath: "/etc/containerd/certs.d:/etc/docker/certs.d",
-			configPath:     "/var/lib/containerd/certs.d",
-			expectedErrMsg: "Containerd registry config path is /etc/containerd/certs.d:/etc/docker/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
+			name:               "missing multiple config paths",
+			configPath:         "/etc/containerd/certs.d:/etc/docker/certs.d",
+			requiredConfigPath: "/var/lib/containerd/certs.d",
+			expectedErrMsg:     "Containerd registry config path is /etc/containerd/certs.d:/etc/docker/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
+		},
+		{
+			name:                  "discard unpacked layers enabled",
+			discardUnpackedLayers: true,
+			expectedErrMsg:        "Containerd discard unpacked layers cannot be enabled",
 		},
 	}
 
@@ -61,10 +67,10 @@ func TestVerifyStatusResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resp := &runtimeapi.StatusResponse{
 				Info: map[string]string{
-					"config": fmt.Sprintf(`{"registry": {"configPath": "%s"}}`, tt.infoConfigPath),
+					"config": fmt.Sprintf(`{"registry": {"configPath": "%s"}, "containerd": {"runtimes":{"discardUnpackedLayers": %v}}}`, tt.configPath, tt.discardUnpackedLayers),
 				},
 			}
-			err := verifyStatusResponse(resp, tt.configPath)
+			err := verifyStatusResponse(resp, tt.requiredConfigPath)
 			if tt.expectedErrMsg != "" {
 				require.EqualError(t, err, tt.expectedErrMsg)
 				return
