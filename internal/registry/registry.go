@@ -179,18 +179,20 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
+	// TODO: Refactor context cancel and mirror channel closing
 	for {
 		select {
 		case <-resolveCtx.Done():
-			// Resolving mirror has timed out meaning one could not be found.
+			// Request has been closed by server or client. No use continuing.
 			//nolint:errcheck // ignore
-			c.AbortWithError(http.StatusNotFound, fmt.Errorf("could not resolve mirror for key: %s", key))
+			c.AbortWithError(http.StatusNotFound, fmt.Errorf("request closed for key: %s", key))
 			return
 		case mirror, ok := <-mirrorCh:
 			// Channel closed means no more mirrors will be received and max retries has been reached.
 			if !ok {
+				// TODO: Change to a 404 instead
 				//nolint:errcheck // ignore
-				c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("mirror resolution has been exhausted"))
+				c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("mirror resolve retries exhausted for key: %s", key))
 				return
 			}
 
