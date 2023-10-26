@@ -1,4 +1,4 @@
-package benchmark
+package main
 
 import (
 	"bytes"
@@ -6,12 +6,12 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/alexflint/go-arg"
 	"golang.org/x/sync/errgroup"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,17 +25,20 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 )
 
-func TestBenchmark(t *testing.T) {
-	kubeconfigPath := os.Getenv("BENCHMARK_KUBECONFIG")
-	require.NotEmpty(t, kubeconfigPath)
-	image := os.Getenv("BENCHMARK_IMAGE")
-	require.NotEmpty(t, image)
-	concurrencyStr := os.Getenv("BENCHMARK_CONCURRENCY")
-	require.NotEmpty(t, concurrencyStr)
-	concurrency, err := strconv.Atoi(concurrencyStr)
-	require.NoError(t, err)
-	err = run(kubeconfigPath, image, concurrency)
-	require.NoError(t, err)
+type Arguments struct {
+	KubeconfigPath string `arg:"--kubeconfig,required"`
+	Image          string `arg:"--image,required"`
+	Concurrency    int    `arg:"--concurrency,required"`
+}
+
+func main() {
+	args := &Arguments{}
+	arg.MustParse(args)
+	err := run(args.KubeconfigPath, args.Image, args.Concurrency)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
 
 type job struct {
@@ -49,7 +52,7 @@ type result struct {
 	duration  float64
 }
 
-func run(kubeconfigPath string, image string, concurrency int) error {
+func run(kubeconfigPath, image string, concurrency int) error {
 	ctx := context.TODO()
 
 	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
@@ -71,6 +74,7 @@ func run(kubeconfigPath string, image string, concurrency int) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("Running benchmark on nodes: ", len(podList.Items))
 	for _, pod := range podList.Items {
 		steps := []string{
 			fmt.Sprintf("/usr/local/bin/crictl rmi %s || true", image),
@@ -114,7 +118,13 @@ func run(kubeconfigPath string, image string, concurrency int) error {
 		return err
 	}
 
-	file, err := os.Create(fmt.Sprintf("/tmp/spegel-benchmark-%s-%d.csv", strings.ReplaceAll(image, "/", "_"), concurrency))
+	dir, err := os.MkdirTemp("", "spegel-benchmark")
+	if err != nil {
+		return err
+	}
+	fileName := fmt.Sprintf("%s-%d.csv", strings.ReplaceAll(image, "/", "_"), concurrency)
+	csvPath := path.Join(dir, fileName)
+	file, err := os.Create(csvPath)
 	if err != nil {
 		return err
 	}
@@ -135,6 +145,8 @@ func run(kubeconfigPath string, image string, concurrency int) error {
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("CSV Result: ", csvPath)
 
 	return nil
 }
@@ -212,10 +224,13 @@ func createBenchmarkPods(ctx context.Context, cs kubernetes.Interface, namespace
 			if err != nil {
 				return false, err
 			}
-			if ds.Status.CurrentNumberScheduled == ds.Status.DesiredNumberScheduled {
-				return true, nil
+			if ds.Status.DesiredNumberScheduled == 0 {
+				return false, nil
 			}
-			return false, nil
+			if ds.Status.NumberReady != ds.Status.DesiredNumberScheduled {
+				return false, nil
+			}
+			return true, nil
 		})
 		if err != nil {
 			return err
