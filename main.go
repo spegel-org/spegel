@@ -20,6 +20,7 @@ import (
 	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/klog/v2"
 
 	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/registry"
@@ -65,6 +66,7 @@ func main() {
 		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
 	}
 	log := zapr.NewLogger(zapLog)
+	klog.SetLogger(log)
 	ctx := logr.NewContext(context.Background(), log)
 
 	err = run(ctx, args)
