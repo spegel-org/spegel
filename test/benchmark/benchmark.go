@@ -1,61 +1,96 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path"
-	"strconv"
+	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
+	"image/color"
+
 	"github.com/alexflint/go-arg"
-	"golang.org/x/sync/errgroup"
+	"golang.org/x/exp/slices"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
+	"gonum.org/v1/plot/vg/vgimg"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/remotecommand"
+	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
+type BenchmarkCmd struct {
+	ResultDir      string   `arg:"--result-dir,required"`
+	Name           string   `arg:"--name,required"`
+	KubeconfigPath string   `arg:"--kubeconfig,required"`
+	Namespace      string   `arg:"--namespace,required"`
+	Images         []string `arg:"--images,required"`
+}
+
+type AnalyzeCmd struct {
+	Path string `args:"--path"`
+}
+
 type Arguments struct {
-	KubeconfigPath string `arg:"--kubeconfig,required"`
-	Image          string `arg:"--image,required"`
-	Concurrency    int    `arg:"--concurrency,required"`
+	Benchmark *BenchmarkCmd `arg:"subcommand:benchmark"`
+	Analyze   *AnalyzeCmd   `arg:"subcommand:analyze"`
 }
 
 func main() {
 	args := &Arguments{}
 	arg.MustParse(args)
-	err := run(args.KubeconfigPath, args.Image, args.Concurrency)
+	err := run(*args)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("unexpected error:", err)
 		os.Exit(1)
 	}
 }
 
-type job struct {
-	iteration int
-	name      string
-	namespace string
+func run(args Arguments) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM)
+	defer cancel()
+	switch {
+	case args.Benchmark != nil:
+		return benchmark(ctx, *args.Benchmark)
+	case args.Analyze != nil:
+		return analyze(ctx, *args.Analyze)
+	default:
+		return fmt.Errorf("unknown command")
+	}
 }
 
-type result struct {
-	iteration int
-	duration  float64
+type Result struct {
+	Name       string
+	Benchmarks []Benchmark
 }
 
-func run(kubeconfigPath, image string, concurrency int) error {
-	ctx := context.TODO()
+type Benchmark struct {
+	Image        string
+	Measurements []Measurement
+}
 
-	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+type Measurement struct {
+	Start    time.Time
+	Stop     time.Time
+	Duration time.Duration
+}
+
+func benchmark(ctx context.Context, args BenchmarkCmd) error {
+	cfg, err := clientcmd.BuildConfigFromFlags("", args.KubeconfigPath)
 	if err != nil {
 		return err
 	}
@@ -63,130 +98,93 @@ func run(kubeconfigPath, image string, concurrency int) error {
 	if err != nil {
 		return err
 	}
-
-	ns := "spegel-benchmark"
-	err = createBenchmarkPods(ctx, cs, ns)
-	if err != nil {
-		return fmt.Errorf("could not create benchmark pods: %w", err)
-	}
-
-	podList, err := cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: "app=spegel-benchmark"})
-	if err != nil {
-		return err
-	}
-	fmt.Println("Running benchmark on nodes: ", len(podList.Items))
-	for _, pod := range podList.Items {
-		steps := []string{
-			fmt.Sprintf("/usr/local/bin/crictl rmi %s || true", image),
-		}
-		_, err := execute(ctx, cs, cfg, pod.Name, pod.Namespace, steps)
-		if err != nil {
-			return err
-		}
-	}
-	g, ctx := errgroup.WithContext(ctx)
-	jobs := make(chan job, len(podList.Items))
-	results := make(chan result, len(podList.Items))
-	for w := 0; w < concurrency; w++ {
-		g.Go(func() error {
-			for job := range jobs {
-				steps := []string{
-					"export TIMEFORMAT=%R",
-					fmt.Sprintf("time /usr/local/bin/crictl pull %s > /dev/null", image),
-				}
-				out, err := execute(ctx, cs, cfg, job.name, job.namespace, steps)
-				if err != nil {
-					return err
-				}
-				out = strings.ReplaceAll(out, "\n", "")
-				out = strings.ReplaceAll(out, "\r", "")
-				duration, err := strconv.ParseFloat(out, 64)
-				if err != nil {
-					return err
-				}
-				results <- result{iteration: job.iteration, duration: duration}
-			}
-			return nil
-		})
-	}
-	for i, pod := range podList.Items {
-		jobs <- job{iteration: i, name: pod.Name, namespace: pod.Namespace}
-	}
-	close(jobs)
-	err = g.Wait()
+	dc, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return err
 	}
 
-	dir, err := os.MkdirTemp("", "spegel-benchmark")
-	if err != nil {
-		return err
-	}
-	fileName := fmt.Sprintf("%s-%d.csv", strings.ReplaceAll(image, "/", "_"), concurrency)
-	csvPath := path.Join(dir, fileName)
-	file, err := os.Create(csvPath)
-	if err != nil {
-		return err
-	}
-	w := csv.NewWriter(file)
-	err = w.Write([]string{"Iteration", "Duration"})
-	if err != nil {
-		return err
-	}
-	for i := 0; i < len(podList.Items); i++ {
-		res := <-results
-		err = w.Write([]string{fmt.Sprintf("%d", res.iteration), fmt.Sprintf("%v", res.duration)})
-		if err != nil {
-			return err
-		}
-	}
-	w.Flush()
-	err = w.Error()
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("CSV Result: ", csvPath)
-
-	return nil
-}
-
-func createBenchmarkPods(ctx context.Context, cs kubernetes.Interface, namespace string) error {
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
-		},
-	}
-	_, err := cs.CoreV1().Namespaces().Get(ctx, ns.ObjectMeta.Name, metav1.GetOptions{})
+	ts := time.Now().Unix()
+	runName := fmt.Sprintf("spegel-benchmark-%d", ts)
+	_, err = cs.CoreV1().Namespaces().Get(ctx, args.Namespace, metav1.GetOptions{})
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 	if errors.IsNotFound(err) {
-		ns, err = cs.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+		ns := corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: args.Namespace,
+			},
+		}
+		_, err := cs.CoreV1().Namespaces().Create(ctx, &ns, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
 	}
+
+	err = clearImages(ctx, cs, dc, args.Namespace, args.Images)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cs.AppsV1().DaemonSets(args.Namespace).Delete(ctx, runName, metav1.DeleteOptions{})
+	}()
+	result := Result{
+		Name: args.Name,
+	}
+	for _, image := range args.Images {
+		bench, err := measureImagePull(ctx, cs, dc, args.Namespace, runName, image)
+		if err != nil {
+			return err
+		}
+		result.Benchmarks = append(result.Benchmarks, bench)
+	}
+	err = clearImages(ctx, cs, dc, args.Namespace, args.Images)
+	if err != nil {
+		return err
+	}
+
+	fileName := fmt.Sprintf("%s.json", args.Name)
+	file, err := os.Create(path.Join(args.ResultDir, fileName))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	b, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(b)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func clearImages(ctx context.Context, cs kubernetes.Interface, dc dynamic.Interface, namespace string, images []string) error {
+	remove := fmt.Sprintf("crictl rmi %s || true", strings.Join(images, " "))
+	commands := []string{"/bin/sh", "-c", fmt.Sprintf("chroot /host /bin/bash -c '%s'; sleep infinity;", remove)}
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "spegel-benchmark",
+			Name: "spegel-clear-image",
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": "spegel-benchmark"},
+				MatchLabels: map[string]string{"app": "spegel-clear-image"},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "spegel-benchmark",
+						"app": "spegel-clear-image",
 					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            "benchmark",
+							Name:            "clear",
 							Image:           "docker.io/library/alpine:3.18.4@sha256:48d9183eb12a05c99bcc0bf44a003607b8e941e1d4f41f9ad12bdcc4b5672f86",
 							ImagePullPolicy: "IfNotPresent",
+							Command:         commands,
 							Stdin:           true,
 							VolumeMounts: []corev1.VolumeMount{
 								{
@@ -210,65 +208,247 @@ func createBenchmarkPods(ctx context.Context, cs kubernetes.Interface, namespace
 			},
 		},
 	}
-	_, err = cs.AppsV1().DaemonSets(ns.ObjectMeta.Name).Get(ctx, ds.ObjectMeta.Name, metav1.GetOptions{})
+	_, err := cs.AppsV1().DaemonSets(namespace).Create(ctx, ds, metav1.CreateOptions{})
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
-	if errors.IsNotFound(err) {
-		ds, err = cs.AppsV1().DaemonSets(ns.ObjectMeta.Name).Create(ctx, ds, metav1.CreateOptions{})
-		if err != nil {
-			return err
+	defer func() {
+		cs.AppsV1().DaemonSets(namespace).Delete(ctx, ds.ObjectMeta.Name, metav1.DeleteOptions{})
+	}()
+	err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 10*time.Minute, true, func(ctx context.Context) (done bool, err error) {
+		gvr := schema.GroupVersionResource{
+			Group:    "apps",
+			Version:  "v1",
+			Resource: "daemonsets",
 		}
-		err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 1*time.Minute, true, func(ctx context.Context) (done bool, err error) {
-			ds, err := cs.AppsV1().DaemonSets(ns.ObjectMeta.Name).Get(ctx, ds.ObjectMeta.Name, metav1.GetOptions{})
-			if err != nil {
-				return false, err
-			}
-			if ds.Status.DesiredNumberScheduled == 0 {
-				return false, nil
-			}
-			if ds.Status.NumberReady != ds.Status.DesiredNumberScheduled {
-				return false, nil
-			}
-			return true, nil
-		})
+		u, err := dc.Resource(gvr).Namespace(namespace).Get(ctx, ds.ObjectMeta.Name, metav1.GetOptions{})
 		if err != nil {
-			return err
+			return false, err
 		}
+		res, err := status.Compute(u)
+		if err != nil {
+			return false, err
+		}
+		if res.Status != status.CurrentStatus {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
-func execute(ctx context.Context, cs kubernetes.Interface, cfg *restclient.Config, name, namespace string, steps []string) (string, error) {
-	command := fmt.Sprintf("chroot /host /bin/bash -c '%s'", strings.Join(steps, ";"))
-	buf := &bytes.Buffer{}
-	errBuf := &bytes.Buffer{}
-	request := cs.CoreV1().RESTClient().
-		Post().
-		Namespace(namespace).
-		Resource("pods").
-		Name(name).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Command: []string{"/bin/sh", "-c", command},
-			Stdin:   false,
-			Stdout:  true,
-			Stderr:  true,
-			TTY:     true,
-		}, scheme.ParameterCodec)
-	exec, err := remotecommand.NewSPDYExecutor(cfg, "POST", request.URL())
-	if err != nil {
-		return "", err
+func measureImagePull(ctx context.Context, cs kubernetes.Interface, dc dynamic.Interface, namespace, name, image string) (Benchmark, error) {
+	ds, err := cs.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil && !errors.IsNotFound(err) {
+		return Benchmark{}, err
 	}
-	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdout: buf,
-		Stderr: errBuf,
+	if errors.IsNotFound(err) {
+		ds := &appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+			Spec: appsv1.DaemonSetSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": name},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:            "benchmark",
+								Image:           image,
+								ImagePullPolicy: "IfNotPresent",
+								// Keep container running
+								Stdin: true,
+							},
+						},
+					},
+				},
+			},
+		}
+		ds, err := cs.AppsV1().DaemonSets(namespace).Create(ctx, ds, metav1.CreateOptions{})
+		if err != nil {
+			return Benchmark{}, err
+		}
+	} else {
+		ds.Spec.Template.Spec.Containers[0].Image = image
+		_, err := cs.AppsV1().DaemonSets(namespace).Update(ctx, ds, metav1.UpdateOptions{})
+		if err != nil {
+			return Benchmark{}, err
+		}
+	}
+
+	err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 30*time.Minute, true, func(ctx context.Context) (done bool, err error) {
+		gvr := schema.GroupVersionResource{
+			Group:    "apps",
+			Version:  "v1",
+			Resource: "daemonsets",
+		}
+		u, err := dc.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		res, err := status.Compute(u)
+		if err != nil {
+			return false, err
+		}
+		if res.Status != status.CurrentStatus {
+			return false, nil
+		}
+		return true, nil
 	})
 	if err != nil {
-		return "", err
+		return Benchmark{}, err
 	}
-	if errBuf.String() != "" {
-		return "", fmt.Errorf(errBuf.String())
+
+	podList, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", name)})
+	if err != nil {
+		return Benchmark{}, err
 	}
-	return buf.String(), nil
+	if len(podList.Items) == 0 {
+		return Benchmark{}, fmt.Errorf("received empty benchmark pod list")
+	}
+	bench := Benchmark{
+		Image: image,
+	}
+	for _, pod := range podList.Items {
+		eventList, _ := cs.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{FieldSelector: fmt.Sprintf("involvedObject.name=%s", pod.Name), TypeMeta: metav1.TypeMeta{Kind: "Pod"}})
+		if err != nil {
+			return Benchmark{}, err
+		}
+		pullingEvent, err := getEvent(eventList.Items, "Pulling")
+		if err != nil {
+			return Benchmark{}, err
+		}
+		pulledEvent, err := getEvent(eventList.Items, "Pulled")
+		if err != nil {
+			return Benchmark{}, err
+		}
+		d, err := parsePullMessage(pulledEvent.Message)
+		if err != nil {
+			return Benchmark{}, err
+		}
+		bench.Measurements = append(bench.Measurements, Measurement{Start: pullingEvent.FirstTimestamp.Time, Stop: pullingEvent.FirstTimestamp.Time.Add(d), Duration: d})
+	}
+	return bench, nil
+}
+
+func getEvent(events []corev1.Event, reason string) (corev1.Event, error) {
+	for _, event := range events {
+		if event.Reason != reason {
+			continue
+		}
+		return event, nil
+	}
+	return corev1.Event{}, fmt.Errorf("could not find event with reason %s", reason)
+}
+
+func parsePullMessage(msg string) (time.Duration, error) {
+	r, err := regexp.Compile(`\((.*) including waiting\)`)
+	if err != nil {
+		return 0, err
+	}
+	match := r.FindStringSubmatch(msg)
+	if len(match) < 2 {
+		return 0, fmt.Errorf("could not find image pull duration")
+	}
+	s := match[1]
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, err
+	}
+	return d, nil
+}
+
+func analyze(ctx context.Context, args AnalyzeCmd) error {
+	b, err := os.ReadFile(args.Path)
+	if err != nil {
+		return err
+	}
+	result := Result{}
+	err = json.Unmarshal(b, &result)
+	if err != nil {
+		return err
+	}
+	ext := path.Ext(args.Path)
+	outPath := strings.TrimSuffix(args.Path, ext)
+	outPath = fmt.Sprintf("%s.png", outPath)
+	err = createPlot(result, outPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func createPlot(result Result, path string) error {
+	plots := []*plot.Plot{}
+	for _, bench := range result.Benchmarks {
+		p := plot.New()
+		p.Title.Text = bench.Image
+		p.Title.Padding = vg.Points(10)
+		p.Y.Label.Text = "Pod Number"
+		p.X.Label.Text = "Time [ms]"
+		slices.SortFunc(bench.Measurements, func(a, b Measurement) int {
+			if a.Start == b.Start {
+				return a.Stop.Compare(b.Stop)
+			}
+			return a.Start.Compare(b.Start)
+		})
+		zeroTime := bench.Measurements[0].Start
+		max := int64(0)
+		min := int64(0)
+		for i, result := range bench.Measurements {
+			if i == 0 || result.Duration.Milliseconds() < min {
+				min = result.Duration.Milliseconds()
+			}
+			if i == 0 || result.Duration.Milliseconds() > max {
+				max = result.Duration.Milliseconds()
+			}
+			start := result.Start.Sub(zeroTime)
+			stop := start + result.Duration
+			b, err := plotter.NewBoxPlot(4, float64(len(bench.Measurements)-i-1), plotter.Values{float64(start.Milliseconds()), float64(stop.Milliseconds())})
+			if err != nil {
+				return err
+			}
+			b.Horizontal = true
+			b.FillColor = color.Black
+			p.Add(b)
+		}
+		plots = append(plots, p)
+	}
+
+	img := vgimg.New(vg.Points(700), vg.Points(300))
+	dc := draw.New(img)
+	t := draw.Tiles{
+		Rows:      1,
+		Cols:      len(plots),
+		PadX:      vg.Millimeter,
+		PadY:      vg.Millimeter,
+		PadTop:    vg.Points(10),
+		PadBottom: vg.Points(10),
+		PadLeft:   vg.Points(10),
+		PadRight:  vg.Points(10),
+	}
+	canv := plot.Align([][]*plot.Plot{plots}, t, dc)
+	for i, plot := range plots {
+		plot.Draw(canv[0][i])
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	png := vgimg.PngCanvas{Canvas: img}
+	if _, err := png.WriteTo(file); err != nil {
+		return err
+	}
+	return nil
 }
