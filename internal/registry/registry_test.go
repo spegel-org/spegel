@@ -124,11 +124,11 @@ func TestMirrorHandler(t *testing.T) {
 					require.Equal(t, tt.expectedBody, string(b))
 				}
 				if method == http.MethodHead {
-					require.Equal(t, "", string(b))
+					require.Empty(t, b)
 				}
 
 				if tt.expectedHeaders == nil {
-					require.Len(t, resp.Header, 0)
+					require.Empty(t, resp.Header)
 				}
 				for k, v := range tt.expectedHeaders {
 					require.Equal(t, v, resp.Header.Values(k))
