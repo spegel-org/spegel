@@ -17,12 +17,12 @@ import (
 
 var advertisedImages = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "spegel_advertised_images",
-	Help: "Number of images advertised to be availible.",
+	Help: "Number of images advertised to be available.",
 }, []string{"registry"})
 
 var advertisedKeys = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Name: "spegel_advertised_keys",
-	Help: "Number of keys advertised to be availible.",
+	Help: "Number of keys advertised to be available.",
 }, []string{"registry"})
 
 // TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.

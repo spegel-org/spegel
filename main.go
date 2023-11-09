@@ -43,7 +43,7 @@ type RegistryCmd struct {
 	ContainerdSock               string        `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string        `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
 	ContainerdRegistryConfigPath string        `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
-	MirrorResolveRetries         int           `arg:"--mirror-resolve-retries" default:"3" help:"Max ammount of mirrors to attempt."`
+	MirrorResolveRetries         int           `arg:"--mirror-resolve-retries" default:"3" help:"Max amount of mirrors to attempt."`
 	MirrorResolveTimeout         time.Duration `arg:"--mirror-resolve-timeout" default:"5s" help:"Max duration spent finding a mirror."`
 	KubeconfigPath               string        `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
 	LeaderElectionNamespace      string        `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
