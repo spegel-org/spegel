@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#262](https://github.com/XenitAB/spegel/pull/262) Enable misspell linter and fix spelling mistakes.
+- [#263](https://github.com/XenitAB/spegel/pull/263) Enable testifylint linter and fix errors.
 
 ### Security
 

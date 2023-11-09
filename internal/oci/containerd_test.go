@@ -269,8 +269,8 @@ func TestCreateFilter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			listFilter, eventFilter := createFilters(stringListToUrlList(t, tt.registries))
-			require.Equal(t, listFilter, tt.expectedListFilter)
-			require.Equal(t, eventFilter, tt.expectedEventFilter)
+			require.Equal(t, tt.expectedListFilter, listFilter)
+			require.Equal(t, tt.expectedEventFilter, eventFilter)
 		})
 	}
 }
