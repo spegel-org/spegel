@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#262](https://github.com/XenitAB/spegel/pull/262) Enable misspell linter and fix spelling mistakes.
 - [#263](https://github.com/XenitAB/spegel/pull/263) Enable testifylint linter and fix errors.
+- [#269](https://github.com/XenitAB/spegel/pull/269) Set Go image version with digest in Dockerfile.
 
 ### Security
 
