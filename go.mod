@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/alexflint/go-arg v1.4.3
-	github.com/containerd/containerd v1.7.8
+	github.com/containerd/containerd v1.7.9
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-logr/logr v1.3.0
@@ -39,7 +39,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
-	github.com/Microsoft/hcsshim v0.11.1 // indirect
+	github.com/Microsoft/hcsshim v0.11.4 // indirect
 	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -179,9 +179,9 @@ require (
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	go.opentelemetry.io/otel v1.16.0 // indirect
-	go.opentelemetry.io/otel/metric v1.16.0 // indirect
-	go.opentelemetry.io/otel/trace v1.16.0 // indirect
+	go.opentelemetry.io/otel v1.19.0 // indirect
+	go.opentelemetry.io/otel/metric v1.19.0 // indirect
+	go.opentelemetry.io/otel/trace v1.19.0 // indirect
 	go.uber.org/dig v1.17.0 // indirect
 	go.uber.org/fx v1.20.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
