@@ -1,6 +1,7 @@
 set -ex
 
 IMG=$1
+CNI=$2
 SCRIPT_PATH=$(realpath $0)
 SCRIPT_DIR=$(dirname $SCRIPT_PATH)
 
@@ -8,7 +9,7 @@ SCRIPT_DIR=$(dirname $SCRIPT_PATH)
 TMP_DIR=$(mktemp -d)
 export KIND_KUBECONFIG=$TMP_DIR/kind.kubeconfig
 echo $KIND_KUBECONFIG
-kind create cluster --kubeconfig $KIND_KUBECONFIG --config $SCRIPT_DIR/kind-config.yaml
+kind create cluster --kubeconfig $KIND_KUBECONFIG --config $SCRIPT_DIR/kind-config-$CNI.yaml
 
 # Write existing configuration to test backup.
 HOSTS_TOML='server = "https://docker.io"\n\n[host."https://registry-1.docker.io"]\n  capabilities = ["push"]'
@@ -50,13 +51,13 @@ kubectl --kubeconfig $KIND_KUBECONFIG label nodes kind-worker4 spegel-
 kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel wait --for=delete $SPEGEL_WORKER4 --timeout=60s
 
 # Verify that both local and external ports are working
-HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://localhost:30020/healthz)
+HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://localhost:30020/healthz || true)
 if [[ $HTTP_CODE != "200" ]]
 then
 	echo "Spegel should be accessible on local port."
 	exit 1
 fi
-HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://localhost:30021/healthz)
+HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://localhost:30021/healthz || true)
 if [[ $HTTP_CODE != "200" ]]
 then
 	echo "Spegel should be accessible on external port."
@@ -68,7 +69,7 @@ then
 	echo "Spegel should not be accessible on local port when Spegel is not present on node."
 	exit 1
 fi
-HTTP_CODE=$(docker exec kind-worker4 curl -s -o /dev/null -w "%{http_code}" http://localhost:30021/healthz)
+HTTP_CODE=$(docker exec kind-worker4 curl -s -o /dev/null -w "%{http_code}" http://localhost:30021/healthz || true)
 if [[ $HTTP_CODE != "200" ]]
 then
 	echo "Spegel should be accessible on external port."
