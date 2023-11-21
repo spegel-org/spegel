@@ -45,7 +45,35 @@ then
 fi
 
 # Remove Spegel from the last node to test that the mirror fallback is working.
+SPEGEL_WORKER4=$(kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=kind-worker4)
 kubectl --kubeconfig $KIND_KUBECONFIG label nodes kind-worker4 spegel-
+kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel wait --for=delete $SPEGEL_WORKER4 --timeout=60s
+
+# Verify that both local and external ports are working
+HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://localhost:30020/healthz)
+if [[ $HTTP_CODE != "200" ]]
+then
+	echo "Spegel should be accessible on local port."
+	exit 1
+fi
+HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://localhost:30021/healthz)
+if [[ $HTTP_CODE != "200" ]]
+then
+	echo "Spegel should be accessible on external port."
+	exit 1
+fi
+HTTP_CODE=$(docker exec kind-worker4 curl -s -o /dev/null -w "%{http_code}" http://localhost:30020/healthz || true)
+if [[ $HTTP_CODE != "000" ]]
+then
+	echo "Spegel should not be accessible on local port when Spegel is not present on node."
+	exit 1
+fi
+HTTP_CODE=$(docker exec kind-worker4 curl -s -o /dev/null -w "%{http_code}" http://localhost:30021/healthz)
+if [[ $HTTP_CODE != "200" ]]
+then
+	echo "Spegel should be accessible on external port."
+	exit 1
+fi
 
 # Pull images onto single node which will never run workload.
 docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd
