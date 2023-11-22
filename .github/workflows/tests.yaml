@@ -38,6 +38,9 @@ jobs:
   e2e:
     needs: lint
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cni: [iptables, ipvs]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,7 +51,7 @@ jobs:
           check-latest: true
           cache: true
       - name: Run e2e
-        run: make e2e
+        run: make e2e CNI=${{ matrix.cni }}
   helm-docs:
     needs: lint
     runs-on: ubuntu-latest

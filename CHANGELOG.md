@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#263](https://github.com/XenitAB/spegel/pull/263) Enable testifylint linter and fix errors.
 - [#269](https://github.com/XenitAB/spegel/pull/269) Set Go image version with digest in Dockerfile.
 - [#270](https://github.com/XenitAB/spegel/pull/270) Add tests for local and external service port.
+- [#271](https://github.com/XenitAB/spegel/pull/271) Fix Spegel running on IPVS cluster.
 
 ### Security
 

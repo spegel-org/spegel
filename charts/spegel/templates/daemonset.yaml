@@ -43,14 +43,19 @@ spec:
           {{- end }}
           {{- end }}
           - --mirror-registries
-          - http://127.0.0.1:{{ .Values.service.registry.hostPort }}
-          - http://127.0.0.1:{{ .Values.service.registry.nodePort }}
+          - http://$(NODE_IP):{{ .Values.service.registry.hostPort }}
+          - http://$(NODE_IP):{{ .Values.service.registry.nodePort }}
           {{- with .Values.spegel.additionalMirrorRegistries }}
           {{- range . }}
           - {{ . | quote }}
           {{- end }}
           {{- end }}
           - --resolve-tags={{ .Values.spegel.resolveTags }}
+        env:
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
         volumeMounts:
           - name: containerd-config
             mountPath: {{ .Values.spegel.containerdRegistryConfigPath }}
@@ -83,7 +88,12 @@ spec:
           - --leader-election-namespace={{ include "spegel.namespace" . }}
           - --leader-election-name={{ .Release.Name }}-leader-election
           - --resolve-latest-tag={{ .Values.spegel.resolveLatestTag }}
-          - --local-addr=127.0.0.1:{{ .Values.service.registry.hostPort }}
+          - --local-addr=$(NODE_IP):{{ .Values.service.registry.hostPort }}
+        env:
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
