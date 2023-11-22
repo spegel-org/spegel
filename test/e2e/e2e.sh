@@ -11,6 +11,17 @@ export KIND_KUBECONFIG=$TMP_DIR/kind.kubeconfig
 echo $KIND_KUBECONFIG
 kind create cluster --kubeconfig $KIND_KUBECONFIG --config $SCRIPT_DIR/kind-config-$CNI.yaml
 
+if [[ ${CNI} == "cilium" ]]
+then
+	CILIUM_VERSION="v1.13.4"
+	docker pull quay.io/cilium/cilium:$CILIUM_VERSION
+	kind load docker-image quay.io/cilium/cilium:$CILIUM_VERSION
+	docker pull quay.io/cilium/operator-generic:$CILIUM_VERSION
+	kind load docker-image quay.io/cilium/operator-generic:$CILIUM_VERSION
+	helm repo add cilium https://helm.cilium.io/
+	helm --kubeconfig $KIND_KUBECONFIG upgrade --wait --install cilium cilium/cilium --version $CILIUM_VERSION --namespace kube-system --set image.pullPolicy=IfNotPresent --set ipam.mode=kubernetes
+fi
+
 # Write existing configuration to test backup.
 HOSTS_TOML='server = "https://docker.io"\n\n[host."https://registry-1.docker.io"]\n  capabilities = ["push"]'
 docker exec kind-worker2 bash -c "mkdir -p /etc/containerd/certs.d/docker.io; echo -e '$HOSTS_TOML' > /etc/containerd/certs.d/docker.io/hosts.toml"
