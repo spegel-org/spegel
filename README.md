@@ -30,7 +30,7 @@ This has the benefit of reducing workload startup times and egress traffic as im
 Before installing Spegel check the [compatibility guide](./docs/COMPATIBILITY.md) to make sure that it will work with your specific Kubernetes flavor. If everything checks out, the easiest method to deploy Spegel is with Helm.
 
 ```shell
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.15 spegel oci://ghcr.io/xenitab/helm-charts/spegel
+helm upgrade --create-namespace --namespace spegel --install --version v0.0.16 spegel oci://ghcr.io/xenitab/helm-charts/spegel
 ```
 
 Refer to the [Helm Chart](./charts/spegel) for detailed configuration documentation.
