@@ -21,4 +21,16 @@ Spegel has been tested on the following Kubernetes flavors for compatibility. So
 | EKS | :yellow_circle: | Discard unpacked layers is enabled by default and needs to be disabled. |
 | GKE | :red_circle: | Not supported due to registry config path not being set. |
 | Minikube | :green_circle: | Verified to work out of the box. |
-| k3s | :yellow_circle: | Requires setting values in the Helm chart. Set `.spegel.containerdSock` to `/run/k3s/containerd/containerd.sock` and `.spegel.containerdRegistryConfigPath` to `/var/lib/rancher/k3s/agent/etc/containerd/certs.d` See [#212](https://github.com/XenitAB/spegel/issues/212) for more information |
+| k3s | :yellow_circle: | See notes below |
+
+## k3s
+
+1. Take content of /var/lib/rancher/k3s/agent/etc/containerd/config.toml
+2. Create /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl and add:
+    ```toml
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/var/lib/rancher/k3s/agent/etc/containerd/certs.d"
+    ```
+3. Restart k3s-agent ( on worker nodes ) or k3s ( on master nodes )
+4. In the Spegel Helm chart set `.spegel.containerdSock` to `/run/k3s/containerd/containerd.sock` and `.spegel.containerdRegistryConfigPath` to `/var/lib/rancher/k3s/agent/etc/containerd/certs.d`
+5. See [#212](https://github.com/XenitAB/spegel/issues/212) for more information
