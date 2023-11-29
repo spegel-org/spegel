@@ -82,11 +82,11 @@ spec:
 | serviceMonitor.interval | string | `"60s"` | Prometheus scrape interval. |
 | serviceMonitor.labels | object | `{}` | Service monitor specific labels for prometheus to discover servicemonitor. |
 | serviceMonitor.scrapeTimeout | string | `"30s"` | Prometheus scrape interval timeout. |
+| spegel.additionalMirrorRegistries | list | `[]` | Additional target mirror registries other than Spegel. |
 | spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
 | spegel.containerdRegistryConfigPath | string | `"/etc/containerd/certs.d"` | Path to Containerd mirror configuration. |
 | spegel.containerdSock | string | `"/run/containerd/containerd.sock"` | Path to Containerd socket. |
-| spegel.extraMirrorRegistries | list | `[]` | Extra target mirror registries other than Spegel. |
 | spegel.kubeconfigPath | string | `""` | Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC. |
 | spegel.mirrorResolveRetries | int | `3` | Max ammount of mirrors to attempt. |
 | spegel.mirrorResolveTimeout | string | `"5s"` | Max duration spent finding a mirror. |

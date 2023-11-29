@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#279](https://github.com/XenitAB/spegel/pull/279) Fix broken default value for additional mirror registries.
+
 ### Security
 
 ## v0.0.16

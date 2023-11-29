@@ -113,8 +113,8 @@ spegel:
     - https://registry.k8s.io
     - https://k8s.gcr.io
     - https://lscr.io
-  # -- Extra target mirror registries other than Spegel.
-  extraMirrorRegistries: []
+  # -- Additional target mirror registries other than Spegel.
+  additionalMirrorRegistries: []
   # -- Max ammount of mirrors to attempt.
   mirrorResolveRetries: 3
   # -- Max duration spent finding a mirror.
