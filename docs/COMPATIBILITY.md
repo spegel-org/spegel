@@ -21,4 +21,4 @@ Spegel has been tested on the following Kubernetes flavors for compatibility. So
 | EKS | :yellow_circle: | Discard unpacked layers is enabled by default and needs to be disabled. |
 | GKE | :red_circle: | Not supported due to registry config path not being set. |
 | Minikube | :green_circle: | Verified to work out of the box. |
-| k3s | :yellow_circle: | Requires setting values in the Helm chart. Set `.spegel.containerdSock` to `/run/k3s/containerd/containerd.sock` and `spegel.containerdRegistryConfigPath` to `/var/lib/rancher/k3s/agent/etc/containerd/certs.d` See [#212](https://github.com/XenitAB/spegel/issues/212) for more information |
+| k3s | :yellow_circle: | Requires setting values in the Helm chart. Set `.spegel.containerdSock` to `/run/k3s/containerd/containerd.sock` and `.spegel.containerdRegistryConfigPath` to `/var/lib/rancher/k3s/agent/etc/containerd/certs.d` See [#212](https://github.com/XenitAB/spegel/issues/212) for more information |
