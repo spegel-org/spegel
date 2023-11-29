@@ -26,6 +26,7 @@ Spegel has been tested on the following Kubernetes flavors for compatibility. So
 ## k3s
 
 1. On each node run `cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl`
+
 2. Add the following to `/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl`
 
     ```toml
