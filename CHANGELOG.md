@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#276](https://github.com/XenitAB/spegel/pull/276) Fix Golang image digest to use manifest list instead of AMD64.
+
 ### Security
 
 ## v0.0.15
