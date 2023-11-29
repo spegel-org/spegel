@@ -25,12 +25,12 @@ Spegel has been tested on the following Kubernetes flavors for compatibility. So
 
 ## k3s
 
-1. Take content of /var/lib/rancher/k3s/agent/etc/containerd/config.toml
-2. Create /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl and add:
+1. On each node run `cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl`
+2. Add the following to `/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl`
     ```toml
     [plugins."io.containerd.grpc.v1.cri".registry]
       config_path = "/var/lib/rancher/k3s/agent/etc/containerd/certs.d"
     ```
-3. Restart k3s-agent ( on worker nodes ) or k3s ( on master nodes )
-4. In the Spegel Helm chart set `.spegel.containerdSock` to `/run/k3s/containerd/containerd.sock` and `.spegel.containerdRegistryConfigPath` to `/var/lib/rancher/k3s/agent/etc/containerd/certs.d`
-5. See [#212](https://github.com/XenitAB/spegel/issues/212) for more information
+4. Restart k3s on all nodes
+5. In the Spegel Helm chart set `.spegel.containerdSock` to `/run/k3s/containerd/containerd.sock` and `.spegel.containerdRegistryConfigPath` to `/var/lib/rancher/k3s/agent/etc/containerd/certs.d`
+6. See [#212](https://github.com/XenitAB/spegel/issues/212) for more information
