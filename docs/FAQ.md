@@ -57,3 +57,14 @@ validate the digest or resolve the tag. This request will only succeed with the 
 This solution does however not work when using Spegel, instead, Spegel may make the problem worse. Without Spegel an image that would want to use a private image, it does not have access to would have to be scheduled on a node that has already pulled the image.
 With Spegel that image will be available to all nodes in the cluster. Currently, a good solution for Spegel does not exist. There are two reasons for this. The first is that credentials are not included when pulling an image from a registry mirror, a good choice as doing so would mean sharing credentials with third parties.
 Additionally, Spegel would have no method of validating the credentials even if they were included in the requests. So for the time being if you have these types of requirements Spegel may not be the choice for you.
+
+## How do I use Spegel in conjunction with another registry cache?
+
+Spegel can be used with other registry caches in cases where the best effort caching offered by Spegel is not enough. In these situations, if the image is not cached within the cluster the image should be pulled from the secondary cache.
+This is configured by adding the domain of the registry to the `additionalMirrorRegistries` list in the Helm values. Registries added to this list will be included in the mirror configuration created by Spegel.
+
+```yaml
+spegel:
+  additionalMirrorRegistries:
+    - https://zot.example.com
+```
