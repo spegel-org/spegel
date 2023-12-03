@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#279](https://github.com/XenitAB/spegel/pull/279) Fix broken default value for additional mirror registries.
+- [#284](https://github.com/XenitAB/spegel/pull/284) Fix Spegel support for ipv6.
 
 ### Security
 

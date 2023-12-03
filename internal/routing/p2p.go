@@ -2,6 +2,7 @@ package routing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -30,31 +31,42 @@ type P2PRouter struct {
 func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort string) (Router, error) {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 
-	h, p, err := net.SplitHostPort(addr)
+	multiAddrs, err := listenMultiaddrs(addr)
 	if err != nil {
 		return nil, err
 	}
-	if h == "" {
-		h = "0.0.0.0"
-	}
-	multiAddr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%s", h, p))
-	if err != nil {
-		return nil, fmt.Errorf("could not create host multi address: %w", err)
-	}
 	addrFactoryOpt := libp2p.AddrsFactory(func(addrs []ma.Multiaddr) []ma.Multiaddr {
-		return ma.FilterAddrs(addrs, func(a ma.Multiaddr) bool { return !manet.IsIPLoopback(a) })
+		var ip4Ma, ip6Ma ma.Multiaddr
+		for _, addr := range addrs {
+			if manet.IsIPLoopback(addr) {
+				continue
+			}
+			if isIp6(addr) {
+				ip6Ma = addr
+				continue
+			}
+			ip4Ma = addr
+		}
+		if ip6Ma != nil {
+			return []ma.Multiaddr{ip6Ma}
+		}
+		if ip4Ma != nil {
+			return []ma.Multiaddr{ip4Ma}
+		}
+		return nil
 	})
-	host, err := libp2p.New(libp2p.ListenAddrs(multiAddr), addrFactoryOpt)
+	host, err := libp2p.New(libp2p.ListenAddrs(multiAddrs...), addrFactoryOpt)
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
 	}
-	if len(host.Addrs()) > 1 {
+	if len(host.Addrs()) != 1 {
 		addrs := []string{}
 		for _, addr := range host.Addrs() {
 			addrs = append(addrs, addr.String())
 		}
-		return nil, fmt.Errorf("expected singled host address got %s", strings.Join(addrs, ", "))
+		return nil, fmt.Errorf("expected single host address but got %d %s", len(addrs), strings.Join(addrs, ", "))
 	}
+
 	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().Pretty())
 	log.Info("starting p2p router", "id", self)
 
@@ -139,13 +151,15 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
 				continue
 			}
-			v, err := info.Addrs[0].ValueForProtocol(ma.P_IP4)
+			host, err := ipInMultiaddr(info.Addrs[0])
 			if err != nil {
-				log.Error(err, "could not get IPV4 address")
+				log.Error(err, "could not get IP address")
 				continue
 			}
 			// Combine peer with registry port to create mirror endpoint.
-			peerCh <- fmt.Sprintf("http://%s:%s", v, r.registryPort)
+			registryEnpoint := net.JoinHostPort(host, r.registryPort)
+			// TODO: Fix support for https scheme
+			peerCh <- fmt.Sprintf("http://%s", registryEnpoint)
 		}
 		close(peerCh)
 	}()
@@ -165,6 +179,62 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 		}
 	}
 	return nil
+}
+
+func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
+	h, p, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	tcpComp, err := ma.NewMultiaddr(fmt.Sprintf("/tcp/%s", p))
+	if err != nil {
+		return nil, err
+	}
+	ipComps := []ma.Multiaddr{}
+	ip := net.ParseIP(h)
+	if ip.To4() != nil {
+		ipComp, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s", h))
+		if err != nil {
+			return nil, fmt.Errorf("could not create host multi address: %w", err)
+		}
+		ipComps = append(ipComps, ipComp)
+	} else if ip.To16() != nil {
+		ipComp, err := ma.NewMultiaddr(fmt.Sprintf("/ip6/%s", h))
+		if err != nil {
+			return nil, fmt.Errorf("could not create host multi address: %w", err)
+		}
+		ipComps = append(ipComps, ipComp)
+	}
+	if len(ipComps) == 0 {
+		ipComps = []ma.Multiaddr{manet.IP6Unspecified, manet.IP4Unspecified}
+	}
+	multiAddrs := []ma.Multiaddr{}
+	for _, ipComp := range ipComps {
+		multiAddrs = append(multiAddrs, ipComp.Encapsulate(tcpComp))
+	}
+	return multiAddrs, nil
+}
+
+func ipInMultiaddr(multiAddr ma.Multiaddr) (string, error) {
+	for _, p := range []int{ma.P_IP6, ma.P_IP4} {
+		v, err := multiAddr.ValueForProtocol(p)
+		if errors.Is(err, ma.ErrProtocolNotFound) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		return v, nil
+	}
+	return "", fmt.Errorf("IP not found in address")
+}
+
+func isIp6(m ma.Multiaddr) bool {
+	c, _ := ma.SplitFirst(m)
+	if c == nil || c.Protocol().Code != ma.P_IP6 {
+		return false
+	}
+	return true
 }
 
 func createCid(key string) (cid.Cid, error) {

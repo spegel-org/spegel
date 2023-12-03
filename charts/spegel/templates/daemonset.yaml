@@ -97,7 +97,6 @@ spec:
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
-            hostIP: "127.0.0.1"    
             hostPort: {{ .Values.service.registry.hostPort }}
             protocol: TCP
           - name: router
