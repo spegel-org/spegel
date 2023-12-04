@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        cni: [iptables, ipvs]
+        cni: [iptables, iptables-ipv6, ipvs]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

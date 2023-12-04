@@ -51,25 +51,33 @@ kubectl --kubeconfig $KIND_KUBECONFIG label nodes kind-worker4 spegel-
 kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel wait --for=delete $SPEGEL_WORKER4 --timeout=60s
 
 # Verify that both local and external ports are working
-HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://localhost:30020/healthz || true)
+HOST_IP=$(kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel get nodes kind-worker -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
+if ipv6calc --in ipv6addr $HOST_IP; then
+	HOST_IP="[${HOST_IP}]"
+fi
+HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://${HOST_IP}:30020/healthz || true)
 if [[ $HTTP_CODE != "200" ]]
 then
 	echo "Spegel should be accessible on local port."
 	exit 1
 fi
-HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://localhost:30021/healthz || true)
+HTTP_CODE=$(docker exec kind-worker curl -s -o /dev/null -w "%{http_code}" http://${HOST_IP}:30021/healthz || true)
 if [[ $HTTP_CODE != "200" ]]
 then
 	echo "Spegel should be accessible on external port."
 	exit 1
 fi
-HTTP_CODE=$(docker exec kind-worker4 curl -s -o /dev/null -w "%{http_code}" http://localhost:30020/healthz || true)
+HOST_IP=$(kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel get nodes kind-worker4 -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
+if ipv6calc --in ipv6addr $HOST_IP; then
+	HOST_IP="[${HOST_IP}]"
+fi
+HTTP_CODE=$(docker exec kind-worker4 curl -s -o /dev/null -w "%{http_code}" http://${HOST_IP}:30020/healthz || true)
 if [[ $HTTP_CODE != "000" ]]
 then
 	echo "Spegel should not be accessible on local port when Spegel is not present on node."
 	exit 1
 fi
-HTTP_CODE=$(docker exec kind-worker4 curl -s -o /dev/null -w "%{http_code}" http://localhost:30021/healthz || true)
+HTTP_CODE=$(docker exec kind-worker4 curl -s -o /dev/null -w "%{http_code}" http://${HOST_IP}:30021/healthz || true)
 if [[ $HTTP_CODE != "200" ]]
 then
 	echo "Spegel should be accessible on external port."
