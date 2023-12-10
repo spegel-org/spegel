@@ -1,4 +1,4 @@
-package routing
+package bootstrap
 
 import (
 	"context"
@@ -12,12 +12,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
-type Bootstrapper interface {
-	Run(ctx context.Context, id string) error
-	GetAddress() (*peer.AddrInfo, error)
-}
-
-type KubernetesBootstrapper struct {
+type LeaderElectionBootstrapper struct {
 	leaderElectionNamespace string
 	leaderElectioName       string
 	cs                      kubernetes.Interface
@@ -26,8 +21,8 @@ type KubernetesBootstrapper struct {
 	id                      string
 }
 
-func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) Bootstrapper {
-	k := &KubernetesBootstrapper{
+func NewLeaderElectionBootstrapper(cs kubernetes.Interface, namespace, name string) Bootstrapper {
+	k := &LeaderElectionBootstrapper{
 		leaderElectionNamespace: namespace,
 		leaderElectioName:       name,
 		cs:                      cs,
@@ -36,7 +31,7 @@ func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) 
 	return k
 }
 
-func (k *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
+func (k *LeaderElectionBootstrapper) Run(ctx context.Context, id string) error {
 	lockCfg := resourcelock.ResourceLockConfig{
 		Identity: id,
 	}
@@ -75,7 +70,7 @@ func (k *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
 	return nil
 }
 
-func (k *KubernetesBootstrapper) GetAddress() (*peer.AddrInfo, error) {
+func (k *LeaderElectionBootstrapper) GetAddress() (*peer.AddrInfo, error) {
 	<-k.initCh
 	k.mx.RLock()
 	defer k.mx.RUnlock()

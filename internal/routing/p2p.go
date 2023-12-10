@@ -18,17 +18,19 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
 	mh "github.com/multiformats/go-multihash"
+
+	"github.com/xenitab/spegel/pkg/bootstrap"
 )
 
 type P2PRouter struct {
-	b            Bootstrapper
+	b            bootstrap.Bootstrapper
 	host         host.Host
 	kdht         *dht.IpfsDHT
 	rd           *routing.RoutingDiscovery
 	registryPort string
 }
 
-func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort string) (Router, error) {
+func NewP2PRouter(ctx context.Context, addr string, b bootstrap.Bootstrapper, registryPort string) (Router, error) {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 
 	multiAddrs, err := listenMultiaddrs(addr)

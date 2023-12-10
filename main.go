@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -15,17 +12,14 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/afero"
 	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
 
-	"github.com/xenitab/spegel/internal/oci"
-	"github.com/xenitab/spegel/internal/registry"
-	"github.com/xenitab/spegel/internal/routing"
-	"github.com/xenitab/spegel/internal/state"
+	"github.com/xenitab/spegel/pkg/bootstrap"
+	"github.com/xenitab/spegel/pkg/oci"
+	"github.com/xenitab/spegel/pkg/spegel"
 )
 
 type ConfigurationCmd struct {
@@ -100,76 +94,27 @@ func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 }
 
 func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
-	log := logr.FromContextOrDiscard(ctx)
-	g, ctx := errgroup.WithContext(ctx)
-
 	cs, err := pkgkubernetes.GetKubernetesClientset(args.KubeconfigPath)
 	if err != nil {
 		return err
 	}
+	bootstrapper := bootstrap.NewLeaderElectionBootstrapper(cs, args.LeaderElectionNamespace, args.LeaderElectionName)
 	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.Registries)
 	if err != nil {
 		return err
 	}
-	err = ociClient.Verify(ctx)
-	if err != nil {
-		return err
+	opts := []spegel.Option{
+		spegel.WithBootstrapper(bootstrapper),
+		spegel.WithOCIClient(ociClient),
+		spegel.WithMetricsAddress(args.MetricsAddr),
+		spegel.WithRegistryAddress(args.RegistryAddr),
+		spegel.WithRouterAddress(args.RouterAddr),
+		spegel.WithLocalAddress(args.LocalAddr),
+		spegel.WithResolveLatestTag(args.ResolveLatestTag),
+		spegel.WithMirrorResolveRetries(args.MirrorResolveRetries),
+		spegel.WithMirrorResolveTimeout(args.MirrorResolveTimeout),
 	}
-
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-	metricsSrv := &http.Server{
-		Addr:    args.MetricsAddr,
-		Handler: mux,
-	}
-	g.Go(func() error {
-		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	})
-	g.Go(func() error {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return metricsSrv.Shutdown(shutdownCtx)
-	})
-
-	_, registryPort, err := net.SplitHostPort(args.RegistryAddr)
-	if err != nil {
-		return err
-	}
-	bootstrapper := routing.NewKubernetesBootstrapper(cs, args.LeaderElectionNamespace, args.LeaderElectionName)
-	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort)
-	if err != nil {
-		return err
-	}
-	g.Go(func() error {
-		<-ctx.Done()
-		return router.Close()
-	})
-	g.Go(func() error {
-		state.Track(ctx, ociClient, router, args.ResolveLatestTag)
-		return nil
-	})
-
-	reg := registry.NewRegistry(ociClient, router, args.LocalAddr, args.MirrorResolveRetries, args.MirrorResolveTimeout, args.ResolveLatestTag)
-	regSrv := reg.Server(args.RegistryAddr, log)
-	g.Go(func() error {
-		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	})
-	g.Go(func() error {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return regSrv.Shutdown(shutdownCtx)
-	})
-
-	log.Info("running registry", "addr", args.RegistryAddr)
-	err = g.Wait()
+	err = spegel.Run(ctx, opts...)
 	if err != nil {
 		return err
 	}
