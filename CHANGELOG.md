@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#291](https://github.com/XenitAB/spegel/pull/291) Move OCI package to pkg.
+
 ### Deprecated
 
 ### Removed

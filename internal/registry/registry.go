@@ -19,8 +19,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	pkggin "github.com/xenitab/pkg/gin"
 
-	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
+	"github.com/xenitab/spegel/pkg/oci"
 )
 
 const (
@@ -110,7 +110,7 @@ func (r *Registry) registryHandler(c *gin.Context) {
 	}
 
 	// Parse out path components from request.
-	ref, dgst, refType, err := oci.ParsePathComponents(c.Query("ns"), c.Request.URL.Path)
+	ref, dgst, refType, err := parsePathComponents(c.Query("ns"), c.Request.URL.Path)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -148,10 +148,10 @@ func (r *Registry) registryHandler(c *gin.Context) {
 		}
 	}
 	switch refType {
-	case oci.ReferenceTypeManifest:
+	case referenceTypeManifest:
 		r.handleManifest(c, dgst)
 		return
-	case oci.ReferenceTypeBlob:
+	case referenceTypeBlob:
 		r.handleBlob(c, dgst)
 		return
 	}

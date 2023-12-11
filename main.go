@@ -22,10 +22,10 @@ import (
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
 
-	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/registry"
 	"github.com/xenitab/spegel/internal/routing"
 	"github.com/xenitab/spegel/internal/state"
+	"github.com/xenitab/spegel/pkg/oci"
 )
 
 type ConfigurationCmd struct {
