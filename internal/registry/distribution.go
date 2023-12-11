@@ -1,4 +1,4 @@
-package oci
+package registry
 
 import (
 	"fmt"
@@ -7,11 +7,11 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
-type ReferenceType string
+type referenceType string
 
 const (
-	ReferenceTypeManifest = "Manifest"
-	ReferenceTypeBlob     = "Blob"
+	referenceTypeManifest = "Manifest"
+	referenceTypeBlob     = "Blob"
 )
 
 // Package is used to parse components from requests which comform with the OCI distribution spec.
@@ -27,22 +27,22 @@ var (
 	blobsRegexDigest    = regexp.MustCompile(`/v2/` + nameRegex.String() + `/blobs/(.*)`)
 )
 
-func ParsePathComponents(registry, path string) (string, digest.Digest, ReferenceType, error) {
+func parsePathComponents(registry, path string) (string, digest.Digest, referenceType, error) {
 	comps := manifestRegexTag.FindStringSubmatch(path)
 	if len(comps) == 6 {
 		if registry == "" {
 			return "", "", "", fmt.Errorf("registry parameter needs to be set for tag references")
 		}
 		ref := fmt.Sprintf("%s/%s:%s", registry, comps[1], comps[5])
-		return ref, "", ReferenceTypeManifest, nil
+		return ref, "", referenceTypeManifest, nil
 	}
 	comps = manifestRegexDigest.FindStringSubmatch(path)
 	if len(comps) == 6 {
-		return "", digest.Digest(comps[5]), ReferenceTypeManifest, nil
+		return "", digest.Digest(comps[5]), referenceTypeManifest, nil
 	}
 	comps = blobsRegexDigest.FindStringSubmatch(path)
 	if len(comps) == 6 {
-		return "", digest.Digest(comps[5]), ReferenceTypeBlob, nil
+		return "", digest.Digest(comps[5]), referenceTypeBlob, nil
 	}
 	return "", "", "", fmt.Errorf("distribution path could not be parsed")
 }

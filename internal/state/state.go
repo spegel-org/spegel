@@ -11,8 +11,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/xenitab/pkg/channels"
 
-	"github.com/xenitab/spegel/internal/oci"
 	"github.com/xenitab/spegel/internal/routing"
+	"github.com/xenitab/spegel/pkg/oci"
 )
 
 var advertisedImages = promauto.NewGaugeVec(prometheus.GaugeOpts{
