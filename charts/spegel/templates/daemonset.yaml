@@ -53,9 +53,7 @@ spec:
           - --resolve-tags={{ .Values.spegel.resolveTags }}
         env:
         - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
+        {{- include "networking.nodeIp" . | nindent 10 }}
         volumeMounts:
           - name: containerd-config
             mountPath: {{ .Values.spegel.containerdRegistryConfigPath }}
@@ -91,9 +89,7 @@ spec:
           - --local-addr=$(NODE_IP):{{ .Values.service.registry.hostPort }}
         env:
         - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
+        {{- include "networking.nodeIp" . | nindent 10 }}
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}

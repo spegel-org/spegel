@@ -43,6 +43,8 @@ securityContext: {}
 
 service:
   registry:
+    # -- Node IP address override.
+    nodeIp: "" 
     # -- Port to expose the registry via the service.
     port: 5000
     # -- Node port to expose the registry via the service.
@@ -133,3 +135,4 @@ spegel:
   resolveTags: true
   # -- When true latest tags will be resolved to digests.
   resolveLatestTag: true
+

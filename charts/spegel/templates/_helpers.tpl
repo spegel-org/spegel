@@ -24,7 +24,7 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
-Creates the namespace for the chart. 
+Creates the namespace for the chart.
 Defaults to the Release namespace unless the namespaceOverride is defined.
 */}}
 {{- define "spegel.namespace" -}}
@@ -80,3 +80,16 @@ Image reference
 {{- .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
 {{- end }}
 {{- end }}
+
+{{/*
+Host networking
+*/}}
+{{- define "networking.nodeIp" -}}
+{{- if .Values.service.registry.nodeIp -}}
+value: {{ .Values.service.registry.nodeIp }}
+{{- else -}}
+valueFrom:
+  fieldRef:
+    fieldPath: status.hostIP
+{{- end -}}
+{{- end -}}
