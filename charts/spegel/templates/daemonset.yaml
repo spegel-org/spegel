@@ -6,6 +6,8 @@ metadata:
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
 spec:
+  updateStrategy:
+    {{- toYaml .Values.updateStrategy | nindent 4 }}
   selector:
     matchLabels:
       {{- include "spegel.selectorLabels" . | nindent 6 }}

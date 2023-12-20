@@ -75,6 +75,12 @@ resources: {}
 nodeSelector:
   kubernetes.io/os: linux
 
+# -- An update strategy to replace existing pods with new pods.
+updateStrategy: {}
+  # type: RollingUpdate
+  # rollingUpdate:
+  #   maxSurge: 0
+  #   maxUnavailable: 1
 
 # -- Tolerations for pod assignment.
 tolerations:
