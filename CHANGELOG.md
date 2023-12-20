@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#299](https://github.com/XenitAB/spegel/pull/299) Add update strategy configuration to Helm chart.
+
 ### Changed
 
 - [#291](https://github.com/XenitAB/spegel/pull/291) Move OCI package to pkg.
