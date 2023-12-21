@@ -7,7 +7,7 @@ require (
 	github.com/containerd/containerd v1.7.10
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/gin-gonic/gin v1.9.1
-	github.com/go-logr/logr v1.3.0
+	github.com/go-logr/logr v1.4.0
 	github.com/go-logr/zapr v1.2.4
 	github.com/ipfs/go-cid v0.4.1
 	github.com/libp2p/go-libp2p v0.30.0
