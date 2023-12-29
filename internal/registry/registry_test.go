@@ -63,11 +63,11 @@ func TestMirrorHandler(t *testing.T) {
 	reg := NewRegistry(nil, router, "", 3, 5*time.Second, false)
 
 	tests := []struct {
+		expectedHeaders map[string][]string
 		name            string
 		key             string
-		expectedStatus  int
 		expectedBody    string
-		expectedHeaders map[string][]string
+		expectedStatus  int
 	}{
 		{
 			name:            "request should timeout when no peers exists",

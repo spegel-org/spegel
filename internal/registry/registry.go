@@ -38,10 +38,10 @@ var mirrorRequestsTotal = promauto.NewCounterVec(
 type Registry struct {
 	ociClient        oci.Client
 	router           routing.Router
+	localAddr        string
 	resolveRetries   int
 	resolveTimeout   time.Duration
 	resolveLatestTag bool
-	localAddr        string
 }
 
 func NewRegistry(ociClient oci.Client, router routing.Router, localAddr string, resolveRetries int, resolveTimeout time.Duration, resolveLatestTag bool) *Registry {
