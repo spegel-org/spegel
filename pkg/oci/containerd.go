@@ -369,8 +369,8 @@ func createFilters(registries []url.URL) (string, string) {
 }
 
 type hostFile struct {
-	Server      string                `toml:"server"`
 	HostConfigs map[string]hostConfig `toml:"host"`
+	Server      string                `toml:"server"`
 }
 
 type hostConfig struct {

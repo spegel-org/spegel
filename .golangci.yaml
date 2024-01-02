@@ -9,3 +9,7 @@ linters:
     - unused
     - misspell
     - testifylint
+linters-settings:
+  govet:
+    enable:
+      - fieldalignment

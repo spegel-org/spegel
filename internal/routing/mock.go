@@ -6,8 +6,8 @@ import (
 )
 
 type MockRouter struct {
-	mx       sync.RWMutex
 	resolver map[string][]string
+	mx       sync.RWMutex
 }
 
 func NewMockRouter(resolver map[string][]string) *MockRouter {

@@ -18,12 +18,12 @@ type Bootstrapper interface {
 }
 
 type KubernetesBootstrapper struct {
-	leaderElectionNamespace string
-	leaderElectioName       string
 	cs                      kubernetes.Interface
 	initCh                  chan interface{}
-	mx                      sync.RWMutex
+	leaderElectionNamespace string
+	leaderElectioName       string
 	id                      string
+	mx                      sync.RWMutex
 }
 
 func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) Bootstrapper {

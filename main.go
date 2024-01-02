@@ -36,20 +36,20 @@ type ConfigurationCmd struct {
 }
 
 type RegistryCmd struct {
-	RegistryAddr                 string        `arg:"--registry-addr,required" help:"address to server image registry."`
-	RouterAddr                   string        `arg:"--router-addr,required" help:"address to serve router."`
+	KubeconfigPath               string        `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
+	ContainerdRegistryConfigPath string        `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
 	MetricsAddr                  string        `arg:"--metrics-addr,required" help:"address to serve metrics."`
-	Registries                   []url.URL     `arg:"--registries,required" help:"registries that are configured to be mirrored."`
+	LocalAddr                    string        `arg:"--local-addr,required" help:"Address that the local Spegel instance will be reached at."`
 	ContainerdSock               string        `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string        `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
-	ContainerdRegistryConfigPath string        `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
-	MirrorResolveRetries         int           `arg:"--mirror-resolve-retries" default:"3" help:"Max amount of mirrors to attempt."`
-	MirrorResolveTimeout         time.Duration `arg:"--mirror-resolve-timeout" default:"5s" help:"Max duration spent finding a mirror."`
-	KubeconfigPath               string        `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
-	LeaderElectionNamespace      string        `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
+	RouterAddr                   string        `arg:"--router-addr,required" help:"address to serve router."`
 	LeaderElectionName           string        `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
+	LeaderElectionNamespace      string        `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
+	RegistryAddr                 string        `arg:"--registry-addr,required" help:"address to server image registry."`
+	Registries                   []url.URL     `arg:"--registries,required" help:"registries that are configured to be mirrored."`
+	MirrorResolveTimeout         time.Duration `arg:"--mirror-resolve-timeout" default:"5s" help:"Max duration spent finding a mirror."`
+	MirrorResolveRetries         int           `arg:"--mirror-resolve-retries" default:"3" help:"Max amount of mirrors to attempt."`
 	ResolveLatestTag             bool          `arg:"--resolve-latest-tag" default:"true" help:"When true latest tags will be resolved to digests."`
-	LocalAddr                    string        `arg:"--local-addr,required" help:"Address that the local Spegel instance will be reached at."`
 }
 
 type Arguments struct {

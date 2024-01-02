@@ -12,10 +12,10 @@ func TestParseImage(t *testing.T) {
 	tests := []struct {
 		name               string
 		image              string
-		digestInImage      bool
 		expectedRepository string
 		expectedTag        string
 		expectedDigest     digest.Digest
+		digestInImage      bool
 	}{
 		{
 			name:               "Latest tag",

@@ -24,9 +24,9 @@ func TestVerifyStatusResponse(t *testing.T) {
 	tests := []struct {
 		name                  string
 		configPath            string
-		discardUnpackedLayers bool
 		requiredConfigPath    string
 		expectedErrMsg        string
+		discardUnpackedLayers bool
 	}{
 		{
 			name:               "empty config path",
@@ -248,9 +248,9 @@ func TestGetImageDigestsNoPlatform(t *testing.T) {
 func TestCreateFilter(t *testing.T) {
 	tests := []struct {
 		name                string
-		registries          []string
 		expectedListFilter  string
 		expectedEventFilter string
+		registries          []string
 	}{
 		{
 			name:                "only registries",
@@ -279,13 +279,13 @@ func TestMirrorConfiguration(t *testing.T) {
 	registryConfigPath := "/etc/containerd/certs.d"
 
 	tests := []struct {
-		name                string
-		resolveTags         bool
-		registries          []url.URL
-		mirrors             []url.URL
-		createConfigPathDir bool
 		existingFiles       map[string]string
 		expectedFiles       map[string]string
+		name                string
+		registries          []url.URL
+		mirrors             []url.URL
+		resolveTags         bool
+		createConfigPathDir bool
 	}{
 		{
 			name:        "multiple mirros",
