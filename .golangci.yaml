@@ -9,3 +9,4 @@ linters:
     - unused
     - misspell
     - testifylint
+    - fieldalignment
