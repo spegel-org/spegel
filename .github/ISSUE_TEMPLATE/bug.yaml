@@ -1,0 +1,34 @@
+name: Bug Report
+description: Create a report to help improve Spegel
+labels: ["bug"]
+body:
+  - type: input
+    attributes:
+      label: Spegel version
+      placeholder: eg. v0.0.16
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Kubernetes distribution
+      placeholder: eg. AKS, EKS, K3S, Kubeadm...
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Kubernetes version
+      placeholder: eg. v1.29.0
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: CNI
+      placeholder: eg. Calico, Cilium, Azure CNI...
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Describe the bug
+      description: A clear description of what the bug is.
+    validations:
+      required: true
