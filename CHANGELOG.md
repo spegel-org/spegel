@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 
 
 - [#299](https://github.com/XenitAB/spegel/pull/299) Add update strategy configuration to Helm chart.
+- [#309](https://github.com/XenitAB/spegel/pull/309) Fix label selectors on service monitors and metrics service.
 
 ### Changed
 

@@ -4,6 +4,7 @@ metadata:
   name: {{ include "spegel.fullname" . }}
   namespace: {{ include "spegel.namespace" . }}
   labels:
+    app.kubernetes.io/component: metrics
     {{- include "spegel.labels" . | nindent 4 }}
 spec:
   selector:

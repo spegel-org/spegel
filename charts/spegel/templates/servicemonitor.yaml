@@ -12,6 +12,7 @@ metadata:
 spec:
   selector:
     matchLabels:
+      app.kubernetes.io/component: metrics
       {{- include "spegel.selectorLabels" . | nindent 6 }}
   endpoints:
     - port: metrics
