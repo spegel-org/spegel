@@ -2,6 +2,10 @@ name: Bug Report
 description: Create a report to help improve Spegel
 labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to fill ot this bug report! Please read the [FAQ](../../docs/FAQ.md) and check existing issues before submitting.
   - type: input
     attributes:
       label: Spegel version
