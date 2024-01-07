@@ -26,7 +26,7 @@ require (
 	github.com/xenitab/pkg/gin v0.0.9
 	github.com/xenitab/pkg/kubernetes v0.0.4
 	go.uber.org/zap v1.26.0
-	golang.org/x/sync v0.5.0
+	golang.org/x/sync v0.6.0
 	k8s.io/client-go v0.27.4
 	k8s.io/cri-api v0.27.4
 	k8s.io/klog/v2 v2.90.1
