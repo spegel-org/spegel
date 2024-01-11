@@ -9,12 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
-- [#299](https://github.com/XenitAB/spegel/pull/299) Add update strategy configuration to Helm chart.
-- [#309](https://github.com/XenitAB/spegel/pull/309) Fix label selectors on service monitors and metrics service.
-
 ### Changed
-
-- [#291](https://github.com/XenitAB/spegel/pull/291) Move OCI package to pkg.
 
 ### Deprecated
 
@@ -22,10 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+### Security
+
+## v0.0.17
+
+### Added 
+
+- [#299](https://github.com/XenitAB/spegel/pull/299) Add update strategy configuration to Helm chart.
+
+### Changed
+
+- [#291](https://github.com/XenitAB/spegel/pull/291) Move OCI package to pkg.
+- [#306](https://github.com/XenitAB/spegel/pull/306) Realign the structs in attempt to minimise memory usage.
+
+### Fixed
+
+- [#309](https://github.com/XenitAB/spegel/pull/309) Fix label selectors on service monitors and metrics service.
 - [#279](https://github.com/XenitAB/spegel/pull/279) Fix broken default value for additional mirror registries.
 - [#284](https://github.com/XenitAB/spegel/pull/284) Fix Spegel support for ipv6.
-
-### Security
 
 ## v0.0.16
 
