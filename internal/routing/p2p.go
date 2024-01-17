@@ -21,14 +21,13 @@ import (
 )
 
 type P2PRouter struct {
-	b            Bootstrapper
-	host         host.Host
-	kdht         *dht.IpfsDHT
-	rd           *routing.RoutingDiscovery
-	registryPort string
+	b    Bootstrapper
+	host host.Host
+	kdht *dht.IpfsDHT
+	rd   *routing.RoutingDiscovery
 }
 
-func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort string) (Router, error) {
+func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper) (Router, error) {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 
 	multiAddrs, err := listenMultiaddrs(addr)
@@ -104,11 +103,10 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 	rd := routing.NewRoutingDiscovery(kdht)
 
 	return &P2PRouter{
-		b:            b,
-		host:         host,
-		kdht:         kdht,
-		rd:           rd,
-		registryPort: registryPort,
+		b:    b,
+		host: host,
+		kdht: kdht,
+		rd:   rd,
 	}, nil
 }
 
@@ -156,10 +154,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				log.Error(err, "could not get IP address")
 				continue
 			}
-			// Combine peer with registry port to create mirror endpoint.
-			registryEnpoint := net.JoinHostPort(host, r.registryPort)
-			// TODO: Fix support for https scheme
-			peerCh <- fmt.Sprintf("http://%s", registryEnpoint)
+			peerCh <- host
 		}
 		close(peerCh)
 	}()

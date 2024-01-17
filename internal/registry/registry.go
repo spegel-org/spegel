@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -200,11 +201,9 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 			// If proxy fails no response is written and it is tried again against a different mirror.
 			// If the response writer has been written to it means that the request was properly proxied.
 			succeeded := false
-			u, err := url.Parse(mirror)
-			if err != nil {
-				//nolint:errcheck // ignore
-				c.AbortWithError(http.StatusInternalServerError, err)
-				return
+			u := &url.URL{
+				Scheme: c.Request.URL.Scheme,
+				Host:   net.JoinHostPort(mirror, c.Request.URL.Port()),
 			}
 			proxy := httputil.NewSingleHostReverseProxy(u)
 			proxy.ErrorHandler = func(http.ResponseWriter, *http.Request, error) {}

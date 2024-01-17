@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -135,12 +134,8 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return metricsSrv.Shutdown(shutdownCtx)
 	})
 
-	_, registryPort, err := net.SplitHostPort(args.RegistryAddr)
-	if err != nil {
-		return err
-	}
 	bootstrapper := routing.NewKubernetesBootstrapper(cs, args.LeaderElectionNamespace, args.LeaderElectionName)
-	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort)
+	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper)
 	if err != nil {
 		return err
 	}
