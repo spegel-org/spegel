@@ -5,11 +5,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+
 	"github.com/xenitab/spegel/internal/routing"
 )
 
@@ -44,6 +46,7 @@ func TestMirrorHandler(t *testing.T) {
 		}
 	}))
 	defer badSvr.Close()
+	badAddrPort := netip.MustParseAddrPort(badSvr.Listener.Addr().String())
 	goodSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("foo", "bar")
 		if r.Method == http.MethodGet {
@@ -52,14 +55,16 @@ func TestMirrorHandler(t *testing.T) {
 		}
 	}))
 	defer goodSvr.Close()
+	goodAddrPort := netip.MustParseAddrPort(goodSvr.Listener.Addr().String())
+	unreachableAddrPort := netip.MustParseAddrPort("127.0.0.1:0")
 
-	resolver := map[string][]string{
-		"no-working-peers":  {badSvr.URL, "foo", badSvr.URL},
-		"first-peer":        {goodSvr.URL, badSvr.URL, badSvr.URL},
-		"first-peer-error":  {"foo", goodSvr.URL},
-		"last-peer-working": {badSvr.URL, badSvr.URL, goodSvr.URL},
+	resolver := map[string][]netip.AddrPort{
+		"no-working-peers":  {badAddrPort, unreachableAddrPort, badAddrPort},
+		"first-peer":        {goodAddrPort, badAddrPort, badAddrPort},
+		"first-peer-error":  {unreachableAddrPort, goodAddrPort},
+		"last-peer-working": {badAddrPort, badAddrPort, goodAddrPort},
 	}
-	router := routing.NewMockRouter(resolver)
+	router := routing.NewMockRouter(resolver, netip.AddrPort{})
 	reg := NewRegistry(nil, router, "", 3, 5*time.Second, false)
 
 	tests := []struct {

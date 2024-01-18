@@ -164,7 +164,7 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 	if isExternal {
 		log.Info("handling mirror request from external node", "path", c.Request.URL.Path, "ip", c.RemoteIP())
 	}
-	mirrorCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
+	peerCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -178,7 +178,7 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 			//nolint:errcheck // ignore
 			c.AbortWithError(http.StatusNotFound, fmt.Errorf("request closed for key: %s", key))
 			return
-		case mirror, ok := <-mirrorCh:
+		case ipAddr, ok := <-peerCh:
 			// Channel closed means no more mirrors will be received and max retries has been reached.
 			if !ok {
 				// TODO: Change to a 404 instead
@@ -191,11 +191,13 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 			// If proxy fails no response is written and it is tried again against a different mirror.
 			// If the response writer has been written to it means that the request was properly proxied.
 			succeeded := false
-			u, err := url.Parse(mirror)
-			if err != nil {
-				//nolint:errcheck // ignore
-				c.AbortWithError(http.StatusInternalServerError, err)
-				return
+			scheme := "http"
+			if c.Request.TLS != nil {
+				scheme = "https"
+			}
+			u := &url.URL{
+				Scheme: scheme,
+				Host:   ipAddr.String(),
 			}
 			proxy := httputil.NewSingleHostReverseProxy(u)
 			proxy.ErrorHandler = func(http.ResponseWriter, *http.Request, error) {}

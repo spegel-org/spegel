@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - [#319](https://github.com/XenitAB/spegel/pull/319) Move metrics definitions to separate package.
+- [#322](https://github.com/XenitAB/spegel/pull/322) Refactor type of router resolve.
 
 ### Deprecated
 
