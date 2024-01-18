@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
+	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -27,11 +29,16 @@ type P2PRouter struct {
 	host         host.Host
 	kdht         *dht.IpfsDHT
 	rd           *routing.RoutingDiscovery
-	registryPort string
+	registryPort uint16
 }
 
-func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort string) (Router, error) {
+func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPortStr string) (Router, error) {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
+
+	registryPort, err := strconv.ParseUint(registryPortStr, 10, 16)
+	if err != nil {
+		return nil, err
+	}
 
 	multiAddrs, err := listenMultiaddrs(addr)
 	if err != nil {
@@ -115,7 +122,7 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 		host:         host,
 		kdht:         kdht,
 		rd:           rd,
-		registryPort: registryPort,
+		registryPort: uint16(registryPort),
 	}, nil
 }
 
@@ -137,14 +144,14 @@ func (r *P2PRouter) HasMirrors() (bool, error) {
 	return true, nil
 }
 
-func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan string, error) {
+func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().Pretty(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
 	}
 	addrCh := r.rd.FindProvidersAsync(ctx, c, count)
-	peerCh := make(chan string, count)
+	peerCh := make(chan netip.AddrPort, count)
 	go func() {
 		for info := range addrCh {
 			if !allowSelf && info.ID == r.host.ID() {
@@ -158,15 +165,12 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
 				continue
 			}
-			host, err := ipInMultiaddr(info.Addrs[0])
+			ipAddr, err := ipInMultiaddr(info.Addrs[0])
 			if err != nil {
 				log.Error(err, "could not get IP address")
 				continue
 			}
-			// Combine peer with registry port to create mirror endpoint.
-			registryEnpoint := net.JoinHostPort(host, r.registryPort)
-			// TODO: Fix support for https scheme
-			peerCh <- fmt.Sprintf("http://%s", registryEnpoint)
+			peerCh <- netip.AddrPortFrom(ipAddr, r.registryPort)
 		}
 		close(peerCh)
 	}()
@@ -222,18 +226,22 @@ func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
 	return multiAddrs, nil
 }
 
-func ipInMultiaddr(multiAddr ma.Multiaddr) (string, error) {
+func ipInMultiaddr(multiAddr ma.Multiaddr) (netip.Addr, error) {
 	for _, p := range []int{ma.P_IP6, ma.P_IP4} {
 		v, err := multiAddr.ValueForProtocol(p)
 		if errors.Is(err, ma.ErrProtocolNotFound) {
 			continue
 		}
 		if err != nil {
-			return "", err
+			return netip.Addr{}, err
 		}
-		return v, nil
+		ipAddr, err := netip.ParseAddr(v)
+		if err != nil {
+			return netip.Addr{}, err
+		}
+		return ipAddr, nil
 	}
-	return "", fmt.Errorf("IP not found in address")
+	return netip.Addr{}, fmt.Errorf("IP not found in address")
 }
 
 func isIp6(m ma.Multiaddr) bool {

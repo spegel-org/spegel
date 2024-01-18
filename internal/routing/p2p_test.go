@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"net/netip"
 	"testing"
 
 	ma "github.com/multiformats/go-multiaddr"
@@ -43,19 +44,19 @@ func TestListenMultiaddrs(t *testing.T) {
 
 func TestIPInMultiaddr(t *testing.T) {
 	tests := []struct {
-		name     string
 		ma       string
-		expected string
+		expected netip.Addr
+		name     string
 	}{
 		{
 			name:     "ipv4",
 			ma:       "/ip4/10.244.1.2/tcp/5001",
-			expected: "10.244.1.2",
+			expected: netip.MustParseAddr("10.244.1.2"),
 		},
 		{
 			name:     "ipv6",
 			ma:       "/ip6/0:0:0:0:0:ffff:0af4:0102/tcp/5001",
-			expected: "::ffff:10.244.1.2",
+			expected: netip.MustParseAddr("::ffff:10.244.1.2"),
 		},
 	}
 	for _, tt := range tests {

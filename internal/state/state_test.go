@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ func TestBasic(t *testing.T) {
 				imgs = append(imgs, img)
 			}
 			ociClient := oci.NewMockClient(imgs)
-			router := routing.NewMockRouter(map[string][]string{})
+			router := routing.NewMockRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
 
 			ctx, cancel := context.WithCancel(context.TODO())
 			go func() {
