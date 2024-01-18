@@ -7,23 +7,12 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/xenitab/pkg/channels"
 
 	"github.com/xenitab/spegel/internal/routing"
+	"github.com/xenitab/spegel/pkg/metrics"
 	"github.com/xenitab/spegel/pkg/oci"
 )
-
-var advertisedImages = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "spegel_advertised_images",
-	Help: "Number of images advertised to be available.",
-}, []string{"registry"})
-
-var advertisedKeys = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "spegel_advertised_keys",
-	Help: "Number of keys advertised to be available.",
-}, []string{"registry"})
 
 // TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
 func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) {
@@ -64,8 +53,8 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 	if err != nil {
 		return err
 	}
-	advertisedImages.Reset()
-	advertisedKeys.Reset()
+	metrics.AdvertisedImages.Reset()
+	metrics.AdvertisedKeys.Reset()
 	errs := []error{}
 	targets := map[string]interface{}{}
 	for _, img := range imgs {
@@ -76,8 +65,8 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 			continue
 		}
 		targets[img.Digest.String()] = nil
-		advertisedImages.WithLabelValues(img.Registry).Add(1)
-		advertisedKeys.WithLabelValues(img.Registry).Add(float64(keyTotal))
+		metrics.AdvertisedImages.WithLabelValues(img.Registry).Add(1)
+		metrics.AdvertisedKeys.WithLabelValues(img.Registry).Add(float64(keyTotal))
 	}
 	return errors.Join(errs...)
 }

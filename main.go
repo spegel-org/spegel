@@ -25,6 +25,7 @@ import (
 	"github.com/xenitab/spegel/internal/registry"
 	"github.com/xenitab/spegel/internal/routing"
 	"github.com/xenitab/spegel/internal/state"
+	"github.com/xenitab/spegel/pkg/metrics"
 	"github.com/xenitab/spegel/pkg/oci"
 )
 
@@ -116,8 +117,9 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return err
 	}
 
+	metrics.Register()
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.HandlerFor(metrics.DefaultGatherer, promhttp.HandlerOpts{}))
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
 		Handler: mux,

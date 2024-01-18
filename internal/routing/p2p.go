@@ -18,6 +18,8 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
 	mh "github.com/multiformats/go-multihash"
+
+	"github.com/xenitab/spegel/pkg/metrics"
 )
 
 type P2PRouter struct {
@@ -55,7 +57,12 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 		}
 		return nil
 	})
-	host, err := libp2p.New(libp2p.ListenAddrs(multiAddrs...), addrFactoryOpt)
+	opts := []libp2p.Option{
+		libp2p.ListenAddrs(multiAddrs...),
+		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
+		addrFactoryOpt,
+	}
+	host, err := libp2p.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
 	}

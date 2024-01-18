@@ -15,24 +15,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	pkggin "github.com/xenitab/pkg/gin"
 
 	"github.com/xenitab/spegel/internal/routing"
+	"github.com/xenitab/spegel/pkg/metrics"
 	"github.com/xenitab/spegel/pkg/oci"
 )
 
 const (
 	MirroredHeaderKey = "X-Spegel-Mirrored"
-)
-
-var mirrorRequestsTotal = promauto.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "spegel_mirror_requests_total",
-		Help: "Total number of mirror requests.",
-	},
-	[]string{"registry", "cache", "source"},
 )
 
 type Registry struct {
@@ -287,7 +278,7 @@ func (r *Registry) metricsHandler(c *gin.Context) {
 	if c.Writer.Status() != http.StatusOK {
 		cacheType = "miss"
 	}
-	mirrorRequestsTotal.WithLabelValues(c.Query("ns"), cacheType, sourceType).Inc()
+	metrics.MirrorRequestsTotal.WithLabelValues(c.Query("ns"), cacheType, sourceType).Inc()
 }
 
 func (r *Registry) isExternalRequest(c *gin.Context) bool {
