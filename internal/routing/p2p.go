@@ -25,16 +25,14 @@ import (
 )
 
 type P2PRouter struct {
-	b            Bootstrapper
+	bootstrapper Bootstrapper
 	host         host.Host
 	kdht         *dht.IpfsDHT
 	rd           *routing.RoutingDiscovery
 	registryPort uint16
 }
 
-func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPortStr string) (Router, error) {
-	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
-
+func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, registryPortStr string) (*P2PRouter, error) {
 	registryPort, err := strconv.ParseUint(registryPortStr, 10, 16)
 	if err != nil {
 		return nil, err
@@ -81,16 +79,9 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 		return nil, fmt.Errorf("expected single host address but got %d %s", len(addrs), strings.Join(addrs, ", "))
 	}
 
-	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().Pretty())
-	log.Info("starting p2p router", "id", self)
-
-	err = b.Run(ctx, self)
-	if err != nil {
-		return nil, err
-	}
-
+	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 	bootstrapPeerOpt := dht.BootstrapPeersFunc(func() []peer.AddrInfo {
-		addrInfo, err := b.GetAddress()
+		addrInfo, err := bootstrapper.Get()
 		if err != nil {
 			log.Error(err, "could not get bootstrap addresses")
 			return nil
@@ -112,13 +103,10 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 	if err != nil {
 		return nil, fmt.Errorf("could not create distributed hash table: %w", err)
 	}
-	if err = kdht.Bootstrap(ctx); err != nil {
-		return nil, fmt.Errorf("could not boostrap distributed hash table: %w", err)
-	}
 	rd := routing.NewRoutingDiscovery(kdht)
 
 	return &P2PRouter{
-		b:            b,
+		bootstrapper: bootstrapper,
 		host:         host,
 		kdht:         kdht,
 		rd:           rd,
@@ -126,12 +114,25 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 	}, nil
 }
 
+func (r *P2PRouter) Run(ctx context.Context) error {
+	self := fmt.Sprintf("%s/p2p/%s", r.host.Addrs()[0].String(), r.host.ID().Pretty())
+	logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", self)
+	if err := r.kdht.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("could not boostrap distributed hash table: %w", err)
+	}
+	err := r.bootstrapper.Run(ctx, self)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *P2PRouter) Close() error {
 	return r.host.Close()
 }
 
 func (r *P2PRouter) HasMirrors() (bool, error) {
-	addrInfo, err := r.b.GetAddress()
+	addrInfo, err := r.bootstrapper.Get()
 	if err != nil {
 		return false, err
 	}

@@ -117,6 +117,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return err
 	}
 
+	// Metrics
 	metrics.Register()
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(metrics.DefaultGatherer, promhttp.HandlerOpts{}))
@@ -137,6 +138,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return metricsSrv.Shutdown(shutdownCtx)
 	})
 
+	// Router
 	_, registryPort, err := net.SplitHostPort(args.RegistryAddr)
 	if err != nil {
 		return err
@@ -147,14 +149,20 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return err
 	}
 	g.Go(func() error {
+		return router.Run(ctx)
+	})
+	g.Go(func() error {
 		<-ctx.Done()
 		return router.Close()
 	})
+
+	// State tracking
 	g.Go(func() error {
 		state.Track(ctx, ociClient, router, args.ResolveLatestTag)
 		return nil
 	})
 
+	// Registry
 	reg := registry.NewRegistry(ociClient, router, args.LocalAddr, args.MirrorResolveRetries, args.MirrorResolveTimeout, args.ResolveLatestTag)
 	regSrv := reg.Server(args.RegistryAddr, log)
 	g.Go(func() error {
@@ -170,7 +178,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return regSrv.Shutdown(shutdownCtx)
 	})
 
-	log.Info("running registry", "addr", args.RegistryAddr)
+	log.Info("running Spegel", "registry", args.RegistryAddr, "router", args.RouterAddr)
 	err = g.Wait()
 	if err != nil {
 		return err

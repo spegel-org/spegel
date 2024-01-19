@@ -14,7 +14,7 @@ import (
 
 type Bootstrapper interface {
 	Run(ctx context.Context, id string) error
-	GetAddress() (*peer.AddrInfo, error)
+	Get() (*peer.AddrInfo, error)
 }
 
 type KubernetesBootstrapper struct {
@@ -27,20 +27,26 @@ type KubernetesBootstrapper struct {
 }
 
 func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) Bootstrapper {
-	k := &KubernetesBootstrapper{
+	return &KubernetesBootstrapper{
 		leaderElectionNamespace: namespace,
 		leaderElectioName:       name,
 		cs:                      cs,
 		initCh:                  make(chan interface{}),
 	}
-	return k
 }
 
 func (k *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
 	lockCfg := resourcelock.ResourceLockConfig{
 		Identity: id,
 	}
-	rl, err := resourcelock.New(resourcelock.ConfigMapsLeasesResourceLock, k.leaderElectionNamespace, k.leaderElectioName, k.cs.CoreV1(), k.cs.CoordinationV1(), lockCfg)
+	rl, err := resourcelock.New(
+		resourcelock.LeasesResourceLock,
+		k.leaderElectionNamespace,
+		k.leaderElectioName,
+		k.cs.CoreV1(),
+		k.cs.CoordinationV1(),
+		lockCfg,
+	)
 	if err != nil {
 		return err
 	}
@@ -71,11 +77,11 @@ func (k *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
 			},
 		},
 	}
-	go leaderelection.RunOrDie(ctx, leCfg)
+	leaderelection.RunOrDie(ctx, leCfg)
 	return nil
 }
 
-func (k *KubernetesBootstrapper) GetAddress() (*peer.AddrInfo, error) {
+func (k *KubernetesBootstrapper) Get() (*peer.AddrInfo, error) {
 	<-k.initCh
 	k.mx.RLock()
 	defer k.mx.RUnlock()
