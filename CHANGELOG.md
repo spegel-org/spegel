@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- [#327](https://github.com/XenitAB/spegel/pull/327) Remove ConfigMap from RBAC.
+
 ### Fixed
 
 ### Security
