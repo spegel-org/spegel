@@ -69,7 +69,6 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 	if err != nil {
 		return err
 	}
-
 	metrics.AdvertisedKeys.Reset()
 	metrics.AdvertisedImages.Reset()
 	metrics.AdvertisedImageTags.Reset()

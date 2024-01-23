@@ -243,6 +243,7 @@ func TestGetImageDigestsNoPlatform(t *testing.T) {
 		Name:   "ghcr.io/xenitab/spegel:v0.0.8",
 		Digest: digest.Digest("sha256:e80e36564e9617f684eb5972bf86dc9e9e761216e0d40ff78ca07741ec70725a"),
 	}
+
 	_, err = c.GetImageDigests(context.TODO(), img)
 	require.EqualError(t, err, "failed to walk image manifests: could not find any platforms with local content in manifest list: sha256:e80e36564e9617f684eb5972bf86dc9e9e761216e0d40ff78ca07741ec70725a")
 }
