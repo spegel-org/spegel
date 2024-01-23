@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	cid "github.com/ipfs/go-cid"
@@ -23,6 +24,8 @@ import (
 
 	"github.com/xenitab/spegel/pkg/metrics"
 )
+
+const KeyTTL = 10 * time.Minute
 
 type P2PRouter struct {
 	bootstrapper Bootstrapper
@@ -131,7 +134,7 @@ func (r *P2PRouter) Close() error {
 	return r.host.Close()
 }
 
-func (r *P2PRouter) HasMirrors() (bool, error) {
+func (r *P2PRouter) Ready() (bool, error) {
 	addrInfo, err := r.bootstrapper.Get()
 	if err != nil {
 		return false, err
