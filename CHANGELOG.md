@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#322](https://github.com/XenitAB/spegel/pull/322) Refactor type of router resolve.
 - [#325](https://github.com/XenitAB/spegel/pull/325) Refactor bootstrap to exit on error.
 - [#326](https://github.com/XenitAB/spegel/pull/326) Clean up routing interface.
+- [#328](https://github.com/XenitAB/spegel/pull/328) Move remaining packages to pkg.
 
 ### Deprecated
 

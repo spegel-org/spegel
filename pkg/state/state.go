@@ -9,9 +9,9 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/xenitab/pkg/channels"
 
-	"github.com/xenitab/spegel/internal/routing"
 	"github.com/xenitab/spegel/pkg/metrics"
 	"github.com/xenitab/spegel/pkg/oci"
+	"github.com/xenitab/spegel/pkg/routing"
 )
 
 // TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
