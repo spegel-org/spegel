@@ -17,9 +17,9 @@ import (
 	"github.com/opencontainers/go-digest"
 	pkggin "github.com/xenitab/pkg/gin"
 
-	"github.com/xenitab/spegel/internal/routing"
 	"github.com/xenitab/spegel/pkg/metrics"
 	"github.com/xenitab/spegel/pkg/oci"
+	"github.com/xenitab/spegel/pkg/routing"
 )
 
 const (
