@@ -70,7 +70,7 @@ func (r *Registry) Server(addr string, log logr.Logger) *http.Server {
 }
 
 func (r *Registry) readyHandler(c *gin.Context) {
-	ok, err := r.router.HasMirrors()
+	ok, err := r.router.Ready()
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)
