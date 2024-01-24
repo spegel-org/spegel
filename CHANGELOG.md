@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#331](https://github.com/XenitAB/spegel/pull/331) Document possible modifications required for k8s-digester.
+
 ### Changed
 
 - [#319](https://github.com/XenitAB/spegel/pull/319) Move metrics definitions to separate package.
