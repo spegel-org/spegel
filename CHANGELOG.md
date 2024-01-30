@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#335](https://github.com/XenitAB/spegel/pull/335) Add k3s to compatibility guide.
+
 ### Changed
 
 ### Deprecated
