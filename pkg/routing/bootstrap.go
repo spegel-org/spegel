@@ -2,11 +2,15 @@ package routing
 
 import (
 	"context"
+	"errors"
+	"io"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -87,6 +91,66 @@ func (k *KubernetesBootstrapper) Get() (*peer.AddrInfo, error) {
 	defer k.mx.RUnlock()
 
 	addr, err := multiaddr.NewMultiaddr(k.id)
+	if err != nil {
+		return nil, err
+	}
+	addrInfo, err := peer.AddrInfoFromP2pAddr(addr)
+	if err != nil {
+		return nil, err
+	}
+	return addrInfo, err
+}
+
+type HTTPBootstrapper struct {
+	addr string
+	peer string
+}
+
+func NewHTTPBootstrapper(addr, peer string) *HTTPBootstrapper {
+	return &HTTPBootstrapper{
+		addr: addr,
+		peer: peer,
+	}
+}
+
+func (h *HTTPBootstrapper) Run(ctx context.Context, id string) error {
+	g, ctx := errgroup.WithContext(ctx)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/id", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		//nolint:errcheck // ignore
+		w.Write([]byte(id))
+	})
+	srv := http.Server{
+		Addr:    h.addr,
+		Handler: mux,
+	}
+	g.Go(func() error {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	})
+	return g.Wait()
+}
+
+func (h *HTTPBootstrapper) Get() (*peer.AddrInfo, error) {
+	resp, err := http.DefaultClient.Get(h.peer)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	addr, err := multiaddr.NewMultiaddr(string(b))
 	if err != nil {
 		return nil, err
 	}

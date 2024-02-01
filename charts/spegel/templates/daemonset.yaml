@@ -84,6 +84,7 @@ spec:
           - --containerd-sock={{ .Values.spegel.containerdSock }}
           - --containerd-namespace={{ .Values.spegel.containerdNamespace }}
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
+          - --bootstrap-kind=kubernetes
           {{- with .Values.spegel.kubeconfigPath }}
           - --kubeconfig-path={{ . }}
           {{- end }}

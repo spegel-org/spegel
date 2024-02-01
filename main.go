@@ -36,16 +36,23 @@ type ConfigurationCmd struct {
 	ResolveTags                  bool      `arg:"--resolve-tags" default:"true" help:"When true Spegel will resolve tags to digests."`
 }
 
+type BootstrapConfig struct {
+	BootstrapKind           string `arg:"--bootstrap-kind" help:"Kind of bootsrapper to use."`
+	HTTPBootstrapAddr       string `arg:"--http-bootstrap-addr" help:"Address to serve for HTTP bootstrap."`
+	HTTPBootstrapPeer       string `àrg:"--http-bootstrap-peer" help:"Peer to HTTP bootstrap with."`
+	KubeconfigPath          string `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
+	LeaderElectionName      string `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
+	LeaderElectionNamespace string `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
+}
+
 type RegistryCmd struct {
-	KubeconfigPath               string        `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
+	BootstrapConfig
 	ContainerdRegistryConfigPath string        `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
 	MetricsAddr                  string        `arg:"--metrics-addr,required" help:"address to serve metrics."`
 	LocalAddr                    string        `arg:"--local-addr,required" help:"Address that the local Spegel instance will be reached at."`
 	ContainerdSock               string        `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string        `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
 	RouterAddr                   string        `arg:"--router-addr,required" help:"address to serve router."`
-	LeaderElectionName           string        `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
-	LeaderElectionNamespace      string        `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
 	RegistryAddr                 string        `arg:"--registry-addr,required" help:"address to server image registry."`
 	Registries                   []url.URL     `arg:"--registries,required" help:"registries that are configured to be mirrored."`
 	MirrorResolveTimeout         time.Duration `arg:"--mirror-resolve-timeout" default:"5s" help:"Max duration spent finding a mirror."`
@@ -104,10 +111,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	log := logr.FromContextOrDiscard(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
-	cs, err := pkgkubernetes.GetKubernetesClientset(args.KubeconfigPath)
-	if err != nil {
-		return err
-	}
+	// OCI Client
 	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.Registries)
 	if err != nil {
 		return err
@@ -143,7 +147,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	if err != nil {
 		return err
 	}
-	bootstrapper := routing.NewKubernetesBootstrapper(cs, args.LeaderElectionNamespace, args.LeaderElectionName)
+	bootstrapper, err := getBootstrapper(args.BootstrapConfig)
+	if err != nil {
+		return err
+	}
 	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort)
 	if err != nil {
 		return err
@@ -184,4 +191,19 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return err
 	}
 	return nil
+}
+
+func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) {
+	switch cfg.BootstrapKind {
+	case "http":
+		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer), nil
+	case "kubernetes":
+		cs, err := pkgkubernetes.GetKubernetesClientset(cfg.KubeconfigPath)
+		if err != nil {
+			return nil, err
+		}
+		return routing.NewKubernetesBootstrapper(cs, cfg.LeaderElectionNamespace, cfg.LeaderElectionName), nil
+	default:
+		return nil, fmt.Errorf("unknown bootstrap kind %s", cfg.BootstrapKind)
+	}
 }
