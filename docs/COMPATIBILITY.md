@@ -13,11 +13,37 @@ version = 2
    discard_unpacked_layers = false
 ```
 
-Spegel has been tested on the following Kubernetes flavors for compatibility. Some flavors may require additional steps while others will work right out of the box.
+# Kubernetes
 
-| Flavor | Status | Comment |
+Spegel has been tested on the following Kubernetes distributions for compatibility. Green status means Spegel will work out of the box, yellow will require additional configuration, and red means that Spegel will not work.
+
+| Status | Distribution |
 | --- | :---: | --- |
-| AKS | :green_circle: | Verified to work out of the box. |
-| EKS | :yellow_circle: | Discard unpacked layers is enabled by default and needs to be disabled. |
-| GKE | :red_circle: | Not supported due to registry config path not being set. |
-| Minikube | :green_circle: | Verified to work out of the box. |
+| :green_circle: | AKS |
+| :green_circle: | Minikube |
+| :yellow_circle: | EKS |
+| :yellow_circle: | Talos |
+| :red_circle: | GKE |
+
+## EKS
+
+Discard unpacked layers is enabled by default and needs to be disabled.
+
+## Talos
+
+Talos comes with Pod Security Admission [pre-configured](https://www.talos.dev/latest/kubernetes-guides/configuration/pod-security/). The default profile is too restrictive and needs to be changed to privileged.
+
+```shell
+kubectl label namespace spegel pod-security.kubernetes.io/enforce=privileged
+```
+
+Talos also uses a different path as its Containerd registry config path.
+
+```yaml
+spegel:
+  containerdRegistryConfigPath: /etc/cri/conf.d/hosts
+```
+
+# GKE
+
+GKE does not set the registry config path in its Containerd configuration. On top of that it uses the old mirror configuration for the internal mirroring service.
