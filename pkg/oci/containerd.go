@@ -34,39 +34,47 @@ const (
 
 type Containerd struct {
 	client             *containerd.Client
+	clientGetter       func() (*containerd.Client, error)
 	platform           platforms.MatchComparer
 	listFilter         string
 	eventFilter        string
-	runtimeClient      runtimeapi.RuntimeServiceClient
 	registryConfigPath string
 }
 
 func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL) (*Containerd, error) {
-	client, err := containerd.New(sock, containerd.WithDefaultNamespace(namespace))
-	if err != nil {
-		return nil, fmt.Errorf("could not create containerd client: %w", err)
-	}
 	listFilter, eventFilter := createFilters(registries)
-	runtimeClient := runtimeapi.NewRuntimeServiceClient(client.Conn())
 	return &Containerd{
-		client:             client,
+		clientGetter: func() (*containerd.Client, error) {
+			return containerd.New(sock, containerd.WithDefaultNamespace(namespace))
+		},
 		platform:           platforms.Default(),
 		listFilter:         listFilter,
 		eventFilter:        eventFilter,
-		runtimeClient:      runtimeClient,
 		registryConfigPath: registryConfigPath,
 	}, nil
 }
 
+func (c *Containerd) Client() (*containerd.Client, error) {
+	var err error
+	if c.client == nil {
+		c.client, err = c.clientGetter()
+	}
+	return c.client, err
+}
+
 func (c *Containerd) Verify(ctx context.Context) error {
-	ok, err := c.client.IsServing(ctx)
+	client, err := c.Client()
+	if err != nil {
+		return err
+	}
+	ok, err := client.IsServing(ctx)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return fmt.Errorf("could not reach Containerd service")
 	}
-	resp, err := c.runtimeClient.Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
+	resp, err := runtimeapi.NewRuntimeServiceClient(client.Conn()).Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
 	if err != nil {
 		return err
 	}
@@ -115,7 +123,16 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error) {
 	imgCh := make(chan Image)
 	errCh := make(chan error)
-	envelopeCh, cErrCh := c.client.EventService().Subscribe(ctx, c.eventFilter)
+
+	client, err := c.Client()
+	if err != nil {
+		errCh <- err
+		close(imgCh)
+		close(errCh)
+		return imgCh, errCh
+	}
+
+	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, c.eventFilter)
 	go func() {
 		for envelope := range envelopeCh {
 			imageName, err := getEventImage(envelope.Event)
@@ -123,7 +140,7 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error)
 				errCh <- err
 				return
 			}
-			cImg, err := c.client.GetImage(ctx, imageName)
+			cImg, err := client.GetImage(ctx, imageName)
 			if err != nil {
 				errCh <- err
 				return
@@ -140,7 +157,11 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error)
 }
 
 func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
-	cImgs, err := c.client.ListImages(ctx, c.listFilter)
+	client, err := c.Client()
+	if err != nil {
+		return nil, err
+	}
+	cImgs, err := client.ListImages(ctx, c.listFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -156,14 +177,18 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 }
 
 func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, error) {
-	cImg, err := c.client.ImageService().Get(ctx, img.Name)
+	client, err := c.Client()
+	if err != nil {
+		return nil, err
+	}
+	cImg, err := client.ImageService().Get(ctx, img.Name)
 	if err != nil {
 		return nil, err
 	}
 	keys := []string{}
 	err = images.Walk(ctx, images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 		keys = append(keys, desc.Digest.String())
-		b, err := content.ReadBlob(ctx, c.client.ContentStore(), desc)
+		b, err := content.ReadBlob(ctx, client.ContentStore(), desc)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +245,11 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 }
 
 func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
-	cImg, err := c.client.GetImage(ctx, ref)
+	client, err := c.Client()
+	if err != nil {
+		return "", err
+	}
+	cImg, err := client.GetImage(ctx, ref)
 	if err != nil {
 		return "", err
 	}
@@ -228,7 +257,11 @@ func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, er
 }
 
 func (c *Containerd) GetSize(ctx context.Context, dgst digest.Digest) (int64, error) {
-	info, err := c.client.ContentStore().Info(ctx, dgst)
+	client, err := c.Client()
+	if err != nil {
+		return 0, err
+	}
+	info, err := client.ContentStore().Info(ctx, dgst)
 	if err != nil {
 		return 0, err
 	}
@@ -236,7 +269,11 @@ func (c *Containerd) GetSize(ctx context.Context, dgst digest.Digest) (int64, er
 }
 
 func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) ([]byte, string, error) {
-	b, err := content.ReadBlob(ctx, c.client.ContentStore(), ocispec.Descriptor{Digest: dgst})
+	client, err := c.Client()
+	if err != nil {
+		return nil, "", err
+	}
+	b, err := content.ReadBlob(ctx, client.ContentStore(), ocispec.Descriptor{Digest: dgst})
 	if err != nil {
 		return nil, "", err
 	}
@@ -256,7 +293,11 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) ([]byte, s
 }
 
 func (c *Containerd) WriteBlob(ctx context.Context, dst io.Writer, dgst digest.Digest) error {
-	ra, err := c.client.ContentStore().ReaderAt(ctx, ocispec.Descriptor{Digest: dgst})
+	client, err := c.Client()
+	if err != nil {
+		return err
+	}
+	ra, err := client.ContentStore().ReaderAt(ctx, ocispec.Descriptor{Digest: dgst})
 	if err != nil {
 		return err
 	}
@@ -273,14 +314,18 @@ func (c *Containerd) WriteBlob(ctx context.Context, dst io.Writer, dgst digest.D
 // TODO: A cache would be helpful to speed up lookups for the same digets.
 func (c *Containerd) lookupMediaType(ctx context.Context, dgst digest.Digest) (string, error) {
 	logr.FromContextOrDiscard(ctx).Info("using Containerd fallback method to determine media type", "digest", dgst.String())
-	images, err := c.client.ImageService().List(ctx, fmt.Sprintf("target.digest==%s", dgst.String()))
+	client, err := c.Client()
+	if err != nil {
+		return "", err
+	}
+	images, err := client.ImageService().List(ctx, fmt.Sprintf("target.digest==%s", dgst.String()))
 	if err != nil {
 		return "", err
 	}
 	if len(images) > 0 {
 		return images[0].Target.MediaType, nil
 	}
-	info, err := c.client.ContentStore().Info(ctx, dgst)
+	info, err := client.ContentStore().Info(ctx, dgst)
 	if err != nil {
 		return "", err
 	}
@@ -289,7 +334,7 @@ func (c *Containerd) lookupMediaType(ctx context.Context, dgst digest.Digest) (s
 		return "", err
 	}
 	var parentDgst digest.Digest
-	err = c.client.ContentStore().Walk(ctx, func(info content.Info) error {
+	err = client.ContentStore().Walk(ctx, func(info content.Info) error {
 		for _, v := range info.Labels {
 			if v != dgst.String() {
 				continue
@@ -305,7 +350,7 @@ func (c *Containerd) lookupMediaType(ctx context.Context, dgst digest.Digest) (s
 	if parentDgst == "" {
 		return "", fmt.Errorf("could not find parent")
 	}
-	b, err := content.ReadBlob(ctx, c.client.ContentStore(), ocispec.Descriptor{Digest: parentDgst})
+	b, err := content.ReadBlob(ctx, client.ContentStore(), ocispec.Descriptor{Digest: parentDgst})
 	if err != nil {
 		return "", err
 	}
