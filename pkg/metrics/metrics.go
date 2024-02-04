@@ -23,6 +23,14 @@ var (
 		Name: "spegel_advertised_images",
 		Help: "Number of images advertised to be available.",
 	}, []string{"registry"})
+	AdvertisedImageTags = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "spegel_advertised_image_tags",
+		Help: "Number of image tags advertised to be available.",
+	}, []string{"registry"})
+	AdvertisedImageDigests = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "spegel_advertised_image_digests",
+		Help: "Number of image digests advertised to be available.",
+	}, []string{"registry"})
 	AdvertisedKeys = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "spegel_advertised_keys",
 		Help: "Number of keys advertised to be available.",
