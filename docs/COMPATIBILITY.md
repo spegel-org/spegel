@@ -18,7 +18,7 @@ version = 2
 Spegel has been tested on the following Kubernetes distributions for compatibility. Green status means Spegel will work out of the box, yellow will require additional configuration, and red means that Spegel will not work.
 
 | Status | Distribution |
-| --- | :---: | --- |
+| --- | --- |
 | :green_circle: | AKS |
 | :green_circle: | Minikube |
 | :yellow_circle: | EKS |
