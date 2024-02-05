@@ -255,14 +255,14 @@ func TestCreateFilter(t *testing.T) {
 		{
 			name:                "only registries",
 			registries:          []string{"https://docker.io", "https://gcr.io"},
-			expectedListFilter:  `name~="docker.io|gcr.io"`,
-			expectedEventFilter: `topic~="/images/create|/images/update",event.name~="docker.io|gcr.io"`,
+			expectedListFilter:  `name~="^(docker\\.io|gcr\\.io)/"`,
+			expectedEventFilter: `topic~="/images/create|/images/update|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
 		},
 		{
 			name:                "additional image filtes",
 			registries:          []string{"https://docker.io", "https://gcr.io"},
-			expectedListFilter:  `name~="docker.io|gcr.io"`,
-			expectedEventFilter: `topic~="/images/create|/images/update",event.name~="docker.io|gcr.io"`,
+			expectedListFilter:  `name~="^(docker\\.io|gcr\\.io)/"`,
+			expectedEventFilter: `topic~="/images/create|/images/update|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
 		},
 	}
 

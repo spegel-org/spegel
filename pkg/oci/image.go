@@ -17,6 +17,20 @@ type Image struct {
 	Digest     digest.Digest
 }
 
+type EventType string
+
+const (
+	CreateEvent  EventType = "CREATE"
+	UpdateEvent  EventType = "UPDATE"
+	DeleteEvent  EventType = "DELETE"
+	UnknownEvent EventType = ""
+)
+
+type ImageEvent struct {
+	Image Image
+	Type  EventType
+}
+
 func NewImage(name, registry, repository, tag string, dgst digest.Digest) (Image, error) {
 	if name == "" {
 		return Image{}, fmt.Errorf("image needs to contain a name")

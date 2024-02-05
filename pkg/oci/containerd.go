@@ -120,9 +120,9 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", cfg.Registry.ConfigPath, configPath)
 }
 
-func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error) {
-	imgCh := make(chan Image)
-	errCh := make(chan error)
+func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error) {
+	imgCh := make(chan ImageEvent, 1)
+	errCh := make(chan error, 1)
 
 	client, err := c.Client()
 	if err != nil {
@@ -135,22 +135,32 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan Image, <-chan error)
 	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, c.eventFilter)
 	go func() {
 		for envelope := range envelopeCh {
-			imageName, err := getEventImage(envelope.Event)
+			var img Image
+			imageName, eventType, err := getEventImage(envelope.Event)
 			if err != nil {
 				errCh <- err
 				return
 			}
-			cImg, err := client.GetImage(ctx, imageName)
-			if err != nil {
-				errCh <- err
-				return
+			switch eventType {
+			case CreateEvent, UpdateEvent:
+				cImg, err := client.GetImage(ctx, imageName)
+				if err != nil {
+					errCh <- err
+					return
+				}
+				img, err = Parse(cImg.Name(), cImg.Target().Digest)
+				if err != nil {
+					errCh <- err
+					return
+				}
+			case DeleteEvent:
+				img, err = Parse(imageName, "")
+				if err != nil {
+					errCh <- err
+					return
+				}
 			}
-			img, err := Parse(cImg.Name(), cImg.Target().Digest)
-			if err != nil {
-				errCh <- err
-				return
-			}
-			imgCh <- img
+			imgCh <- ImageEvent{Image: img, Type: eventType}
 		}
 	}()
 	return imgCh, channels.Merge(errCh, cErrCh)
@@ -388,28 +398,30 @@ func getContentFilter(labels map[string]string) (string, error) {
 	return "", fmt.Errorf("could not find distribution label to create content filter")
 }
 
-func getEventImage(e typeurl.Any) (string, error) {
+func getEventImage(e typeurl.Any) (string, EventType, error) {
 	evt, err := typeurl.UnmarshalAny(e)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshalany: %w", err)
+		return "", UnknownEvent, fmt.Errorf("failed to unmarshalany: %w", err)
 	}
 	switch e := evt.(type) {
 	case *eventtypes.ImageCreate:
-		return e.Name, nil
+		return e.Name, CreateEvent, nil
 	case *eventtypes.ImageUpdate:
-		return e.Name, nil
+		return e.Name, UpdateEvent, nil
+	case *eventtypes.ImageDelete:
+		return e.Name, DeleteEvent, nil
 	default:
-		return "", errors.New("unsupported event")
+		return "", UnknownEvent, errors.New("unsupported event")
 	}
 }
 
 func createFilters(registries []url.URL) (string, string) {
 	registryHosts := []string{}
 	for _, registry := range registries {
-		registryHosts = append(registryHosts, registry.Host)
+		registryHosts = append(registryHosts, strings.ReplaceAll(registry.Host, `.`, `\\.`))
 	}
-	listFilter := fmt.Sprintf(`name~="%s"`, strings.Join(registryHosts, "|"))
-	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update",event.name~="%s"`, strings.Join(registryHosts, "|"))
+	listFilter := fmt.Sprintf(`name~="^(%s)/"`, strings.Join(registryHosts, "|"))
+	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update|/images/delete",event.%s`, listFilter)
 	return listFilter, eventFilter
 }
 
