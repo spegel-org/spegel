@@ -199,7 +199,7 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 			var idx ocispec.Index
 			b, err := content.ReadBlob(ctx, client.ContentStore(), desc)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to read blob for manifest list: %w", err)
 			}
 			if err := json.Unmarshal(b, &idx); err != nil {
 				return nil, err
@@ -220,7 +220,7 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 			var manifest ocispec.Manifest
 			b, err := content.ReadBlob(ctx, client.ContentStore(), desc)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to read blob for manifest: %w", err)
 			}
 			if err := json.Unmarshal(b, &manifest); err != nil {
 				return nil, err
