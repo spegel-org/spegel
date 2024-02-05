@@ -154,8 +154,14 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 	if err != nil {
 		return nil, err
 	}
+	// If using unlimited retries (count=0), ensure that the peer address channel
+	// does not become blocking by using a reasonable non-zero buffer size.
+	peerBufferSize := count
+	if peerBufferSize == 0 {
+		peerBufferSize = 20
+	}
 	addrCh := r.rd.FindProvidersAsync(ctx, c, count)
-	peerCh := make(chan netip.AddrPort, count)
+	peerCh := make(chan netip.AddrPort, peerBufferSize)
 	go func() {
 		for info := range addrCh {
 			if !allowSelf && info.ID == r.host.ID() {
@@ -174,7 +180,13 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				log.Error(err, "could not get IP address")
 				continue
 			}
-			peerCh <- netip.AddrPortFrom(ipAddr, r.registryPort)
+			peer := netip.AddrPortFrom(ipAddr, r.registryPort)
+			// Don't block if the client has disconnected before reading all values from the channel
+			select {
+			case peerCh <- peer:
+			default:
+				log.V(10).Info("mirror endpoint dropped: peer channel is full")
+			}
 		}
 		close(peerCh)
 	}()

@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#328](https://github.com/XenitAB/spegel/pull/328) Move remaining packages to pkg.
 - [#342](https://github.com/XenitAB/spegel/pull/342) Defer Containerd client creation until first accessed.
 - [#348](https://github.com/XenitAB/spegel/pull/348) Change registry configuration to options.
+- [#349](https://github.com/XenitAB/spegel/pull/349) Adjust router peer channel buffer size.
 
 ### Deprecated
 
