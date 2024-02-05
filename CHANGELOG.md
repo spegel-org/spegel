@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#337](https://github.com/XenitAB/spegel/pull/337) Add HTTP bootstrapper.
 - [#340](https://github.com/XenitAB/spegel/pull/340) Add Talos to compatibility.
 - [#343](https://github.com/XenitAB/spegel/pull/343) Implement image event and add support for delete events.
+- [#344](https://github.com/XenitAB/spegel/pull/344) Add support for multi arch images.
 
 ### Changed
 
