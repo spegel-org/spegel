@@ -170,7 +170,13 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	})
 
 	// Registry
-	reg := registry.NewRegistry(ociClient, router, args.LocalAddr, args.MirrorResolveRetries, args.MirrorResolveTimeout, args.ResolveLatestTag, nil)
+	registryOpts := []registry.Option{
+		registry.WithResolveLatestTag(args.ResolveLatestTag),
+		registry.WithResolveRetries(args.MirrorResolveRetries),
+		registry.WithResolveTimeout(args.MirrorResolveTimeout),
+		registry.WithLocalAddress(args.LocalAddr),
+	}
+	reg := registry.NewRegistry(ociClient, router, registryOpts...)
 	regSrv := reg.Server(args.RegistryAddr, log)
 	g.Go(func() error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -65,7 +64,7 @@ func TestMirrorHandler(t *testing.T) {
 		"last-peer-working": {badAddrPort, badAddrPort, goodAddrPort},
 	}
 	router := routing.NewMockRouter(resolver, netip.AddrPort{})
-	reg := NewRegistry(nil, router, "", 3, 5*time.Second, false, nil)
+	reg := NewRegistry(nil, router)
 
 	tests := []struct {
 		expectedHeaders map[string][]string

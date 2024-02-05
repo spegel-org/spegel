@@ -26,6 +26,38 @@ const (
 	MirroredHeaderKey = "X-Spegel-Mirrored"
 )
 
+type Option func(*Registry)
+
+func WithResolveRetries(resolveRetries int) Option {
+	return func(r *Registry) {
+		r.resolveRetries = resolveRetries
+	}
+}
+
+func WithResolveLatestTag(resolveLatestTag bool) Option {
+	return func(r *Registry) {
+		r.resolveLatestTag = resolveLatestTag
+	}
+}
+
+func WithResolveTimeout(resolveTimeout time.Duration) Option {
+	return func(r *Registry) {
+		r.resolveTimeout = resolveTimeout
+	}
+}
+
+func WithTransport(transport http.RoundTripper) Option {
+	return func(r *Registry) {
+		r.transport = transport
+	}
+}
+
+func WithLocalAddress(localAddr string) Option {
+	return func(r *Registry) {
+		r.localAddr = localAddr
+	}
+}
+
 type Registry struct {
 	ociClient        oci.Client
 	router           routing.Router
@@ -36,16 +68,18 @@ type Registry struct {
 	resolveLatestTag bool
 }
 
-func NewRegistry(ociClient oci.Client, router routing.Router, localAddr string, resolveRetries int, resolveTimeout time.Duration, resolveLatestTag bool, transport http.RoundTripper) *Registry {
-	return &Registry{
+func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *Registry {
+	r := &Registry{
 		ociClient:        ociClient,
 		router:           router,
-		resolveRetries:   resolveRetries,
-		resolveTimeout:   resolveTimeout,
-		resolveLatestTag: resolveLatestTag,
-		localAddr:        localAddr,
-		transport:        transport,
+		resolveRetries:   3,
+		resolveTimeout:   1 * time.Second,
+		resolveLatestTag: true,
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 func (r *Registry) Server(addr string, log logr.Logger) *http.Server {
