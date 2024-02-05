@@ -10,14 +10,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/containerd/containerd"
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
@@ -35,7 +33,6 @@ const (
 type Containerd struct {
 	client             *containerd.Client
 	clientGetter       func() (*containerd.Client, error)
-	platform           platforms.MatchComparer
 	listFilter         string
 	eventFilter        string
 	registryConfigPath string
@@ -47,7 +44,6 @@ func NewContainerd(sock, namespace, registryConfigPath string, registries []url.
 		clientGetter: func() (*containerd.Client, error) {
 			return containerd.New(sock, containerd.WithDefaultNamespace(namespace))
 		},
-		platform:           platforms.Default(),
 		listFilter:         listFilter,
 		eventFilter:        eventFilter,
 		registryConfigPath: registryConfigPath,
@@ -198,41 +194,34 @@ func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, 
 	keys := []string{}
 	err = images.Walk(ctx, images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 		keys = append(keys, desc.Digest.String())
-		b, err := content.ReadBlob(ctx, client.ContentStore(), desc)
-		if err != nil {
-			return nil, err
-		}
 		switch desc.MediaType {
 		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 			var idx ocispec.Index
+			b, err := content.ReadBlob(ctx, client.ContentStore(), desc)
+			if err != nil {
+				return nil, err
+			}
 			if err := json.Unmarshal(b, &idx); err != nil {
 				return nil, err
 			}
 			var descs []ocispec.Descriptor
 			for _, m := range idx.Manifests {
-				if !c.platform.Match(*m.Platform) {
+				// Skip index layers that do not exist locally
+				if _, err := client.ContentStore().Info(ctx, m.Digest); err != nil {
 					continue
 				}
 				descs = append(descs, m)
 			}
 			if len(descs) == 0 {
-				return nil, fmt.Errorf("could not find platform architecture in manifest: %v", desc.Digest)
+				return nil, fmt.Errorf("could not find any platforms with local content in manifest list: %v", desc.Digest)
 			}
-			// Platform matching is a bit weird in that multiple platforms can match.
-			// There is however a "best" match that should be used.
-			// This logic is used by Containerd to determine which layer to pull so we should use the same logic.
-			sort.SliceStable(descs, func(i, j int) bool {
-				if descs[i].Platform == nil {
-					return false
-				}
-				if descs[j].Platform == nil {
-					return true
-				}
-				return c.platform.Less(*descs[i].Platform, *descs[j].Platform)
-			})
-			return []ocispec.Descriptor{descs[0]}, nil
+			return descs, nil
 		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 			var manifest ocispec.Manifest
+			b, err := content.ReadBlob(ctx, client.ContentStore(), desc)
+			if err != nil {
+				return nil, err
+			}
 			if err := json.Unmarshal(b, &manifest); err != nil {
 				return nil, err
 			}

@@ -62,11 +62,7 @@ func (i Image) String() string {
 	if i.Tag != "" {
 		tag = fmt.Sprintf(":%s", i.Tag)
 	}
-	dgstStr := ""
-	if i.Tag != "" {
-		dgstStr = fmt.Sprintf("@%s", i.Digest.String())
-	}
-	return fmt.Sprintf("%s/%s%s%s", i.Registry, i.Repository, tag, dgstStr)
+	return fmt.Sprintf("%s/%s%s@%s", i.Registry, i.Repository, tag, i.Digest.String())
 }
 
 func (i Image) TagName() (string, bool) {
