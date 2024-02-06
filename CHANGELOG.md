@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.18
+
+### Added 
+
 - [#331](https://github.com/XenitAB/spegel/pull/331) Document possible modifications required for k8s-digester.
 - [#337](https://github.com/XenitAB/spegel/pull/337) Add HTTP bootstrapper.
 - [#340](https://github.com/XenitAB/spegel/pull/340) Add Talos to compatibility.
@@ -28,15 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#348](https://github.com/XenitAB/spegel/pull/348) Change registry configuration to options.
 - [#349](https://github.com/XenitAB/spegel/pull/349) Adjust router peer channel buffer size.
 
-### Deprecated
-
 ### Removed
 
 - [#327](https://github.com/XenitAB/spegel/pull/327) Remove ConfigMap from RBAC.
-
-### Fixed
-
-### Security
 
 ## v0.0.17
 
