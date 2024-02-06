@@ -35,7 +35,7 @@ type P2PRouter struct {
 	registryPort uint16
 }
 
-func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, registryPortStr string) (*P2PRouter, error) {
+func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, registryPortStr string, opts ...libp2p.Option) (*P2PRouter, error) {
 	registryPort, err := strconv.ParseUint(registryPortStr, 10, 16)
 	if err != nil {
 		return nil, err
@@ -65,11 +65,11 @@ func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, r
 		}
 		return nil
 	})
-	opts := []libp2p.Option{
+	opts = append(opts,
 		libp2p.ListenAddrs(multiAddrs...),
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
 		addrFactoryOpt,
-	}
+	)
 	host, err := libp2p.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
