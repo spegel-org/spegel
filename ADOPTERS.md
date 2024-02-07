@@ -6,3 +6,4 @@ This list shows adopters of Spegel. If you are using Spegel in your organization
 | --- |--- |
 | Xenit AB | https://xenit.se/ |
 | National Research Platform | https://nationalresearchplatform.org |
+| K3S | https://k3s.io/ |

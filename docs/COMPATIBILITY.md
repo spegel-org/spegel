@@ -22,12 +22,17 @@ Spegel has been tested on the following Kubernetes distributions for compatibili
 | :green_circle: | AKS |
 | :green_circle: | Minikube |
 | :yellow_circle: | EKS |
+| :yellow_circle: | K3S |
 | :yellow_circle: | Talos |
 | :red_circle: | GKE |
 
 ## EKS
 
 Discard unpacked layers is enabled by default and needs to be disabled.
+
+## K3S
+
+K3S embeds Spegel, refer to their [documentation](https://docs.k3s.io/installation/registry-mirror?_highlight=spegel) for deployment information.
 
 ## Talos
 
@@ -44,6 +49,6 @@ spegel:
   containerdRegistryConfigPath: /etc/cri/conf.d/hosts
 ```
 
-# GKE
+## GKE
 
 GKE does not set the registry config path in its Containerd configuration. On top of that it uses the old mirror configuration for the internal mirroring service.
