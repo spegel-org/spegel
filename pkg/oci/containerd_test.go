@@ -5,10 +5,19 @@ import (
 	"fmt"
 	iofs "io/fs"
 	"net/url"
+	"path"
 	"testing"
 
+	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/content/local"
+	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/metadata"
+	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	bolt "go.etcd.io/bbolt"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
@@ -369,4 +378,43 @@ func stringListToUrlList(t *testing.T, list []string) []url.URL {
 		urls = append(urls, *u)
 	}
 	return urls
+}
+
+func localContainerd(t *testing.T, ctx context.Context, imgs []map[string]string, blobs map[digest.Digest][]byte) *Containerd {
+	t.Helper()
+
+	contentStore, err := local.NewStore(t.TempDir())
+	require.NoError(t, err)
+	boltDB, err := bolt.Open(path.Join(t.TempDir(), "bolt.db"), 0644, nil)
+	require.NoError(t, err)
+	db := metadata.NewDB(boltDB, contentStore, nil)
+	imageStore := metadata.NewImageStore(db)
+	for _, img := range imgs {
+		dgst, err := digest.Parse(img["digest"])
+		require.NoError(t, err)
+		cImg := images.Image{
+			Name: img["name"],
+			Target: ocispec.Descriptor{
+				MediaType: img["mediaType"],
+				Digest:    dgst,
+				Size:      int64(len(blobs[dgst])),
+			},
+		}
+		_, err = imageStore.Create(ctx, cImg)
+		require.NoError(t, err)
+	}
+	for k, v := range blobs {
+		writer, err := contentStore.Writer(ctx, content.WithRef(k.String()))
+		require.NoError(t, err)
+		_, err = writer.Write(v)
+		require.NoError(t, err)
+		err = writer.Commit(ctx, int64(len(v)), k)
+		require.NoError(t, err)
+		writer.Close()
+	}
+	containerdClient, err := containerd.New("", containerd.WithServices(containerd.WithImageStore(imageStore), containerd.WithContentStore(contentStore)))
+	require.NoError(t, err)
+	return &Containerd{
+		client: containerdClient,
+	}
 }
