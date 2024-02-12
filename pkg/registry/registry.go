@@ -261,7 +261,7 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 
 func (r *Registry) handleManifest(c *gin.Context, dgst digest.Digest) {
 	c.Set("handler", "manifest")
-	b, mediaType, err := r.ociClient.GetBlob(c, dgst)
+	b, mediaType, err := r.ociClient.GetManifest(c, dgst)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusNotFound, err)
@@ -283,7 +283,7 @@ func (r *Registry) handleManifest(c *gin.Context, dgst digest.Digest) {
 
 func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 	c.Set("handler", "blob")
-	size, err := r.ociClient.GetSize(c, dgst)
+	size, err := r.ociClient.Size(c, dgst)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)
@@ -294,7 +294,7 @@ func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 	if c.Request.Method == http.MethodHead {
 		return
 	}
-	err = r.ociClient.WriteBlob(c, c.Writer, dgst)
+	err = r.ociClient.CopyLayer(c, dgst, c.Writer)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)
