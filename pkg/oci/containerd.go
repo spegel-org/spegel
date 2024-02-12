@@ -30,6 +30,8 @@ const (
 	backupDir = "_backup"
 )
 
+var _ Client = &Containerd{}
+
 type Containerd struct {
 	client             *containerd.Client
 	clientGetter       func() (*containerd.Client, error)
@@ -182,7 +184,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	return imgs, nil
 }
 
-func (c *Containerd) GetImageDigests(ctx context.Context, img Image) ([]string, error) {
+func (c *Containerd) AllIdentifiers(ctx context.Context, img Image) ([]string, error) {
 	client, err := c.Client()
 	if err != nil {
 		return nil, err
@@ -255,7 +257,7 @@ func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, er
 	return cImg.Target().Digest, nil
 }
 
-func (c *Containerd) GetSize(ctx context.Context, dgst digest.Digest) (int64, error) {
+func (c *Containerd) Size(ctx context.Context, dgst digest.Digest) (int64, error) {
 	client, err := c.Client()
 	if err != nil {
 		return 0, err
@@ -267,7 +269,7 @@ func (c *Containerd) GetSize(ctx context.Context, dgst digest.Digest) (int64, er
 	return info.Size, nil
 }
 
-func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) ([]byte, string, error) {
+func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byte, string, error) {
 	client, err := c.Client()
 	if err != nil {
 		return nil, "", err
@@ -291,7 +293,7 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) ([]byte, s
 	return b, mt, nil
 }
 
-func (c *Containerd) WriteBlob(ctx context.Context, dst io.Writer, dgst digest.Digest) error {
+func (c *Containerd) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer) error {
 	client, err := c.Client()
 	if err != nil {
 		return err

@@ -15,9 +15,9 @@ type Client interface {
 	Verify(ctx context.Context) error
 	Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error)
 	ListImages(ctx context.Context) ([]Image, error)
-	GetImageDigests(ctx context.Context, img Image) ([]string, error)
+	AllIdentifiers(ctx context.Context, img Image) ([]string, error)
 	Resolve(ctx context.Context, ref string) (digest.Digest, error)
-	GetSize(ctx context.Context, dgst digest.Digest) (int64, error)
-	WriteBlob(ctx context.Context, dst io.Writer, dgst digest.Digest) error
-	GetBlob(ctx context.Context, dgst digest.Digest) ([]byte, string, error)
+	Size(ctx context.Context, dgst digest.Digest) (int64, error)
+	GetManifest(ctx context.Context, dgst digest.Digest) ([]byte, string, error)
+	CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer) error
 }

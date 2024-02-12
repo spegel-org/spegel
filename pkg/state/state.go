@@ -115,7 +115,7 @@ func update(ctx context.Context, ociClient oci.Client, router routing.Router, ev
 		return 0, nil
 	}
 	if !skipDigests {
-		dgsts, err := ociClient.GetImageDigests(ctx, event.Image)
+		dgsts, err := ociClient.AllIdentifiers(ctx, event.Image)
 		if err != nil {
 			return 0, fmt.Errorf("could not get digests for image %s: %w", event.Image.String(), err)
 		}
