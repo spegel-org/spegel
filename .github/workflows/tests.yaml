@@ -17,7 +17,7 @@ jobs:
           check-latest: true
           cache: true
       - name: Setup golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v4
         with:
           version: v1.55.2
           args: --timeout 3m0s
