@@ -60,6 +60,10 @@ func (c *Containerd) Client() (*containerd.Client, error) {
 	return c.client, err
 }
 
+func (c *Containerd) Name() string {
+	return "containerd"
+}
+
 func (c *Containerd) Verify(ctx context.Context) error {
 	client, err := c.Client()
 	if err != nil {

@@ -12,6 +12,7 @@ type UnknownDocument struct {
 }
 
 type Client interface {
+	Name() string
 	Verify(ctx context.Context) error
 	Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error)
 	ListImages(ctx context.Context) ([]Image, error)

@@ -19,6 +19,10 @@ func NewMockClient(images []Image) *MockClient {
 	}
 }
 
+func (m *MockClient) Name() string {
+	return "mock"
+}
+
 func (m *MockClient) Verify(ctx context.Context) error {
 	return nil
 }
