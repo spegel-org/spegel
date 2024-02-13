@@ -1,6 +1,7 @@
 package oci
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -77,7 +78,70 @@ func TestOCIClient(t *testing.T) {
 
 	for _, ociClient := range []Client{containerd} {
 		t.Run(ociClient.Name(), func(t *testing.T) {
-			tests := []struct {
+			imgs, err := ociClient.ListImages(ctx)
+			require.NoError(t, err)
+			require.Len(t, imgs, 5)
+			for _, img := range imgs {
+				_, err := ociClient.Resolve(ctx, img.Name)
+				require.NoError(t, err)
+			}
+
+			noPlatformName := "example.com/org/no-platform:test"
+			dgst, err := ociClient.Resolve(ctx, noPlatformName)
+			require.NoError(t, err)
+			img := Image{
+				Name:   noPlatformName,
+				Digest: dgst,
+			}
+			_, err = ociClient.AllIdentifiers(ctx, img)
+			require.EqualError(t, err, "failed to walk image manifests: could not find any platforms with local content in manifest list: sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9")
+
+			contentTests := []struct {
+				mediaType string
+				dgst      digest.Digest
+				size      int64
+			}{
+				{
+					mediaType: ocispec.MediaTypeImageIndex,
+					dgst:      digest.Digest("sha256:9430beb291fa7b96997711fc486bc46133c719631aefdbeebe58dd3489217bfe"),
+					size:      374,
+				},
+				{
+					mediaType: ocispec.MediaTypeImageManifest,
+					dgst:      digest.Digest("sha256:aec8273a5e5aca369fcaa8cecef7bf6c7959d482f5c8cfa2236a6a16e46bbdcf"),
+					size:      476,
+				},
+				{
+					mediaType: ocispec.MediaTypeImageConfig,
+					dgst:      digest.Digest("sha256:68b8a989a3e08ddbdb3a0077d35c0d0e59c9ecf23d0634584def8bdbb7d6824f"),
+					size:      529,
+				},
+				{
+					mediaType: ocispec.MediaTypeImageLayer,
+					dgst:      digest.Digest("sha256:3caa2469de2a23cbcc209dd0b9d01cd78ff9a0f88741655991d36baede5b0996"),
+					size:      118,
+				},
+			}
+			for _, tt := range contentTests {
+				t.Run(tt.mediaType, func(t *testing.T) {
+					size, err := ociClient.Size(ctx, tt.dgst)
+					require.NoError(t, err)
+					require.Equal(t, tt.size, size)
+					if tt.mediaType != ocispec.MediaTypeImageLayer {
+						b, mediaType, err := ociClient.GetManifest(ctx, tt.dgst)
+						require.NoError(t, err)
+						require.Equal(t, tt.mediaType, mediaType)
+						require.Equal(t, blobs[tt.dgst], b)
+					} else {
+						var buf bytes.Buffer
+						err = ociClient.CopyLayer(ctx, tt.dgst, &buf)
+						require.NoError(t, err)
+						require.Equal(t, blobs[tt.dgst], buf.Bytes())
+					}
+				})
+			}
+
+			identifiersTests := []struct {
 				imageName    string
 				imageDigest  string
 				expectedKeys []string
@@ -175,7 +239,7 @@ func TestOCIClient(t *testing.T) {
 					},
 				},
 			}
-			for _, tt := range tests {
+			for _, tt := range identifiersTests {
 				t.Run(tt.imageName, func(t *testing.T) {
 					img, err := Parse(tt.imageName, digest.Digest(tt.imageDigest))
 					require.NoError(t, err)
@@ -184,13 +248,6 @@ func TestOCIClient(t *testing.T) {
 					require.Equal(t, tt.expectedKeys, keys)
 				})
 			}
-
-			img := Image{
-				Name:   "no-platform",
-				Digest: digest.Digest("sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9"),
-			}
-			_, err = ociClient.AllIdentifiers(ctx, img)
-			require.EqualError(t, err, "failed to walk image manifests: could not find any platforms with local content in manifest list: sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9")
 		})
 	}
 }
