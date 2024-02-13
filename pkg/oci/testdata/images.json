@@ -1,0 +1,18 @@
+[
+  {
+    "name": "ghcr.io/xenitab/spegel:v0.0.8",
+    "digest": "sha256:e80e36564e9617f684eb5972bf86dc9e9e761216e0d40ff78ca07741ec70725a"
+  },
+  {
+    "name": "ghcr.io/xenitab/spegel:v0.0.8-with-media-type",
+    "digest": "sha256:e80e36564e9617f684eb5972bf86dc9e9e761216e0d40ff78ca07741ec70725a"
+  },
+  {
+    "name": "ghcr.io/xenitab/spegel:v0.0.8-without-media-type",
+    "digest": "sha256:e2db0e6787216c5abfc42ea8ec82812e41782f3bc6e3b5221d5ef9c800e6c507"
+  },
+  {
+    "name": "no-platform",
+    "digest": "sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9"
+  }
+]
