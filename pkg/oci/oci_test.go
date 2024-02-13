@@ -8,10 +8,15 @@ import (
 	"testing"
 
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/metadata"
+	"github.com/containerd/containerd/namespaces"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
+	bolt "go.etcd.io/bbolt"
 )
 
 func TestOCIClient(t *testing.T) {
@@ -20,7 +25,7 @@ func TestOCIClient(t *testing.T) {
 	imgs := []map[string]string{}
 	err = json.Unmarshal(b, &imgs)
 	require.NoError(t, err)
-	blobs := map[digest.Digest]string{}
+	blobs := map[digest.Digest][]byte{}
 	fileItems, err := os.ReadDir("./testdata/blobs")
 	require.NoError(t, err)
 	for _, item := range fileItems {
@@ -31,29 +36,40 @@ func TestOCIClient(t *testing.T) {
 		require.NoError(t, err)
 		b, err := os.ReadFile(path.Join("./testdata/blobs", item.Name()))
 		require.NoError(t, err)
-		blobs[dgst] = string(b)
+		blobs[dgst] = b
 	}
 
-	is := &mockImageStore{
-		data: map[string]images.Image{},
-	}
+	contentStore, err := local.NewStore(t.TempDir())
+	require.NoError(t, err)
+	boltDB, err := bolt.Open(path.Join(t.TempDir(), "bolt.db"), 0644, nil)
+	require.NoError(t, err)
+	db := metadata.NewDB(boltDB, contentStore, nil)
+	imageStore := metadata.NewImageStore(db)
+	ctx := namespaces.WithNamespace(context.TODO(), "k8s.io")
 	for _, img := range imgs {
 		dgst, err := digest.Parse(img["digest"])
 		require.NoError(t, err)
-		is.data[img["name"]] = images.Image{
+		cImg := images.Image{
+			Name: img["name"],
 			Target: ocispec.Descriptor{
-				MediaType: "application/vnd.oci.image.index.v1+json",
+				MediaType: img["mediaType"],
 				Digest:    dgst,
+				Size:      int64(len(blobs[dgst])),
 			},
 		}
-	}
-	cs := &mockContentStore{
-		data: map[string]string{},
+		_, err = imageStore.Create(ctx, cImg)
+		require.NoError(t, err)
 	}
 	for k, v := range blobs {
-		cs.data[k.String()] = v
+		writer, err := contentStore.Writer(ctx, content.WithRef(k.String()))
+		require.NoError(t, err)
+		_, err = writer.Write(v)
+		require.NoError(t, err)
+		err = writer.Commit(ctx, int64(len(v)), k)
+		require.NoError(t, err)
+		writer.Close()
 	}
-	containerdClient, err := containerd.New("", containerd.WithServices(containerd.WithImageStore(is), containerd.WithContentStore(cs)))
+	containerdClient, err := containerd.New("", containerd.WithServices(containerd.WithImageStore(imageStore), containerd.WithContentStore(contentStore)))
 	require.NoError(t, err)
 	containerd := &Containerd{
 		client: containerdClient,
@@ -68,9 +84,9 @@ func TestOCIClient(t *testing.T) {
 			}{
 				{
 					imageName:   "ghcr.io/xenitab/spegel:v0.0.8-with-media-type",
-					imageDigest: "sha256:e80e36564e9617f684eb5972bf86dc9e9e761216e0d40ff78ca07741ec70725a",
+					imageDigest: "sha256:9506c8e7a2d0a098d43cadfd7ecdc3c91697e8188d3a1245943b669f717747b4",
 					expectedKeys: []string{
-						"sha256:e80e36564e9617f684eb5972bf86dc9e9e761216e0d40ff78ca07741ec70725a",
+						"sha256:9506c8e7a2d0a098d43cadfd7ecdc3c91697e8188d3a1245943b669f717747b4",
 						"sha256:44cb2cf712c060f69df7310e99339c1eb51a085446f1bb6d44469acff35b4355",
 						"sha256:d715ba0d85ee7d37da627d0679652680ed2cb23dde6120f25143a0b8079ee47e",
 						"sha256:a7ca0d9ba68fdce7e15bc0952d3e898e970548ca24d57698725836c039086639",
@@ -114,9 +130,9 @@ func TestOCIClient(t *testing.T) {
 				},
 				{
 					imageName:   "ghcr.io/xenitab/spegel:v0.0.8-without-media-type",
-					imageDigest: "sha256:e2db0e6787216c5abfc42ea8ec82812e41782f3bc6e3b5221d5ef9c800e6c507",
+					imageDigest: "sha256:d8df04365d06181f037251de953aca85cc16457581a8fc168f4957c978e1008b",
 					expectedKeys: []string{
-						"sha256:e2db0e6787216c5abfc42ea8ec82812e41782f3bc6e3b5221d5ef9c800e6c507",
+						"sha256:d8df04365d06181f037251de953aca85cc16457581a8fc168f4957c978e1008b",
 						"sha256:44cb2cf712c060f69df7310e99339c1eb51a085446f1bb6d44469acff35b4355",
 						"sha256:d715ba0d85ee7d37da627d0679652680ed2cb23dde6120f25143a0b8079ee47e",
 						"sha256:a7ca0d9ba68fdce7e15bc0952d3e898e970548ca24d57698725836c039086639",
@@ -163,7 +179,7 @@ func TestOCIClient(t *testing.T) {
 				t.Run(tt.imageName, func(t *testing.T) {
 					img, err := Parse(tt.imageName, digest.Digest(tt.imageDigest))
 					require.NoError(t, err)
-					keys, err := ociClient.AllIdentifiers(context.TODO(), img)
+					keys, err := ociClient.AllIdentifiers(ctx, img)
 					require.NoError(t, err)
 					require.Equal(t, tt.expectedKeys, keys)
 				})
@@ -173,7 +189,7 @@ func TestOCIClient(t *testing.T) {
 				Name:   "no-platform",
 				Digest: digest.Digest("sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9"),
 			}
-			_, err = ociClient.AllIdentifiers(context.TODO(), img)
+			_, err = ociClient.AllIdentifiers(ctx, img)
 			require.EqualError(t, err, "failed to walk image manifests: could not find any platforms with local content in manifest list: sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9")
 		})
 	}

@@ -1,18 +1,12 @@
 package oci
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	iofs "io/fs"
 	"net/url"
 	"testing"
 
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/images"
-	digest "github.com/opencontainers/go-digest"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -320,92 +314,4 @@ func stringListToUrlList(t *testing.T, list []string) []url.URL {
 		urls = append(urls, *u)
 	}
 	return urls
-}
-
-type readerAt struct {
-	bytes.Reader
-}
-
-func (r *readerAt) Close() error {
-	return nil
-}
-
-type mockContentStore struct {
-	data map[string]string
-}
-
-func (m *mockContentStore) Info(ctx context.Context, dgst digest.Digest) (content.Info, error) {
-	s, ok := m.data[dgst.String()]
-	if !ok {
-		return content.Info{}, fmt.Errorf("content %v: %w", dgst, errdefs.ErrNotFound)
-	}
-	return content.Info{
-		Digest: dgst,
-		Size:   int64(len(s)),
-	}, nil
-}
-
-func (*mockContentStore) Walk(ctx context.Context, fn content.WalkFunc, filters ...string) error {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Delete(ctx context.Context, dgst digest.Digest) error {
-	panic("not implemented")
-}
-
-func (m *mockContentStore) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (content.ReaderAt, error) {
-	s, ok := m.data[desc.Digest.String()]
-	if !ok {
-		return nil, fmt.Errorf("digest not found: %s", desc.Digest.String())
-	}
-	return &readerAt{*bytes.NewReader([]byte(s))}, nil
-}
-
-func (*mockContentStore) Status(ctx context.Context, ref string) (content.Status, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Update(ctx context.Context, info content.Info, fieldpaths ...string) (content.Info, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) ListStatuses(ctx context.Context, filters ...string) ([]content.Status, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
-	panic("not implemented")
-}
-
-func (*mockContentStore) Abort(ctx context.Context, ref string) error {
-	panic("not implemented")
-}
-
-type mockImageStore struct {
-	data map[string]images.Image
-}
-
-func (m *mockImageStore) Get(ctx context.Context, name string) (images.Image, error) {
-	img, ok := m.data[name]
-	if !ok {
-		return images.Image{}, fmt.Errorf("image with name %s does not exist", name)
-	}
-	return img, nil
-}
-
-func (*mockImageStore) List(ctx context.Context, filters ...string) ([]images.Image, error) {
-	return nil, nil
-}
-
-func (*mockImageStore) Create(ctx context.Context, image images.Image) (images.Image, error) {
-	return images.Image{}, nil
-
-}
-
-func (*mockImageStore) Update(ctx context.Context, image images.Image, fieldpaths ...string) (images.Image, error) {
-	return images.Image{}, nil
-}
-
-func (*mockImageStore) Delete(ctx context.Context, name string, opts ...images.DeleteOpt) error {
-	return nil
 }
