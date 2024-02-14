@@ -1,5 +1,10 @@
 [
   {
+    "name": "example.com/org/scratch:latest",
+    "mediaType": "application/vnd.oci.image.index.v1+json",
+    "digest": "sha256:9430beb291fa7b96997711fc486bc46133c719631aefdbeebe58dd3489217bfe"
+  },
+  {
     "name": "ghcr.io/xenitab/spegel:v0.0.8",
     "mediaType": "application/vnd.oci.image.index.v1+json",
     "digest": "sha256:9506c8e7a2d0a098d43cadfd7ecdc3c91697e8188d3a1245943b669f717747b4"
@@ -15,7 +20,7 @@
     "digest": "sha256:d8df04365d06181f037251de953aca85cc16457581a8fc168f4957c978e1008b"
   },
   {
-    "name": "no-platform",
+    "name": "example.com/org/no-platform:test",
     "mediaType": "application/vnd.oci.image.index.v1+json",
     "digest": "sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9"
   }

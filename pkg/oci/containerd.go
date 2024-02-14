@@ -289,6 +289,13 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	if ud.MediaType != "" {
 		return b, ud.MediaType, nil
 	}
+	var ic ocispec.Image
+	if err := json.Unmarshal(b, &ic); err != nil {
+		return nil, "", err
+	}
+	if isImageConfig(ic) {
+		return b, ocispec.MediaTypeImageConfig, nil
+	}
 	// Media type is not a required field. We need a fallback method if the field is not set.
 	mt, err := c.lookupMediaType(ctx, dgst)
 	if err != nil {
@@ -418,6 +425,19 @@ func createFilters(registries []url.URL) (string, string) {
 	listFilter := fmt.Sprintf(`name~="^(%s)/"`, strings.Join(registryHosts, "|"))
 	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update|/images/delete",event.%s`, listFilter)
 	return listFilter, eventFilter
+}
+
+func isImageConfig(ic ocispec.Image) bool {
+	if ic.Architecture == "" {
+		return false
+	}
+	if ic.OS == "" {
+		return false
+	}
+	if ic.RootFS.Type == "" {
+		return false
+	}
+	return true
 }
 
 type hostFile struct {
