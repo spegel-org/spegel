@@ -83,6 +83,7 @@ spec:
 | serviceMonitor.labels | object | `{}` | Service monitor specific labels for prometheus to discover servicemonitor. |
 | serviceMonitor.scrapeTimeout | string | `"30s"` | Prometheus scrape interval timeout. |
 | spegel.additionalMirrorRegistries | list | `[]` | Additional target mirror registries other than Spegel. |
+| spegel.blobSpeed | string | `""` | Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps. |
 | spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
 | spegel.containerdRegistryConfigPath | string | `"/etc/containerd/certs.d"` | Path to Containerd mirror configuration. |
