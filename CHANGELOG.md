@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#335](https://github.com/XenitAB/spegel/pull/335) Add k3s to compatibility guide.
 - [#339](https://github.com/XenitAB/spegel/pull/339) Extend OCI client tests.
+- [#339](https://github.com/XenitAB/spegel/pull/339) Extend OCI client tests.
+- [#365](https://github.com/XenitAB/spegel/pull/365) Add support for throttling blob write speed.
 
 ### Changed
 
