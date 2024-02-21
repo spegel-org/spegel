@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#355](https://github.com/XenitAB/spegel/pull/355) Rename OCI function names.
 - [#356](https://github.com/XenitAB/spegel/pull/356) Refactor OCI client test to simplify testing multiple implementations.
 - [#357](https://github.com/XenitAB/spegel/pull/357) Replace mock Containerd store with real upstream store.
+- [#367](https://github.com/XenitAB/spegel/pull/367) Update Go image to 1.21.7.
 
 ### Deprecated
 
