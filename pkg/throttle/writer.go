@@ -8,16 +8,12 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const burstLimit = 1024 * 1024 * 1024 // 1GB
-
 type writer struct {
 	limiter *rate.Limiter
 	writer  io.Writer
 }
 
-func NewWriter(w io.Writer, br Byterate) io.Writer {
-	limiter := rate.NewLimiter(rate.Limit(br), burstLimit)
-	limiter.AllowN(time.Now(), burstLimit)
+func NewWriter(w io.Writer, limiter *rate.Limiter) io.Writer {
 	return &writer{
 		limiter: limiter,
 		writer:  w,

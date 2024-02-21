@@ -17,6 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
 	pkggin "github.com/xenitab/pkg/gin"
+	"golang.org/x/time/rate"
 
 	"github.com/xenitab/spegel/pkg/metrics"
 	"github.com/xenitab/spegel/pkg/oci"
@@ -26,6 +27,7 @@ import (
 
 const (
 	MirroredHeaderKey = "X-Spegel-Mirrored"
+	burstLimit        = 1024 * 1024 * 1024 // 1GB
 )
 
 type Option func(*Registry)
@@ -62,12 +64,14 @@ func WithLocalAddress(localAddr string) Option {
 
 func WithBlobSpeed(blobSpeed throttle.Byterate) Option {
 	return func(r *Registry) {
-		r.blobSpeed = &blobSpeed
+		limiter := rate.NewLimiter(rate.Limit(blobSpeed), burstLimit)
+		limiter.AllowN(time.Now(), burstLimit)
+		r.rateLimiter = limiter
 	}
 }
 
 type Registry struct {
-	blobSpeed        *throttle.Byterate
+	rateLimiter      *rate.Limiter
 	ociClient        oci.Client
 	router           routing.Router
 	transport        http.RoundTripper
@@ -304,8 +308,8 @@ func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 		return
 	}
 	var writer io.Writer = c.Writer
-	if r.blobSpeed != nil {
-		writer = throttle.NewWriter(c.Writer, *r.blobSpeed)
+	if r.rateLimiter != nil {
+		writer = throttle.NewWriter(c.Writer, r.rateLimiter)
 	}
 	err = r.ociClient.CopyLayer(c, dgst, writer)
 	if err != nil {

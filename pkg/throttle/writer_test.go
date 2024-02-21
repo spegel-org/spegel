@@ -6,11 +6,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 )
 
 func TestWriter(t *testing.T) {
-	br := 500 * Bps
-	w := NewWriter(bytes.NewBuffer([]byte{}), br)
+	limit := rate.Limit(500 * Bps)
+	limiter := rate.NewLimiter(limit, 1024*1024)
+	limiter.AllowN(time.Now(), 1024*1024)
+	w := NewWriter(bytes.NewBuffer([]byte{}), limiter)
 	chunkSize := 100
 	start := time.Now()
 	for i := 0; i < 10; i++ {
