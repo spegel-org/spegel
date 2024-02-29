@@ -14,7 +14,7 @@ jobs:
       - name: Clone repo
         uses: actions/checkout@v4
       - name: Setup Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@v4
         with:
           version: v3.12.1
       - name: Setup QEMU
