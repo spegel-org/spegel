@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	iofs "io/fs"
+	"maps"
 	"net/url"
 	"path/filepath"
 	"testing"
@@ -179,16 +180,16 @@ func TestCreateFilter(t *testing.T) {
 		registries          []string
 	}{
 		{
-			name:                "only registries",
+			name:                "with registry filtering",
 			registries:          []string{"https://docker.io", "https://gcr.io"},
 			expectedListFilter:  `name~="^(docker\\.io|gcr\\.io)/"`,
 			expectedEventFilter: `topic~="/images/create|/images/update|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
 		},
 		{
-			name:                "additional image filtes",
-			registries:          []string{"https://docker.io", "https://gcr.io"},
-			expectedListFilter:  `name~="^(docker\\.io|gcr\\.io)/"`,
-			expectedEventFilter: `topic~="/images/create|/images/update|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
+			name:                "without registry filtering",
+			registries:          []string{},
+			expectedListFilter:  `name~="^.+/"`,
+			expectedEventFilter: `topic~="/images/create|/images/update|/images/delete",event.name~="^.+/"`,
 		},
 	}
 	for _, tt := range tests {
@@ -286,7 +287,7 @@ func TestMirrorConfiguration(t *testing.T) {
 		prependExisting     bool
 	}{
 		{
-			name:            "multiple mirros",
+			name:            "multiple mirrors",
 			resolveTags:     true,
 			registries:      stringListToUrlList(t, []string{"http://foo.bar:5000"}),
 			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.2:5000", "http://127.0.0.1:5001"}),
@@ -301,6 +302,17 @@ capabilities = ['pull', 'resolve']
 capabilities = ['pull', 'resolve']
 
 [host.'http://127.0.0.1:5001']
+capabilities = ['pull', 'resolve']`,
+			},
+		},
+		{
+			name:            "_default registry mirrors",
+			resolveTags:     true,
+			registries:      stringListToUrlList(t, []string{}),
+			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			prependExisting: false,
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/_default/hosts.toml": `[host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
 			},
 		},
@@ -530,18 +542,21 @@ capabilities = ['pull', 'resolve']`,
 			ok, err := afero.DirExists(fs, "/etc/containerd/certs.d/_backup")
 			require.NoError(t, err)
 			require.True(t, ok)
+			seenExpectedFiles := maps.Clone(tt.expectedFiles)
 			err = afero.Walk(fs, registryConfigPath, func(path string, fi iofs.FileInfo, _ error) error {
 				if fi.IsDir() {
 					return nil
 				}
 				expectedContent, ok := tt.expectedFiles[path]
 				require.True(t, ok, path)
+				delete(seenExpectedFiles, path)
 				b, err := afero.ReadFile(fs, path)
 				require.NoError(t, err)
 				require.Equal(t, expectedContent, string(b))
 				return nil
 			})
 			require.NoError(t, err)
+			require.Empty(t, seenExpectedFiles)
 		})
 	}
 }

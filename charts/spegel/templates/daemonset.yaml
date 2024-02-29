@@ -43,13 +43,13 @@ spec:
           - configuration
           - --log-level={{ .Values.spegel.logLevel }}
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
-          {{- with .Values.spegel.registries }}
-          - --registries
+          {{- with .Values.spegel.mirroredRegistries }}
+          - --mirrored-registries
           {{- range . }}
           - {{ . | quote }}
           {{- end }}
           {{- end }}
-          - --mirror-registries
+          - --mirror-targets
           - http://$(NODE_IP):{{ .Values.service.registry.hostPort }}
           - http://$(NODE_IP):{{ .Values.service.registry.nodePort }}
           {{- with .Values.spegel.additionalMirrorRegistries }}
@@ -83,7 +83,7 @@ spec:
           - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
           {{- with .Values.spegel.registries }}
-          - --registries
+          - --mirrored-registries
           {{- range . }}
           - {{ . | quote }}
           {{- end }}
