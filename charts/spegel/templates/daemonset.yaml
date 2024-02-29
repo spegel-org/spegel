@@ -92,6 +92,9 @@ spec:
           - --leader-election-name={{ .Release.Name }}-leader-election
           - --resolve-latest-tag={{ .Values.spegel.resolveLatestTag }}
           - --local-addr=$(NODE_IP):{{ .Values.service.registry.hostPort }}
+          {{- with .Values.spegel.blobSpeed }}
+          - --blob-speed={{ . }}
+          {{- end }}
         env:
         - name: NODE_IP
           valueFrom:

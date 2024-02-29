@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -20,6 +21,7 @@ import (
 	"github.com/xenitab/spegel/pkg/metrics"
 	"github.com/xenitab/spegel/pkg/oci"
 	"github.com/xenitab/spegel/pkg/routing"
+	"github.com/xenitab/spegel/pkg/throttle"
 )
 
 const (
@@ -58,7 +60,14 @@ func WithLocalAddress(localAddr string) Option {
 	}
 }
 
+func WithBlobSpeed(blobSpeed throttle.Byterate) Option {
+	return func(r *Registry) {
+		r.throttler = throttle.NewThrottler(blobSpeed)
+	}
+}
+
 type Registry struct {
+	throttler        *throttle.Throttler
 	ociClient        oci.Client
 	router           routing.Router
 	transport        http.RoundTripper
@@ -294,7 +303,11 @@ func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 	if c.Request.Method == http.MethodHead {
 		return
 	}
-	err = r.ociClient.CopyLayer(c, dgst, c.Writer)
+	var writer io.Writer = c.Writer
+	if r.throttler != nil {
+		writer = r.throttler.Writer(c.Writer)
+	}
+	err = r.ociClient.CopyLayer(c, dgst, writer)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)

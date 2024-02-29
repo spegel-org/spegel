@@ -28,6 +28,7 @@ require (
 	go.etcd.io/bbolt v1.3.7
 	go.uber.org/zap v1.26.0
 	golang.org/x/sync v0.6.0
+	golang.org/x/time v0.5.0
 	k8s.io/client-go v0.27.4
 	k8s.io/cri-api v0.27.4
 	k8s.io/klog/v2 v2.90.1
@@ -197,7 +198,6 @@ require (
 	golang.org/x/sys v0.16.0 // indirect
 	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846 // indirect
 	gonum.org/v1/gonum v0.13.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

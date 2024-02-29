@@ -27,6 +27,7 @@ import (
 	"github.com/xenitab/spegel/pkg/registry"
 	"github.com/xenitab/spegel/pkg/routing"
 	"github.com/xenitab/spegel/pkg/state"
+	"github.com/xenitab/spegel/pkg/throttle"
 )
 
 type ConfigurationCmd struct {
@@ -47,17 +48,18 @@ type BootstrapConfig struct {
 
 type RegistryCmd struct {
 	BootstrapConfig
-	ContainerdRegistryConfigPath string        `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
-	MetricsAddr                  string        `arg:"--metrics-addr,required" help:"address to serve metrics."`
-	LocalAddr                    string        `arg:"--local-addr,required" help:"Address that the local Spegel instance will be reached at."`
-	ContainerdSock               string        `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
-	ContainerdNamespace          string        `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
-	RouterAddr                   string        `arg:"--router-addr,required" help:"address to serve router."`
-	RegistryAddr                 string        `arg:"--registry-addr,required" help:"address to server image registry."`
-	Registries                   []url.URL     `arg:"--registries,required" help:"registries that are configured to be mirrored."`
-	MirrorResolveTimeout         time.Duration `arg:"--mirror-resolve-timeout" default:"5s" help:"Max duration spent finding a mirror."`
-	MirrorResolveRetries         int           `arg:"--mirror-resolve-retries" default:"3" help:"Max amount of mirrors to attempt."`
-	ResolveLatestTag             bool          `arg:"--resolve-latest-tag" default:"true" help:"When true latest tags will be resolved to digests."`
+	BlobSpeed                    *throttle.Byterate `arg:"--blob-speed" help:"Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps."`
+	ContainerdRegistryConfigPath string             `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
+	MetricsAddr                  string             `arg:"--metrics-addr,required" help:"address to serve metrics."`
+	LocalAddr                    string             `arg:"--local-addr,required" help:"Address that the local Spegel instance will be reached at."`
+	ContainerdSock               string             `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
+	ContainerdNamespace          string             `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
+	RouterAddr                   string             `arg:"--router-addr,required" help:"address to serve router."`
+	RegistryAddr                 string             `arg:"--registry-addr,required" help:"address to server image registry."`
+	Registries                   []url.URL          `arg:"--registries,required" help:"registries that are configured to be mirrored."`
+	MirrorResolveTimeout         time.Duration      `arg:"--mirror-resolve-timeout" default:"5s" help:"Max duration spent finding a mirror."`
+	MirrorResolveRetries         int                `arg:"--mirror-resolve-retries" default:"3" help:"Max amount of mirrors to attempt."`
+	ResolveLatestTag             bool               `arg:"--resolve-latest-tag" default:"true" help:"When true latest tags will be resolved to digests."`
 }
 
 type Arguments struct {
@@ -175,6 +177,9 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithResolveRetries(args.MirrorResolveRetries),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithLocalAddress(args.LocalAddr),
+	}
+	if args.BlobSpeed != nil {
+		registryOpts = append(registryOpts, registry.WithBlobSpeed(*args.BlobSpeed))
 	}
 	reg := registry.NewRegistry(ociClient, router, registryOpts...)
 	regSrv := reg.Server(args.RegistryAddr, log)
