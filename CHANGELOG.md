@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#356](https://github.com/XenitAB/spegel/pull/356) Refactor OCI client test to simplify testing multiple implementations.
 - [#357](https://github.com/XenitAB/spegel/pull/357) Replace mock Containerd store with real upstream store.
 - [#367](https://github.com/XenitAB/spegel/pull/367) Update Go image to 1.21.7.
+- [#376](https://github.com/XenitAB/spegel/pull/376) Change go directive to 1.21.
 
 ### Deprecated
 

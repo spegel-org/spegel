@@ -1,6 +1,6 @@
 module github.com/xenitab/spegel
 
-go 1.19
+go 1.21
 
 require (
 	github.com/alexflint/go-arg v1.4.3
