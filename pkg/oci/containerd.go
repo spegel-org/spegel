@@ -495,6 +495,10 @@ func parseContentRegistries(l map[string]string) []string {
 func createFilters(parsedMirroredRegistries []url.URL) ([]string, []string, []string) {
 	registryHosts := []string{}
 	for _, registry := range parsedMirroredRegistries {
+		if registry.Host == "*" || registry.Host == "_default" {
+			registryHosts = []string{".+"}
+			break
+		}
 		registryHosts = append(registryHosts, strings.ReplaceAll(registry.Host, `.`, `\\.`))
 	}
 	imageFilter := fmt.Sprintf(`name~="^(%s)/"`, strings.Join(registryHosts, "|"))
