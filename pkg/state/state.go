@@ -14,20 +14,7 @@ import (
 	"github.com/xenitab/spegel/pkg/routing"
 )
 
-// TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
-func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) {
-	log := logr.FromContextOrDiscard(ctx)
-	for {
-		err := track(ctx, ociClient, router, resolveLatestTag)
-		if err == nil || errors.Is(err, context.Canceled) {
-			log.V(5).Info("image state tracker stopped")
-			return
-		}
-		log.Error(err, "restarting image state tracker due to error")
-	}
-}
-
-func track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
+func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
 	log := logr.FromContextOrDiscard(ctx)
 	eventCh, errCh := ociClient.Subscribe(ctx)
 	immediate := make(chan time.Time, 1)
@@ -38,11 +25,12 @@ func track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil
 		case <-ticker:
 			log.Info("running scheduled image state update")
 			if err := all(ctx, ociClient, router, resolveLatestTag); err != nil {
-				return fmt.Errorf("received errors when updating all images: %w", err)
+				log.Error(err, "received errors when updating all images")
+				continue
 			}
 		case event, ok := <-eventCh:
 			if !ok {
@@ -58,7 +46,6 @@ func track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 				return errors.New("image error channel closed")
 			}
 			log.Error(err, "event channel error")
-			continue
 		}
 	}
 }
@@ -70,6 +57,7 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 		return err
 	}
 
+	// TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
 	metrics.AdvertisedKeys.Reset()
 	metrics.AdvertisedImages.Reset()
 	metrics.AdvertisedImageTags.Reset()

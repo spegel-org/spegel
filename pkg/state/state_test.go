@@ -49,7 +49,8 @@ func TestBasic(t *testing.T) {
 				time.Sleep(2 * time.Second)
 				cancel()
 			}()
-			Track(ctx, ociClient, router, tt.resolveLatestTag)
+			err := Track(ctx, ociClient, router, tt.resolveLatestTag)
+			require.NoError(t, err)
 
 			for _, img := range imgs {
 				peers, ok := router.LookupKey(img.Digest.String())
