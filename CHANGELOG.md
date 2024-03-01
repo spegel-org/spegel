@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- [#371](https://github.com/XenitAB/spegel/pull/371) Remove state track retry on error.
+
 ### Fixed
 
 ### Security
