@@ -1,6 +1,7 @@
 module github.com/xenitab/spegel
 
 go 1.21
+toolchain go1.22.0
 
 require (
 	github.com/alexflint/go-arg v1.4.3
@@ -15,7 +16,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.12.2
 	github.com/multiformats/go-multicodec v0.9.0
 	github.com/multiformats/go-multihash v0.2.3
-	github.com/norwoodj/helm-docs v1.12.0
+	github.com/norwoodj/helm-docs v1.13.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/pelletier/go-toml/v2 v2.1.1
