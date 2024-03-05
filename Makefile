@@ -10,7 +10,7 @@ test:
 	go test ./...
 
 docker-build:
-	docker build -t ${IMG} .
+	docker build --platform linux/amd64 -t ${IMG} .
 
 e2e: docker-build
 	./test/e2e/e2e.sh ${IMG} ${CNI}

@@ -93,6 +93,7 @@ spec:
 | spegel.mirrorResolveTimeout | string | `"5s"` | Max duration spent finding a mirror. |
 | spegel.registries | list | `["https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://gcr.io","https://registry.k8s.io","https://k8s.gcr.io","https://lscr.io"]` | Registries for which mirror configuration will be created. |
 | spegel.resolveLatestTag | bool | `true` | When true latest tags will be resolved to digests. |
+| spegel.blobCopyBuffer | bool | `32768` | IO copy buffer size (bytes) for blob. |
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |
 | tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
 | updateStrategy | object | `{}` | An update strategy to replace existing pods with new pods. |

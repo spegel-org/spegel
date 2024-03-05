@@ -60,6 +60,7 @@ type RegistryCmd struct {
 	MirrorResolveTimeout         time.Duration      `arg:"--mirror-resolve-timeout" default:"5s" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries         int                `arg:"--mirror-resolve-retries" default:"3" help:"Max amount of mirrors to attempt."`
 	ResolveLatestTag             bool               `arg:"--resolve-latest-tag" default:"true" help:"When true latest tags will be resolved to digests."`
+	BlobCopyBuffer               int                `arg:"--blob-copy-buffer" default:"32768" help:"IO copy buffer size (bytes) for blob."`
 }
 
 type Arguments struct {
@@ -137,6 +138,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		}
 		return nil
 	})
+
 	g.Go(func() error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -180,6 +182,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithResolveRetries(args.MirrorResolveRetries),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithLocalAddress(args.LocalAddr),
+		registry.WithBlobCopyBuffer(args.BlobCopyBuffer),
 	}
 	if args.BlobSpeed != nil {
 		registryOpts = append(registryOpts, registry.WithBlobSpeed(*args.BlobSpeed))

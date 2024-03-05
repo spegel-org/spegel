@@ -141,3 +141,5 @@ spegel:
   resolveLatestTag: true
   # -- Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps.
   blobSpeed: ""
+  # -- IO copy buffer size (bytes) for blob.
+  blobCopyBuffer: 32768

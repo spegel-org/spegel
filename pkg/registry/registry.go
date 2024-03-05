@@ -42,6 +42,12 @@ func WithResolveLatestTag(resolveLatestTag bool) Option {
 	}
 }
 
+func WithBlobCopyBuffer(blobCopyBuffer int) Option {
+	return func(r *Registry) {
+		r.blobCopyBuffer = blobCopyBuffer
+	}
+}
+
 func WithResolveTimeout(resolveTimeout time.Duration) Option {
 	return func(r *Registry) {
 		r.resolveTimeout = resolveTimeout
@@ -75,6 +81,7 @@ type Registry struct {
 	resolveRetries   int
 	resolveTimeout   time.Duration
 	resolveLatestTag bool
+	blobCopyBuffer   int
 }
 
 func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *Registry {
@@ -84,6 +91,7 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *R
 		resolveRetries:   3,
 		resolveTimeout:   1 * time.Second,
 		resolveLatestTag: true,
+		blobCopyBuffer:   32768,
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -307,7 +315,7 @@ func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 	if r.throttler != nil {
 		writer = r.throttler.Writer(c.Writer)
 	}
-	err = r.ociClient.CopyLayer(c, dgst, writer)
+	err = r.ociClient.CopyLayer(c, dgst, writer, r.blobCopyBuffer)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)

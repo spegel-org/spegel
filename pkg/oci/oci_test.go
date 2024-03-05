@@ -134,7 +134,8 @@ func TestOCIClient(t *testing.T) {
 						require.Equal(t, blobs[tt.dgst], b)
 					} else {
 						var buf bytes.Buffer
-						err = ociClient.CopyLayer(ctx, tt.dgst, &buf)
+						bufferSize := 32768
+						err = ociClient.CopyLayer(ctx, tt.dgst, &buf, bufferSize)
 						require.NoError(t, err)
 						require.Equal(t, blobs[tt.dgst], buf.Bytes())
 					}

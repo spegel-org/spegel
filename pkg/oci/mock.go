@@ -51,6 +51,6 @@ func (m *MockClient) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	return nil, "", nil
 }
 
-func (m *MockClient) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer) error {
+func (m *MockClient) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer, bsize int) error {
 	return nil
 }

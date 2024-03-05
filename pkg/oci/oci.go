@@ -20,5 +20,5 @@ type Client interface {
 	Resolve(ctx context.Context, ref string) (digest.Digest, error)
 	Size(ctx context.Context, dgst digest.Digest) (int64, error)
 	GetManifest(ctx context.Context, dgst digest.Digest) ([]byte, string, error)
-	CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer) error
+	CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer, bsize int) error
 }

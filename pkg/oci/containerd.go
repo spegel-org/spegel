@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/containerd/containerd"
 	eventtypes "github.com/containerd/containerd/api/events"
@@ -304,7 +305,8 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	return b, mt, nil
 }
 
-func (c *Containerd) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer) error {
+func (c *Containerd) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer, bsize int) error {
+	log := logr.FromContextOrDiscard(ctx)
 	client, err := c.Client()
 	if err != nil {
 		return err
@@ -314,11 +316,34 @@ func (c *Containerd) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.W
 		return err
 	}
 	defer ra.Close()
-	_, err = io.Copy(dst, content.NewReader(ra))
-	if err != nil {
+
+	// Use a channel to signal the completion of the copy
+	done := make(chan error, 1)
+	// Start a goroutine to perform the copy
+	go func() {
+		startTime := time.Now()
+
+		// Use a buffer to improve copy performance
+		buffer := make([]byte, bsize)
+
+		wSize, err := io.CopyBuffer(dst, content.NewReader(ra), buffer)
+		duration := time.Since(startTime)
+
+		if err != nil {
+			log.Error(err, "Blob io.CopyBuffer failed")
+		} else {
+			log.Info("Blob io.CopyBuffer completed in %s, blob size is %v", duration, wSize)
+		}
+		done <- err // Send the result to the channel
+	}()
+
+	// Wait for the copy to complete or the context to be canceled
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-done:
 		return err
 	}
-	return nil
 }
 
 // lookupMediaType will resolve the media type for a digest without looking at the content.

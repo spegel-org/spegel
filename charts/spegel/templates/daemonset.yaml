@@ -91,6 +91,7 @@ spec:
           - --leader-election-namespace={{ include "spegel.namespace" . }}
           - --leader-election-name={{ .Release.Name }}-leader-election
           - --resolve-latest-tag={{ .Values.spegel.resolveLatestTag }}
+          - --blob-copy-buffer={{ .Values.spegel.blobCopyBuffer }}
           - --local-addr=$(NODE_IP):{{ .Values.service.registry.hostPort }}
           {{- with .Values.spegel.blobSpeed }}
           - --blob-speed={{ . }}
