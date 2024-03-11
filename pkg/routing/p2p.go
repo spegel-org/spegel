@@ -118,7 +118,7 @@ func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, r
 }
 
 func (r *P2PRouter) Run(ctx context.Context) error {
-	self := fmt.Sprintf("%s/p2p/%s", r.host.Addrs()[0].String(), r.host.ID().Pretty())
+	self := fmt.Sprintf("%s/p2p/%s", r.host.Addrs()[0].String(), r.host.ID().String())
 	logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", self)
 	if err := r.kdht.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("could not boostrap distributed hash table: %w", err)
@@ -149,7 +149,7 @@ func (r *P2PRouter) Ready() (bool, error) {
 }
 
 func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {
-	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().Pretty(), "key", key)
+	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
@@ -194,7 +194,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
-	logr.FromContextOrDiscard(ctx).V(10).Info("advertising keys", "host", r.host.ID().Pretty(), "keys", keys)
+	logr.FromContextOrDiscard(ctx).V(10).Info("advertising keys", "host", r.host.ID().String(), "keys", keys)
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {
