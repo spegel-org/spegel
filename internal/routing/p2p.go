@@ -67,7 +67,7 @@ func NewP2PRouter(ctx context.Context, addr string, b Bootstrapper, registryPort
 		return nil, fmt.Errorf("expected single host address but got %d %s", len(addrs), strings.Join(addrs, ", "))
 	}
 
-	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().Pretty())
+	self := fmt.Sprintf("%s/p2p/%s", host.Addrs()[0].String(), host.ID().String())
 	log.Info("starting p2p router", "id", self)
 
 	err = b.Run(ctx, self)
@@ -131,7 +131,7 @@ func (r *P2PRouter) HasMirrors() (bool, error) {
 }
 
 func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan string, error) {
-	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().Pretty(), "key", key)
+	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
@@ -167,7 +167,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
-	logr.FromContextOrDiscard(ctx).V(10).Info("advertising keys", "host", r.host.ID().Pretty(), "keys", keys)
+	logr.FromContextOrDiscard(ctx).V(10).Info("advertising keys", "host", r.host.ID().String(), "keys", keys)
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {
