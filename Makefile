@@ -1,6 +1,7 @@
 TAG = $$(git rev-parse --short HEAD)
 IMG ?= ghcr.io/xenitab/spegel:$(TAG)
 CNI ?= iptables
+PLATFORM ?= linux/amd64
 
 lint:
 	golangci-lint run ./...
@@ -10,7 +11,7 @@ test:
 	go test ./...
 
 docker-build:
-	docker build --platform linux/amd64 -t ${IMG} .
+	docker build --platform ${PLATFORM} -t ${IMG} .
 
 e2e: docker-build
 	./test/e2e/e2e.sh ${IMG} ${CNI}
