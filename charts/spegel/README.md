@@ -83,6 +83,7 @@ spec:
 | serviceMonitor.labels | object | `{}` | Service monitor specific labels for prometheus to discover servicemonitor. |
 | serviceMonitor.scrapeTimeout | string | `"30s"` | Prometheus scrape interval timeout. |
 | spegel.additionalMirrorRegistries | list | `[]` | Additional target mirror registries other than Spegel. |
+| spegel.blobCopyBuffer | int | `32768` | IO copy buffer size (bytes) for blob. |
 | spegel.blobSpeed | string | `""` | Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps. |
 | spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
@@ -93,7 +94,6 @@ spec:
 | spegel.mirrorResolveTimeout | string | `"5s"` | Max duration spent finding a mirror. |
 | spegel.registries | list | `["https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://gcr.io","https://registry.k8s.io","https://k8s.gcr.io","https://lscr.io"]` | Registries for which mirror configuration will be created. |
 | spegel.resolveLatestTag | bool | `true` | When true latest tags will be resolved to digests. |
-| spegel.blobCopyBuffer | bool | `32768` | IO copy buffer size (bytes) for blob. |
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |
 | tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
 | updateStrategy | object | `{}` | An update strategy to replace existing pods with new pods. |
