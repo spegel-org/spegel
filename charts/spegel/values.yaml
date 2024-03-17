@@ -105,7 +105,8 @@ serviceMonitor:
   labels: {}
 
 grafanaDashboard:
-  create: false
+  # -- If true creates a Grafana dashboard.
+  enabled: false
   # -- Label that ConfigMaps should have to be loaded as dashboards.
   sidecarLabel: "grafana_dashboard"
   # -- Label value that ConfigMaps should have to be loaded as dashboards.
