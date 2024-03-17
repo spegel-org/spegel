@@ -1,4 +1,4 @@
-{{- if .Values.grafanaDashboard.enabled -}}
+{{- if .Values.grafanaDashboard.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,4 +10,4 @@ metadata:
 data:
     spegel.json: |-
 {{ .Files.Get "monitoring/grafana-dashboard.json" | indent 6 }}
-{{- end -}}
+{{- end }}
