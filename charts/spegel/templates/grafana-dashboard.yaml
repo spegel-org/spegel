@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Values.grafanaDashboard.configMapName }}
+  name: {{ include "spegel.fullname" . }}-dashboard
   namespace: {{ include "spegel.namespace" . }}
   labels:
     {{ .Values.grafanaDashboard.sidecarLabel }}: {{ .Values.grafanaDashboard.sidecarLabelValue | quote }}
