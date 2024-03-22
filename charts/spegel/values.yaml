@@ -110,6 +110,7 @@ priorityClassName: system-node-critical
 spegel:
   # -- Registries for which mirror configuration will be created.
   registries:
+    - https://cgr.dev
     - https://docker.io
     - https://ghcr.io
     - https://quay.io
