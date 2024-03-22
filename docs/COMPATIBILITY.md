@@ -28,7 +28,25 @@ Spegel has been tested on the following Kubernetes distributions for compatibili
 
 ## EKS
 
-Discard unpacked layers is enabled by default and needs to be disabled.
+Discard unpacked layers is enabled by default, meaning that layers that are not required for the container runtime will be removed after consumed.
+This needs to be disabled as otherwise all of the required layers of an image would not be present on the node.
+
+The best way to change Containerd settings in EKS is to add the configuration to the import directory using a custom node bootstrap script.
+
+```shell
+#!/bin/bash
+set -ex
+
+mkdir -p /etc/containerd/config.d
+cat > /etc/containerd/config.d/spegel.toml << EOL
+[plugins."io.containerd.grpc.v1.cri".registry]
+   config_path = "/etc/containerd/certs.d"
+[plugins."io.containerd.grpc.v1.cri".containerd]
+   discard_unpacked_layers = false
+EOL
+
+/etc/eks/bootstrap.sh
+```
 
 ## K3S
 

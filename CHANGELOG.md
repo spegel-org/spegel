@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#339](https://github.com/XenitAB/spegel/pull/339) Extend OCI client tests.
 - [#365](https://github.com/XenitAB/spegel/pull/365) Add support for throttling blob write speed.
 - [#386](https://github.com/XenitAB/spegel/pull/386) Add contributing guide.
+- [#391](https://github.com/XenitAB/spegel/pull/391) Add documentation for EKS specific Containerd configuration.
 
 ### Changed
 
