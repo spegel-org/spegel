@@ -31,35 +31,35 @@ import (
 )
 
 type ConfigurationCmd struct {
-	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
-	Registries                   []url.URL `arg:"--registries,required" help:"registries that are configured to be mirrored."`
-	MirrorRegistries             []url.URL `arg:"--mirror-registries,required" help:"registries that are configured to act as mirrors."`
-	ResolveTags                  bool      `arg:"--resolve-tags" default:"true" help:"When true Spegel will resolve tags to digests."`
+	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
+	Registries                   []url.URL `arg:"--registries,required,env:REGISTRIES" help:"registries that are configured to be mirrored."`
+	MirrorRegistries             []url.URL `arg:"--mirror-registries,env:MIRROR_REGISTRIES,required" help:"registries that are configured to act as mirrors."`
+	ResolveTags                  bool      `arg:"--resolve-tags,env:RESOLVE_TAGS" default:"true" help:"When true Spegel will resolve tags to digests."`
 }
 
 type BootstrapConfig struct {
-	BootstrapKind           string `arg:"--bootstrap-kind" help:"Kind of bootsrapper to use."`
-	HTTPBootstrapAddr       string `arg:"--http-bootstrap-addr" help:"Address to serve for HTTP bootstrap."`
-	HTTPBootstrapPeer       string `àrg:"--http-bootstrap-peer" help:"Peer to HTTP bootstrap with."`
-	KubeconfigPath          string `arg:"--kubeconfig-path" help:"Path to the kubeconfig file."`
-	LeaderElectionName      string `arg:"--leader-election-name" default:"spegel-leader-election" help:"Name of leader election."`
-	LeaderElectionNamespace string `arg:"--leader-election-namespace" default:"spegel" help:"Kubernetes namespace to write leader election data."`
+	BootstrapKind           string `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
+	HTTPBootstrapAddr       string `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_KIND" help:"Address to serve for HTTP bootstrap."`
+	HTTPBootstrapPeer       string `àrg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
+	KubeconfigPath          string `arg:"--kubeconfig-path,env:KUBECONFIG_PATH" help:"Path to the kubeconfig file."`
+	LeaderElectionName      string `arg:"--leader-election-name,env:LEADER_ELECTION_NAME" default:"spegel-leader-election" help:"Name of leader election."`
+	LeaderElectionNamespace string `arg:"--leader-election-namespace,env:LEADER_ELECTION_NAMESPACE" default:"spegel" help:"Kubernetes namespace to write leader election data."`
 }
 
 type RegistryCmd struct {
 	BootstrapConfig
-	BlobSpeed                    *throttle.Byterate `arg:"--blob-speed" help:"Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps."`
-	ContainerdRegistryConfigPath string             `arg:"--containerd-registry-config-path" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
-	MetricsAddr                  string             `arg:"--metrics-addr,required" help:"address to serve metrics."`
-	LocalAddr                    string             `arg:"--local-addr,required" help:"Address that the local Spegel instance will be reached at."`
-	ContainerdSock               string             `arg:"--containerd-sock" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
-	ContainerdNamespace          string             `arg:"--containerd-namespace" default:"k8s.io" help:"Containerd namespace to fetch images from."`
-	RouterAddr                   string             `arg:"--router-addr,required" help:"address to serve router."`
-	RegistryAddr                 string             `arg:"--registry-addr,required" help:"address to server image registry."`
-	Registries                   []url.URL          `arg:"--registries,required" help:"registries that are configured to be mirrored."`
-	MirrorResolveTimeout         time.Duration      `arg:"--mirror-resolve-timeout" default:"5s" help:"Max duration spent finding a mirror."`
-	MirrorResolveRetries         int                `arg:"--mirror-resolve-retries" default:"3" help:"Max amount of mirrors to attempt."`
-	ResolveLatestTag             bool               `arg:"--resolve-latest-tag" default:"true" help:"When true latest tags will be resolved to digests."`
+	BlobSpeed                    *throttle.Byterate `arg:"--blob-speed,env:BLOB_SPEED" help:"Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps."`
+	ContainerdRegistryConfigPath string             `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
+	MetricsAddr                  string             `arg:"--metrics-addr,required,env:METRICS_ADDR" help:"address to serve metrics."`
+	LocalAddr                    string             `arg:"--local-addr,required,env:LOCAL_ADDR" help:"Address that the local Spegel instance will be reached at."`
+	ContainerdSock               string             `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
+	ContainerdNamespace          string             `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
+	RouterAddr                   string             `arg:"--router-addr,env:ROUTER_ADDR,required" help:"address to serve router."`
+	RegistryAddr                 string             `arg:"--registry-addr,env:REGISTRY_ADDR,required" help:"address to server image registry."`
+	Registries                   []url.URL          `arg:"--registries,env:REGISTRIES,required" help:"registries that are configured to be mirrored."`
+	MirrorResolveTimeout         time.Duration      `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"5s" help:"Max duration spent finding a mirror."`
+	MirrorResolveRetries         int                `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
+	ResolveLatestTag             bool               `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
 }
 
 type Arguments struct {

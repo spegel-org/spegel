@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#365](https://github.com/XenitAB/spegel/pull/365) Add support for throttling blob write speed.
 - [#386](https://github.com/XenitAB/spegel/pull/386) Add contributing guide.
 - [#391](https://github.com/XenitAB/spegel/pull/391) Add documentation for EKS specific Containerd configuration.
+- [#393](https://github.com/XenitAB/spegel/pull/393) Add environment variable configuration support.
 
 ### Changed
 
@@ -23,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#357](https://github.com/XenitAB/spegel/pull/357) Replace mock Containerd store with real upstream store.
 - [#367](https://github.com/XenitAB/spegel/pull/367) Update Go image to 1.21.7.
 - [#376](https://github.com/XenitAB/spegel/pull/376) Change go directive to 1.21.
+- [#383](https://github.com/XenitAB/spegel/pull/383) Bump libp2p to v0.33.0, replace deprecated Pretty function
 
 ### Deprecated
 
