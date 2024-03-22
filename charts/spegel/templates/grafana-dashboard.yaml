@@ -7,6 +7,10 @@ metadata:
   labels:
     {{ .Values.grafanaDashboard.sidecarLabel }}: {{ .Values.grafanaDashboard.sidecarLabelValue | quote }}
     {{- include "spegel.labels" . | nindent 4 }}
+  {{- with .Values.grafanaDashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 data:
     spegel.json: |-
 {{ .Files.Get "monitoring/grafana-dashboard.json" | indent 6 }}
