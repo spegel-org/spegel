@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#386](https://github.com/XenitAB/spegel/pull/386) Add contributing guide.
 - [#391](https://github.com/XenitAB/spegel/pull/391) Add documentation for EKS specific Containerd configuration.
 - [#393](https://github.com/XenitAB/spegel/pull/393) Add environment variable configuration support.
+- [#394](https://github.com/XenitAB/spegel/pull/394) Add `cgr.dev` to default registry mirrors in the Helm chart.
 
 ### Changed
 
