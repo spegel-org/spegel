@@ -57,6 +57,9 @@ spec:
 |-----|------|---------|-------------|
 | affinity | object | `{}` | Affinity settings for pod assignment. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
+| grafanaDashboard.enabled | bool | `false` | If true creates a Grafana dashboard. |
+| grafanaDashboard.sidecarLabel | string | `"grafana_dashboard"` | Label that ConfigMaps should have to be loaded as dashboards. |
+| grafanaDashboard.sidecarLabelValue | string | `"1"` | Label value that ConfigMaps should have to be loaded as dashboards. |
 | image.digest | string | `""` | Image digest. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image Pull Policy. |
 | image.repository | string | `"ghcr.io/xenitab/spegel"` | Image repository. |
