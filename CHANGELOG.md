@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#396](https://github.com/XenitAB/spegel/pull/396) Fix missing metrics when registering.
+
 ### Security
 
 ## v0.0.18
