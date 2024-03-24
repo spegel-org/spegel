@@ -40,5 +40,7 @@ var (
 func Register() {
 	DefaultRegisterer.MustRegister(MirrorRequestsTotal)
 	DefaultRegisterer.MustRegister(AdvertisedImages)
+	DefaultRegisterer.MustRegister(AdvertisedImageTags)
+	DefaultRegisterer.MustRegister(AdvertisedImageDigests)
 	DefaultRegisterer.MustRegister(AdvertisedKeys)
 }
