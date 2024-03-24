@@ -51,6 +51,10 @@ func (m *MockClient) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	return nil, "", nil
 }
 
+func (m *MockClient) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+	return nil, nil
+}
+
 func (m *MockClient) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer) error {
 	return nil
 }
