@@ -303,11 +303,18 @@ func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
 	if c.Request.Method == http.MethodHead {
 		return
 	}
-	var writer io.Writer = c.Writer
+	var w io.Writer = c.Writer
 	if r.throttler != nil {
-		writer = r.throttler.Writer(c.Writer)
+		w = r.throttler.Writer(c.Writer)
 	}
-	err = r.ociClient.CopyLayer(c, dgst, writer)
+	rc, err := r.ociClient.GetBlob(c, dgst)
+	if err != nil {
+		//nolint:errcheck // ignore
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	defer rc.Close()
+	_, err = io.Copy(w, rc)
 	if err != nil {
 		//nolint:errcheck // ignore
 		c.AbortWithError(http.StatusInternalServerError, err)

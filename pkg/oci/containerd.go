@@ -304,6 +304,24 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	return b, mt, nil
 }
 
+func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+	client, err := c.Client()
+	if err != nil {
+		return nil, err
+	}
+	ra, err := client.ContentStore().ReaderAt(ctx, ocispec.Descriptor{Digest: dgst})
+	if err != nil {
+		return nil, err
+	}
+	return struct {
+		io.Reader
+		io.Closer
+	}{
+		Reader: content.NewReader(ra),
+		Closer: ra,
+	}, nil
+}
+
 func (c *Containerd) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer) error {
 	client, err := c.Client()
 	if err != nil {

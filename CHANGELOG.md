@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#367](https://github.com/XenitAB/spegel/pull/367) Update Go image to 1.21.7.
 - [#376](https://github.com/XenitAB/spegel/pull/376) Change go directive to 1.21.
 - [#383](https://github.com/XenitAB/spegel/pull/383) Bump libp2p to v0.33.0, replace deprecated Pretty function
+- [#397](https://github.com/XenitAB/spegel/pull/397) Replace CopyLayer with GetBlob.
 
 ### Deprecated
 

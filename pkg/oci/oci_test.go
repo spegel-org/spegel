@@ -1,9 +1,9 @@
 package oci
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path"
 	"testing"
@@ -133,10 +133,12 @@ func TestOCIClient(t *testing.T) {
 						require.Equal(t, tt.mediaType, mediaType)
 						require.Equal(t, blobs[tt.dgst], b)
 					} else {
-						var buf bytes.Buffer
-						err = ociClient.CopyLayer(ctx, tt.dgst, &buf)
+						rc, err := ociClient.GetBlob(ctx, tt.dgst)
 						require.NoError(t, err)
-						require.Equal(t, blobs[tt.dgst], buf.Bytes())
+						defer rc.Close()
+						b, err := io.ReadAll(rc)
+						require.NoError(t, err)
+						require.Equal(t, blobs[tt.dgst], b)
 					}
 				})
 			}
