@@ -25,6 +25,7 @@ Spegel has been tested on the following Kubernetes distributions for compatibili
 | :yellow_circle: | K3S |
 | :yellow_circle: | Talos |
 | :red_circle: | GKE |
+| :red_circle: | DigitalOcean |
 
 ## EKS
 
@@ -70,3 +71,7 @@ spegel:
 ## GKE
 
 GKE does not set the registry config path in its Containerd configuration. On top of that it uses the old mirror configuration for the internal mirroring service.
+
+## DigitalOcean
+
+DigitalOcean does not set the registry config path in its Containerd configuration.
