@@ -12,7 +12,7 @@ Make sure that you have read the [compatibility guide](../../docs/COMPATIBILITY.
 Delpoy Spegel with the Helm CLI.
 
 ```sh
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.18 spegel oci://ghcr.io/spegel-org/helm-charts/spegel
+helm upgrade --create-namespace --namespace spegel --install --version v0.0.19 spegel oci://ghcr.io/spegel-org/helm-charts/spegel
 ```
 
 ### Flux
@@ -45,7 +45,7 @@ spec:
   chart:
     spec:
       chart: spegel
-      version: "v0.0.18"
+      version: "v0.0.19"
       interval: 5m
       sourceRef:
         kind: HelmRepository
