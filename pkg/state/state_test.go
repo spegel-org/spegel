@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/xenitab/spegel/pkg/oci"
-	"github.com/xenitab/spegel/pkg/routing"
+	"github.com/spegel-org/spegel/pkg/oci"
+	"github.com/spegel-org/spegel/pkg/routing"
 )
 
 func TestBasic(t *testing.T) {

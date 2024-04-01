@@ -1,4 +1,4 @@
-module github.com/xenitab/spegel/test/benchmark
+module github.com/spegel-org/spegel/test/benchmark
 
 go 1.21.3
 

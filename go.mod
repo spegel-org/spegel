@@ -1,4 +1,4 @@
-module github.com/xenitab/spegel
+module github.com/spegel-org/spegel
 
 go 1.21
 
