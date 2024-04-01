@@ -78,6 +78,6 @@ func TestParseImageDigestDoesNotMatch(t *testing.T) {
 }
 
 func TestParseImageNoTagOrDigest(t *testing.T) {
-	_, err := Parse("ghcr.io/xenitab/spegel", digest.Digest(""))
+	_, err := Parse("ghcr.io/spegel-org/spegel", digest.Digest(""))
 	require.EqualError(t, err, "image needs to contain a digest")
 }
