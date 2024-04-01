@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#396](https://github.com/spegel-org/spegel/pull/396) Fix missing metrics when registering.
+- [#408](https://github.com/spegel-org/spegel/pull/408) Fix int overflow for ARM builds.
 
 ### Security
 
