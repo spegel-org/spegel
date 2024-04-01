@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#383](https://github.com/spegel-org/spegel/pull/383) Bump libp2p to v0.33.0, replace deprecated Pretty function
 - [#397](https://github.com/spegel-org/spegel/pull/397) Replace CopyLayer with GetBlob.
 - [#400](https://github.com/spegel-org/spegel/pull/400) Update org imports from xenitab to spegel-org.
+- [#402](https://github.com/spegel-org/spegel/pull/402) Update tests to use spegel-org instead of xenitab.
 
 ### Deprecated
 

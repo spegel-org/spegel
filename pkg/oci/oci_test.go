@@ -149,7 +149,7 @@ func TestOCIClient(t *testing.T) {
 				expectedKeys []string
 			}{
 				{
-					imageName:   "ghcr.io/xenitab/spegel:v0.0.8-with-media-type",
+					imageName:   "ghcr.io/spegel-org/spegel:v0.0.8-with-media-type",
 					imageDigest: "sha256:9506c8e7a2d0a098d43cadfd7ecdc3c91697e8188d3a1245943b669f717747b4",
 					expectedKeys: []string{
 						"sha256:9506c8e7a2d0a098d43cadfd7ecdc3c91697e8188d3a1245943b669f717747b4",
@@ -195,7 +195,7 @@ func TestOCIClient(t *testing.T) {
 					},
 				},
 				{
-					imageName:   "ghcr.io/xenitab/spegel:v0.0.8-without-media-type",
+					imageName:   "ghcr.io/spegel-org/spegel:v0.0.8-without-media-type",
 					imageDigest: "sha256:d8df04365d06181f037251de953aca85cc16457581a8fc168f4957c978e1008b",
 					expectedKeys: []string{
 						"sha256:d8df04365d06181f037251de953aca85cc16457581a8fc168f4957c978e1008b",
