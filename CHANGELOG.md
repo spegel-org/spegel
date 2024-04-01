@@ -9,9 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.19
+
+> [!IMPORTANT]  
+> The Spegel repository has been moved from XenitAB to a new GitHub organization.
+> Make sure to update the organization in the image and chart references.
+
+### Added 
+
 - [#335](https://github.com/spegel-org/spegel/pull/335) Add k3s to compatibility guide.
-- [#339](https://github.com/spegel-org/spegel/pull/339) Extend OCI client tests.
-- [#339](https://github.com/spegel-org/spegel/pull/339) Extend OCI client tests.
+- [#359](https://github.com/spegel-org/spegel/pull/359) Extend OCI client tests.
 - [#365](https://github.com/spegel-org/spegel/pull/365) Add support for throttling blob write speed.
 - [#386](https://github.com/spegel-org/spegel/pull/386) Add contributing guide.
 - [#391](https://github.com/spegel-org/spegel/pull/391) Add documentation for EKS specific Containerd configuration.
