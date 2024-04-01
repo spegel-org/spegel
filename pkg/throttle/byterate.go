@@ -8,7 +8,7 @@ import (
 
 var unmarshalRegex = regexp.MustCompile(`^(\d+)\s?([KMGT]?Bps)$`)
 
-type Byterate int
+type Byterate int64
 
 const (
 	Bps  Byterate = 1
