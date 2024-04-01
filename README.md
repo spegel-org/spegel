@@ -76,6 +76,10 @@ having trackers and seeders distribute image layers through a BitTorrent-like me
 as a transparent pull-through mirror. Meaning that any image that is supposed to be pulled through Kraken will require changing the registry URL in the image name. This has to be done for all
 Pods in the cluster. 
 
+## Acknowledgements
+
+Spegel was initially developed at [Xenit AB](https://xenit.se/).
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
