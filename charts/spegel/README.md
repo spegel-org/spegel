@@ -11,7 +11,7 @@ Make sure that you have read the [compatibility guide](../../docs/COMPATIBILITY.
 Delpoy Spegel with the Helm CLI.
 
 ```sh
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.18 spegel oci://ghcr.io/xenitab/helm-charts/spegel
+helm upgrade --create-namespace --namespace spegel --install --version v0.0.18 spegel oci://ghcr.io/spegel-org/helm-charts/spegel
 ```
 
 ### Flux
@@ -32,7 +32,7 @@ metadata:
 spec:
   type: "oci"
   interval: 5m0s
-  url: oci://ghcr.io/xenitab/helm-charts
+  url: oci://ghcr.io/spegel-org/helm-charts
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
@@ -59,7 +59,7 @@ spec:
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
 | image.digest | string | `""` | Image digest. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image Pull Policy. |
-| image.repository | string | `"ghcr.io/xenitab/spegel"` | Image repository. |
+| image.repository | string | `"ghcr.io/spegel-org/spegel"` | Image repository. |
 | image.tag | string | `""` | Overrides the image tag whose default is the chart appVersion. |
 | imagePullSecrets | list | `[]` | Image Pull Secrets |
 | nameOverride | string | `""` | Overrides the name of the chart. |
