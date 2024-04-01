@@ -4,7 +4,7 @@ Frequently asked questions, please read these before creating a new issue.
 
 ## Can I use Spegel in production?
 
-We have been running Spegel in multiple production Kubernetes clusters at Xenit since the first release without any issues. The great thing is that pulling images would not stop working if you for some reason would find an issue with Spegel.
+Spegel is being used by multiple users in production for over a year without any major issues. The great thing is that pulling images would not stop working if you for some reason would find an issue with Spegel.
 A fallback to the original registry will always occur if Spegel can't be reached or serve the requested image.
 
 ## How do I know that Spegel is working? 
