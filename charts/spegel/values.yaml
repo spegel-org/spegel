@@ -1,6 +1,6 @@
 image:
   # -- Image repository.
-  repository: ghcr.io/xenitab/spegel
+  repository: ghcr.io/spegel-org/spegel
   # -- Image Pull Policy.
   pullPolicy: IfNotPresent
   # -- Overrides the image tag whose default is the chart appVersion.

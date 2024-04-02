@@ -30,7 +30,7 @@ This has the benefit of reducing workload startup times and egress traffic as im
 Before installing Spegel check the [compatibility guide](./docs/COMPATIBILITY.md) to make sure that it will work with your specific Kubernetes flavor. If everything checks out, the easiest method to deploy Spegel is with Helm.
 
 ```shell
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.18 spegel oci://ghcr.io/xenitab/helm-charts/spegel
+helm upgrade --create-namespace --namespace spegel --install --version v0.0.19 spegel oci://ghcr.io/spegel-org/helm-charts/spegel
 ```
 
 Refer to the [Helm Chart](./charts/spegel) for detailed configuration documentation.
@@ -75,6 +75,10 @@ The problem set that Kraken is attempting to solve is however different from Spe
 having trackers and seeders distribute image layers through a BitTorrent-like method. This means that Kraken requires more moving components to function. Kraken also does not support using it
 as a transparent pull-through mirror. Meaning that any image that is supposed to be pulled through Kraken will require changing the registry URL in the image name. This has to be done for all
 Pods in the cluster. 
+
+## Acknowledgements
+
+Spegel was initially developed at [Xenit AB](https://xenit.se/).
 
 ## License
 

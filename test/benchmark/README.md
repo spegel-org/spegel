@@ -32,7 +32,7 @@ Deploy Spegel in the cluster and wait for all of the pods to run.
 
 ```bash
 export KUBECONFIG=$(pwd)/terraform/benchmark.kubeconfig
-helm upgrade --create-namespace --namespace spegel --install --version $VERSION spegel oci://ghcr.io/xenitab/helm-charts/spegel
+helm upgrade --create-namespace --namespace spegel --install --version $VERSION spegel oci://ghcr.io/spegel-org/helm-charts/spegel
 kubectl --namespace spegel rollout status daemonset spegel --timeout 60s
 ```
 

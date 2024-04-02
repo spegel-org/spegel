@@ -22,7 +22,7 @@ import (
 	mc "github.com/multiformats/go-multicodec"
 	mh "github.com/multiformats/go-multihash"
 
-	"github.com/xenitab/spegel/pkg/metrics"
+	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
 const KeyTTL = 10 * time.Minute

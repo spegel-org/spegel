@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
-	"github.com/xenitab/spegel/pkg/routing"
+	"github.com/spegel-org/spegel/pkg/routing"
 )
 
 type TestResponseRecorder struct {

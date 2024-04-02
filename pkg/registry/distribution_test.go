@@ -45,11 +45,11 @@ func TestParsePathComponents(t *testing.T) {
 }
 
 func TestParsePathComponentsInvalidPath(t *testing.T) {
-	_, _, _, err := parsePathComponents("example.com", "/v2/xenitab/spegel/v0.0.1")
+	_, _, _, err := parsePathComponents("example.com", "/v2/spegel-org/spegel/v0.0.1")
 	require.EqualError(t, err, "distribution path could not be parsed")
 }
 
 func TestParsePathComponentsMissingRegistry(t *testing.T) {
-	_, _, _, err := parsePathComponents("", "/v2/xenitab/spegel/manifests/v0.0.1")
+	_, _, _, err := parsePathComponents("", "/v2/spegel-org/spegel/manifests/v0.0.1")
 	require.EqualError(t, err, "registry parameter needs to be set for tag references")
 }

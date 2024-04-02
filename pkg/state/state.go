@@ -9,9 +9,9 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/xenitab/pkg/channels"
 
-	"github.com/xenitab/spegel/pkg/metrics"
-	"github.com/xenitab/spegel/pkg/oci"
-	"github.com/xenitab/spegel/pkg/routing"
+	"github.com/spegel-org/spegel/pkg/metrics"
+	"github.com/spegel-org/spegel/pkg/oci"
+	"github.com/spegel-org/spegel/pkg/routing"
 )
 
 func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
