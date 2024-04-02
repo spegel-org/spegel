@@ -1427,8 +1427,6 @@ github.com/warpfork/go-wish v0.0.0-20220906213052-39a1cc7a02d0 h1:GDDkbFiaK8jsSD
 github.com/warpfork/go-wish v0.0.0-20220906213052-39a1cc7a02d0/go.mod h1:x6AKhvSSexNrVSrViXSHUEbICjmGXhtgABaHIySUSGw=
 github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 h1:EKhdznlJHPMoKr0XTrX+IlJs1LH3lyx2nfr1dOlZ79k=
 github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1/go.mod h1:8UvriyWtv5Q5EOgjHaSseUEdkQfvwFv1I/In/O2M9gc=
-github.com/xenitab/pkg/channels v0.0.2 h1:nCMsjEyhJedmAimYPOobzJl/yj7byU9h6IHEPc4QlPg=
-github.com/xenitab/pkg/channels v0.0.2/go.mod h1:/MCBlje0/98BdAF7LetkSK1+lXeUpScIbTENGaWjGRg=
 github.com/xenitab/pkg/gin v0.0.9 h1:BGdxnKoXAJBkthQTwQdaRdN7jTiNO+/C8hIexBrasfU=
 github.com/xenitab/pkg/gin v0.0.9/go.mod h1:8rzqJ8X5KJOo31PBOD4/Wtlt2ac8hCjN1mpOf1YAFs4=
 github.com/xenitab/pkg/kubernetes v0.0.4 h1:muVWzci89l611bd4FzWlDsHm2zwwzNpxA2TvY9svebI=

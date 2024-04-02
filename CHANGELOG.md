@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#411](https://github.com/spegel-org/spegel/pull/411) Replace XenitAB pkg with internal package.
+
 ### Deprecated
 
 ### Removed
