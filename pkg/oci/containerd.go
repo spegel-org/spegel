@@ -22,8 +22,9 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/afero"
-	"github.com/xenitab/pkg/channels"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
+
+	"github.com/spegel-org/spegel/internal/channel"
 )
 
 const (
@@ -165,7 +166,7 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan e
 			imgCh <- ImageEvent{Image: img, Type: eventType}
 		}
 	}()
-	return imgCh, channels.Merge(errCh, cErrCh)
+	return imgCh, channel.Merge(errCh, cErrCh)
 }
 
 func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {

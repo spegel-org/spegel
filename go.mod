@@ -22,7 +22,6 @@ require (
 	github.com/prometheus/client_golang v1.19.0
 	github.com/spf13/afero v1.11.0
 	github.com/stretchr/testify v1.9.0
-	github.com/xenitab/pkg/channels v0.0.2
 	github.com/xenitab/pkg/gin v0.0.9
 	github.com/xenitab/pkg/kubernetes v0.0.4
 	go.etcd.io/bbolt v1.3.9

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/xenitab/pkg/channels"
 
+	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
@@ -21,7 +21,7 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 	immediate <- time.Now()
 	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
 	defer expirationTicker.Stop()
-	ticker := channels.Merge(immediate, expirationTicker.C)
+	ticker := channel.Merge(immediate, expirationTicker.C)
 	for {
 		select {
 		case <-ctx.Done():
