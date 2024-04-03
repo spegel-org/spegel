@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#412](https://github.com/spegel-org/spegel/pull/412) Fix http bootstrapper arg annotation.
+
 ### Security
 
 - [#409](https://github.com/spegel-org/spegel/pull/409) Bump protobuf to fix CVE-2024-24786.
