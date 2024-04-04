@@ -5,7 +5,9 @@ on:
     types: [published]
 
 permissions:
+  contents: read
   packages: write
+  id-token: write
 
 jobs:
   release:
@@ -13,6 +15,8 @@ jobs:
     steps:
       - name: Clone repo
         uses: actions/checkout@v4
+      - name: Setup Cosign
+        uses: sigstore/cosign-installer@v3.4.0
       - name: Setup Helm
         uses: azure/setup-helm@v4
         with:
@@ -55,9 +59,17 @@ jobs:
           platforms: linux/amd64,linux/arm/v7,linux/arm64
           tags: ghcr.io/spegel-org/spegel:${{ steps.prep.outputs.VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Sign the image with Cosign
+        run: |
+          cosign sign --yes ghcr.io/spegel-org/spegel@${{ steps.build.outputs.DIGEST }}
       - name: Publish Helm chart to GHCR
+        id: helm
         run: |
           yq -i '.image.digest = "${{ steps.build.outputs.DIGEST }}"' charts/spegel/values.yaml
           helm package --app-version ${{ steps.prep.outputs.VERSION }} --version ${{ steps.prep.outputs.VERSION }} charts/spegel
-          helm push spegel-${{ steps.prep.outputs.VERSION }}.tgz oci://ghcr.io/spegel-org/helm-charts
-          rm spegel-${{ steps.prep.outputs.VERSION }}.tgz
+          helm push spegel-${{ steps.prep.outputs.VERSION }}.tgz oci://ghcr.io/spegel-org/helm-charts 2> .digest
+          DIGEST=$(cat .digest | awk -F "[, ]+" '/Digest/{print $NF}')
+          echo "DIGEST=${DIGEST}" >> $GITHUB_OUTPUT
+      - name: Sign the Helm chart with Cosign
+        run: |
+          cosign sign --yes ghcr.io/spegel-org/helm-charts/spegel@${{ steps.helm.outputs.DIGEST }}
