@@ -81,9 +81,9 @@ func TestMirrorHandler(t *testing.T) {
 			expectedHeaders: nil,
 		},
 		{
-			name:            "request should not timeout and give 500 if all peers fail",
+			name:            "request should not timeout and give 404 if all peers fail",
 			key:             "no-working-peers",
-			expectedStatus:  http.StatusInternalServerError,
+			expectedStatus:  http.StatusNotFound,
 			expectedBody:    "",
 			expectedHeaders: nil,
 		},
@@ -111,7 +111,7 @@ func TestMirrorHandler(t *testing.T) {
 	}
 	for _, tt := range tests {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
-			t.Run(tt.name, func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s-%s", method, tt.name), func(t *testing.T) {
 				rw := CreateTestResponseRecorder()
 				c, _ := gin.CreateTestContext(rw)
 				target := fmt.Sprintf("http://example.com/%s", tt.key)
