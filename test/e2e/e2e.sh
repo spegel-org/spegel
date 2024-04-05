@@ -17,6 +17,7 @@ docker exec kind-worker2 bash -c "mkdir -p /etc/containerd/certs.d/docker.io; ec
 
 # Pull images onto single node which will never run workload.
 docker exec kind-worker ctr -n k8s.io image pull ghcr.io/spegel-org/conformance:75d2816
+docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.22.0
 docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.23.0
 docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b
 docker exec kind-worker ctr -n k8s.io image pull mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 
 
 - [#421](https://github.com/spegel-org/spegel/pull/421) Add conformance tests to e2e test.
+- [#422](https://github.com/spegel-org/spegel/pull/422) Add support for OCI Distribution Specification 1.1.
 
 ### Changed
 
