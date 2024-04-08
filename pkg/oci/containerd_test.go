@@ -113,6 +113,7 @@ func TestMirrorConfiguration(t *testing.T) {
 		mirrors             []url.URL
 		resolveTags         bool
 		createConfigPathDir bool
+		appendToBackup      bool
 	}{
 		{
 			name:        "multiple mirros",
@@ -249,6 +250,60 @@ capabilities = ['pull', 'resolve']
 `,
 			},
 		},
+		{
+			name:                "append to existing configuration",
+			resolveTags:         true,
+			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
+			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			createConfigPathDir: true,
+			appendToBackup:      true,
+			existingFiles: map[string]string{
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host]
+[host.'http://example.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+
+[host.'http://example.com:30021']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+`,
+			},
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host]
+[host.'http://example.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+
+[host.'http://example.com:30021']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+`,
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://example.com:30020']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+capabilities = ['pull', 'resolve']
+
+[host.'http://example.com:30021']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+capabilities = ['pull', 'resolve']
+`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+
+[host]
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -261,7 +316,7 @@ capabilities = ['pull', 'resolve']
 				err := afero.WriteFile(fs, k, []byte(v), 0644)
 				require.NoError(t, err)
 			}
-			err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags)
+			err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags, tt.appendToBackup)
 			require.NoError(t, err)
 			if len(tt.existingFiles) == 0 {
 				ok, err := afero.DirExists(fs, "/etc/containerd/certs.d/_backup")
@@ -289,19 +344,19 @@ func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
 	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 
 	registries := stringListToUrlList(t, []string{"ftp://docker.io"})
-	err := AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true)
+	err := AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false)
 	require.EqualError(t, err, "invalid registry url scheme must be http or https: ftp://docker.io")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io/foo/bar"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true)
+	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false)
 	require.EqualError(t, err, "invalid registry url path has to be empty: https://docker.io/foo/bar")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io?foo=bar"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true)
+	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false)
 	require.EqualError(t, err, "invalid registry url query has to be empty: https://docker.io?foo=bar")
 
 	registries = stringListToUrlList(t, []string{"https://foo@docker.io"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true)
+	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false)
 	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
 }
 

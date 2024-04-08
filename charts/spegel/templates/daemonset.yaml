@@ -53,6 +53,7 @@ spec:
           {{- end }}
           {{- end }}
           - --resolve-tags={{ .Values.spegel.resolveTags }}
+          - --append-mirrors={{ .Values.spegel.appendMirrors }}
         env:
         - name: NODE_IP
           valueFrom:

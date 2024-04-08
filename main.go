@@ -35,6 +35,7 @@ type ConfigurationCmd struct {
 	Registries                   []url.URL `arg:"--registries,required,env:REGISTRIES" help:"registries that are configured to be mirrored."`
 	MirrorRegistries             []url.URL `arg:"--mirror-registries,env:MIRROR_REGISTRIES,required" help:"registries that are configured to act as mirrors."`
 	ResolveTags                  bool      `arg:"--resolve-tags,env:RESOLVE_TAGS" default:"true" help:"When true Spegel will resolve tags to digests."`
+	AppendMirrors                bool      `arg:"--append-mirrors,env:APPEND_MIRRORS" default:"false" help:"When true existing mirror configuration will be appended to instead of replaced."`
 }
 
 type BootstrapConfig struct {
@@ -102,7 +103,7 @@ func run(ctx context.Context, args *Arguments) error {
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	fs := afero.NewOsFs()
-	err := oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries, args.ResolveTags)
+	err := oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries, args.ResolveTags, args.AppendMirrors)
 	if err != nil {
 		return err
 	}
