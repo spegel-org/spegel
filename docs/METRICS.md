@@ -3,6 +3,7 @@
 | Name| Type | Labels |
 | ---------- | ----------- | ----------- |
 | spegel_advertised_images | Gauge | `registry` |
+| spegel_resolve_duration_seconds | Histogram | `router` |
 | spegel_advertised_keys | Gauge | `registry` |
 | spegel_advertised_image_tags | Gauge | `registry` |
 | spegel_advertised_image_digests | Gauge | `registry` |

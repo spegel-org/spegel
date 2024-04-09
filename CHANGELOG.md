@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#421](https://github.com/spegel-org/spegel/pull/421) Add conformance tests to e2e test.
 - [#424](https://github.com/spegel-org/spegel/pull/424) Add option to append mirror configuration instead of overwriting.
+- [#429](https://github.com/spegel-org/spegel/pull/429) Add metrics to measure duration to resolve peers.
 
 ### Changed
 

@@ -21,6 +21,7 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
 	mh "github.com/multiformats/go-multihash"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
@@ -163,7 +164,9 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 	addrCh := r.rd.FindProvidersAsync(ctx, c, count)
 	peerCh := make(chan netip.AddrPort, peerBufferSize)
 	go func() {
+		resolveTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
 		for info := range addrCh {
+			resolveTimer.ObserveDuration()
 			if !allowSelf && info.ID == r.host.ID() {
 				continue
 			}

@@ -19,6 +19,10 @@ var (
 		Name: "spegel_mirror_requests_total",
 		Help: "Total number of mirror requests.",
 	}, []string{"registry", "cache", "source"})
+	ResolveDurHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "spegel_resolve_duration_seconds",
+		Help: "The duration for router to resolve a peer.",
+	}, []string{"router"})
 	AdvertisedImages = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "spegel_advertised_images",
 		Help: "Number of images advertised to be available.",
@@ -54,6 +58,7 @@ var (
 
 func Register() {
 	DefaultRegisterer.MustRegister(MirrorRequestsTotal)
+	DefaultRegisterer.MustRegister(ResolveDurHistogram)
 	DefaultRegisterer.MustRegister(AdvertisedImages)
 	DefaultRegisterer.MustRegister(AdvertisedImageTags)
 	DefaultRegisterer.MustRegister(AdvertisedImageDigests)
