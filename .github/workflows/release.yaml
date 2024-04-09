@@ -65,6 +65,7 @@ jobs:
       - name: Publish Helm chart to GHCR
         id: helm
         run: |
+          rm charts/spegel/artifacthub-repo.yml
           yq -i '.image.digest = "${{ steps.build.outputs.DIGEST }}"' charts/spegel/values.yaml
           helm package --app-version ${{ steps.prep.outputs.VERSION }} --version ${{ steps.prep.outputs.VERSION }} charts/spegel
           helm push spegel-${{ steps.prep.outputs.VERSION }}.tgz oci://ghcr.io/spegel-org/helm-charts 2> .digest
