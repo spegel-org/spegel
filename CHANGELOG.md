@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#431](https://github.com/spegel-org/spegel/pull/431) Fix import error caused by invalid file name.
+
 ### Security
 
 ## v0.0.20
