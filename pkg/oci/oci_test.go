@@ -3,6 +3,7 @@ package oci
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -27,15 +28,15 @@ func TestOCIClient(t *testing.T) {
 	err = json.Unmarshal(b, &imgs)
 	require.NoError(t, err)
 	blobs := map[digest.Digest][]byte{}
-	fileItems, err := os.ReadDir("./testdata/blobs")
+	fileItems, err := os.ReadDir("./testdata/blobs/sha256")
 	require.NoError(t, err)
 	for _, item := range fileItems {
 		if item.IsDir() {
 			continue
 		}
-		dgst, err := digest.Parse(item.Name())
+		dgst, err := digest.Parse(fmt.Sprintf("sha256:%s", item.Name()))
 		require.NoError(t, err)
-		b, err := os.ReadFile(path.Join("./testdata/blobs", item.Name()))
+		b, err := os.ReadFile(path.Join("./testdata/blobs/sha256", item.Name()))
 		require.NoError(t, err)
 		blobs[dgst] = b
 	}
