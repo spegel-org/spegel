@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - [#395](https://github.com/spegel-org/spegel/pull/395) Replace Gin with standard lib HTTP handler.
+- [#430](https://github.com/spegel-org/spegel/pull/430) Replace XenitAB Kubernetes pkg with internal package.
 
 ### Deprecated
 
