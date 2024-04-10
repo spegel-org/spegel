@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.21
+
+### Added 
+
 - [#421](https://github.com/spegel-org/spegel/pull/421) Add conformance tests to e2e test.
 - [#424](https://github.com/spegel-org/spegel/pull/424) Add option to append mirror configuration instead of overwriting.
 - [#429](https://github.com/spegel-org/spegel/pull/429) Add metrics to measure duration to resolve peers.
@@ -18,15 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#395](https://github.com/spegel-org/spegel/pull/395) Replace Gin with standard lib HTTP handler.
 - [#430](https://github.com/spegel-org/spegel/pull/430) Replace XenitAB Kubernetes pkg with internal package.
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - [#431](https://github.com/spegel-org/spegel/pull/431) Fix import error caused by invalid file name.
-
-### Security
 
 ## v0.0.20
  
