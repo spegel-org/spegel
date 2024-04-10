@@ -17,11 +17,11 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/afero"
-	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
 
+	"github.com/spegel-org/spegel/internal/kubernetes"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
@@ -214,7 +214,7 @@ func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) {
 	case "http":
 		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer), nil
 	case "kubernetes":
-		cs, err := pkgkubernetes.GetKubernetesClientset(cfg.KubeconfigPath)
+		cs, err := kubernetes.GetClientset(cfg.KubeconfigPath)
 		if err != nil {
 			return nil, err
 		}
