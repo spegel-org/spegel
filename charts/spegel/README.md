@@ -85,6 +85,7 @@ spec:
 | spegel.additionalMirrorRegistries | list | `[]` | Additional target mirror registries other than Spegel. |
 | spegel.appendMirrors | bool | `false` | When true existing mirror configuration will be appended to instead of replaced. |
 | spegel.blobSpeed | string | `""` | Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps. |
+| spegel.containerdContentPath | string | `"/var/lib/containerd/io.containerd.content.v1.content"` | Path to Containerd content store.. |
 | spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
 | spegel.containerdRegistryConfigPath | string | `"/etc/containerd/certs.d"` | Path to Containerd mirror configuration. |

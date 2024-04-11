@@ -34,6 +34,7 @@ const (
 var _ Client = &Containerd{}
 
 type Containerd struct {
+	contentPath        string
 	client             *containerd.Client
 	clientGetter       func() (*containerd.Client, error)
 	listFilter         string
@@ -41,16 +42,28 @@ type Containerd struct {
 	registryConfigPath string
 }
 
-func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL) (*Containerd, error) {
+type Option func(*Containerd)
+
+func WithContentPath(path string) Option {
+	return func(c *Containerd) {
+		c.contentPath = path
+	}
+}
+
+func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL, opts ...Option) (*Containerd, error) {
 	listFilter, eventFilter := createFilters(registries)
-	return &Containerd{
+	c := &Containerd{
 		clientGetter: func() (*containerd.Client, error) {
 			return containerd.New(sock, containerd.WithDefaultNamespace(namespace))
 		},
 		listFilter:         listFilter,
 		eventFilter:        eventFilter,
 		registryConfigPath: registryConfigPath,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c, nil
 }
 
 func (c *Containerd) Client() (*containerd.Client, error) {
@@ -306,6 +319,14 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 }
 
 func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+	if c.contentPath != "" {
+		path := filepath.Join(c.contentPath, "blobs", dgst.Algorithm().String(), dgst.Encoded())
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		return file, nil
+	}
 	client, err := c.Client()
 	if err != nil {
 		return nil, err

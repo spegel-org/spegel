@@ -56,6 +56,7 @@ type RegistryCmd struct {
 	LocalAddr                    string             `arg:"--local-addr,required,env:LOCAL_ADDR" help:"Address that the local Spegel instance will be reached at."`
 	ContainerdSock               string             `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string             `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
+	ContainerdContentPath        string             `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
 	RouterAddr                   string             `arg:"--router-addr,env:ROUTER_ADDR,required" help:"address to serve router."`
 	RegistryAddr                 string             `arg:"--registry-addr,env:REGISTRY_ADDR,required" help:"address to server image registry."`
 	Registries                   []url.URL          `arg:"--registries,env:REGISTRIES,required" help:"registries that are configured to be mirrored."`
@@ -116,7 +117,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// OCI Client
-	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.Registries)
+	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.Registries, oci.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
 		return err
 	}
