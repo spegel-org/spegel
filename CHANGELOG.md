@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#435](https://github.com/spegel-org/spegel/pull/435) Add pprof endpoints to enable profiling.
+
 ### Changed
 
 ### Deprecated
