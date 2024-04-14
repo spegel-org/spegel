@@ -96,6 +96,9 @@ spec:
           {{- with .Values.spegel.blobSpeed }}
           - --blob-speed={{ . }}
           {{- end }}
+          {{- with .Values.spegel.containerdContentPath }}
+          - --containerd-content-path={{ . }}
+          {{- end }}
         env:
         - name: NODE_IP
           valueFrom:
@@ -127,12 +130,23 @@ spec:
         volumeMounts:
           - name: containerd-sock
             mountPath: {{ .Values.spegel.containerdSock }}
+          {{- with .Values.spegel.containerdContentPath }}
+          - name: containerd-content
+            mountPath: {{ . }}
+            readOnly: true
+          {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
         - name: containerd-sock
           hostPath:
             path: {{ .Values.spegel.containerdSock }}
+        {{- with .Values.spegel.containerdContentPath }}
+        - name: containerd-content
+          hostPath:
+            path: {{ . }}
+            type: Directory
+        {{- end }}
         {{- if .Values.spegel.containerdMirrorAdd }}
         - name: containerd-config
           hostPath:
