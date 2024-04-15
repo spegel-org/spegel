@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#435](https://github.com/spegel-org/spegel/pull/435) Add pprof endpoints to enable profiling.
 - [#434](https://github.com/spegel-org/spegel/pull/434) Add optional Containerd local content store to increase serve performance.
+- [#438](https://github.com/spegel-org/spegel/pull/438) Set host path type for Containerd socket.
 
 ### Changed
 
