@@ -141,6 +141,7 @@ spec:
         - name: containerd-sock
           hostPath:
             path: {{ .Values.spegel.containerdSock }}
+            type: Socket
         {{- with .Values.spegel.containerdContentPath }}
         - name: containerd-content
           hostPath:
