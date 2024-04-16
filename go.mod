@@ -1,6 +1,6 @@
 module github.com/spegel-org/spegel
 
-go 1.21
+go 1.21.9
 
 require (
 	github.com/alexflint/go-arg v1.4.3
