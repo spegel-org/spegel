@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#439](https://github.com/spegel-org/spegel/pull/439) Update Go version and fix toolchain version.
+
 ### Deprecated
 
 ### Removed
