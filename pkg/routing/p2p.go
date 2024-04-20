@@ -188,7 +188,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 			select {
 			case peerCh <- peer:
 			default:
-				log.V(10).Info("mirror endpoint dropped: peer channel is full")
+				log.V(4).Info("mirror endpoint dropped: peer channel is full")
 			}
 		}
 		close(peerCh)
@@ -197,7 +197,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
-	logr.FromContextOrDiscard(ctx).V(10).Info("advertising keys", "host", r.host.ID().String(), "keys", keys)
+	logr.FromContextOrDiscard(ctx).V(4).Info("advertising keys", "host", r.host.ID().String(), "keys", keys)
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {

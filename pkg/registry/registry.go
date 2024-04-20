@@ -126,9 +126,8 @@ func (r *Registry) handle(rw mux.ResponseWriter, req *http.Request) {
 		}
 
 		// Logging
-		ip := getClientIP(req)
 		path := req.URL.Path
-		kvs := []interface{}{"path", path, "status", rw.Status(), "method", req.Method, "latency", latency, "ip", ip}
+		kvs := []interface{}{"path", path, "status", rw.Status(), "method", req.Method, "latency", latency.String(), "ip", getClientIP(req)}
 		if rw.Status() >= 200 && rw.Status() < 300 {
 			r.log.Info("", kvs...)
 			return
@@ -226,7 +225,7 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, key string) {
-	log := r.log.WithValues("key", key, "path", req.URL.Path, "ip", req.RemoteAddr)
+	log := r.log.WithValues("key", key, "path", req.URL.Path, "ip", getClientIP(req))
 
 	// Resolve mirror with the requested key
 	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
@@ -285,7 +284,7 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, key st
 			if !succeeded {
 				break
 			}
-			log.V(5).Info("mirrored request", "url", u.String())
+			log.V(4).Info("mirrored request", "url", u.String())
 			return
 		}
 	}
