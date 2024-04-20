@@ -37,6 +37,7 @@ spec:
           {{- toYaml .Values.securityContext | nindent 12 }}
         args:
           - configuration
+          - --log-level={{ .Values.spegel.logLevel }}
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
           {{- with .Values.spegel.registries }}
           - --registries
@@ -71,6 +72,7 @@ spec:
           {{- toYaml .Values.securityContext | nindent 12 }}
         args:
           - registry
+          - --log-level={{ .Values.spegel.logLevel }}
           - --mirror-resolve-retries={{ .Values.spegel.mirrorResolveRetries }}
           - --mirror-resolve-timeout={{ .Values.spegel.mirrorResolveTimeout }}
           - --registry-addr=:{{ .Values.service.registry.port }}

@@ -15,12 +15,11 @@ import (
 
 	"github.com/alexflint/go-arg"
 	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/afero"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
+	"log/slog"
 
 	"github.com/spegel-org/spegel/internal/kubernetes"
 	"github.com/spegel-org/spegel/pkg/metrics"
@@ -68,23 +67,25 @@ type RegistryCmd struct {
 type Arguments struct {
 	Configuration *ConfigurationCmd `arg:"subcommand:configuration"`
 	Registry      *RegistryCmd      `arg:"subcommand:registry"`
+	LogLevel      slog.Level        `arg:"--log-level,env:LOG_LEVEL" default:"INFO" help:"Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR."`
 }
 
 func main() {
 	args := &Arguments{}
 	arg.MustParse(args)
 
-	zapLog, err := zap.NewProduction()
-	if err != nil {
-		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
+	opts := slog.HandlerOptions{
+		AddSource: true,
+		Level:     args.LogLevel,
 	}
-	log := zapr.NewLogger(zapLog)
+	handler := slog.NewJSONHandler(os.Stderr, &opts)
+	log := logr.FromSlogHandler(handler)
 	klog.SetLogger(log)
 	ctx := logr.NewContext(context.Background(), log)
 
-	err = run(ctx, args)
+	err := run(ctx, args)
 	if err != nil {
-		log.Error(err, "")
+		log.Error(err, "run exit with error")
 		os.Exit(1)
 	}
 	log.Info("gracefully shutdown")

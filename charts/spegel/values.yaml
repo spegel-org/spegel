@@ -108,6 +108,8 @@ serviceMonitor:
 priorityClassName: system-node-critical
 
 spegel:
+  # -- Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR.
+  logLevel: "INFO"
   # -- Registries for which mirror configuration will be created.
   registries:
     - https://cgr.dev
