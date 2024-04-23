@@ -37,6 +37,7 @@ spec:
           {{- toYaml .Values.securityContext | nindent 12 }}
         args:
           - configuration
+          - --log-level={{ .Values.spegel.logLevel }}
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
           {{- with .Values.spegel.registries }}
           - --registries
@@ -53,6 +54,7 @@ spec:
           {{- end }}
           {{- end }}
           - --resolve-tags={{ .Values.spegel.resolveTags }}
+          - --append-mirrors={{ .Values.spegel.appendMirrors }}
         env:
         - name: NODE_IP
           valueFrom:
@@ -70,6 +72,7 @@ spec:
           {{- toYaml .Values.securityContext | nindent 12 }}
         args:
           - registry
+          - --log-level={{ .Values.spegel.logLevel }}
           - --mirror-resolve-retries={{ .Values.spegel.mirrorResolveRetries }}
           - --mirror-resolve-timeout={{ .Values.spegel.mirrorResolveTimeout }}
           - --registry-addr=:{{ .Values.service.registry.port }}
@@ -94,6 +97,9 @@ spec:
           - --local-addr=$(NODE_IP):{{ .Values.service.registry.hostPort }}
           {{- with .Values.spegel.blobSpeed }}
           - --blob-speed={{ . }}
+          {{- end }}
+          {{- with .Values.spegel.containerdContentPath }}
+          - --containerd-content-path={{ . }}
           {{- end }}
         env:
         - name: NODE_IP
@@ -126,12 +132,24 @@ spec:
         volumeMounts:
           - name: containerd-sock
             mountPath: {{ .Values.spegel.containerdSock }}
+          {{- with .Values.spegel.containerdContentPath }}
+          - name: containerd-content
+            mountPath: {{ . }}
+            readOnly: true
+          {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
         - name: containerd-sock
           hostPath:
             path: {{ .Values.spegel.containerdSock }}
+            type: Socket
+        {{- with .Values.spegel.containerdContentPath }}
+        - name: containerd-content
+          hostPath:
+            path: {{ . }}
+            type: Directory
+        {{- end }}
         {{- if .Values.spegel.containerdMirrorAdd }}
         - name: containerd-config
           hostPath:

@@ -120,6 +120,8 @@ grafanaDashboard:
 priorityClassName: system-node-critical
 
 spegel:
+  # -- Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR.
+  logLevel: "INFO"
   # -- Registries for which mirror configuration will be created.
   registries:
     - https://cgr.dev
@@ -144,6 +146,8 @@ spegel:
   containerdNamespace: "k8s.io"
   # -- Path to Containerd mirror configuration.
   containerdRegistryConfigPath: "/etc/containerd/certs.d"
+  # -- Path to Containerd content store..
+  containerdContentPath: "/var/lib/containerd/io.containerd.content.v1.content"
   # -- If true Spegel will add mirror configuration to the node.
   containerdMirrorAdd: true
   # -- Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC.
@@ -154,3 +158,5 @@ spegel:
   resolveLatestTag: true
   # -- Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps.
   blobSpeed: ""
+  # -- When true existing mirror configuration will be appended to instead of replaced.
+  appendMirrors: false

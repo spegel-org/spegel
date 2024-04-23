@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/xenitab/pkg/channels"
 
+	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
@@ -16,12 +16,15 @@ import (
 
 func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
 	log := logr.FromContextOrDiscard(ctx)
-	eventCh, errCh := ociClient.Subscribe(ctx)
+	eventCh, errCh, err := ociClient.Subscribe(ctx)
+	if err != nil {
+		return err
+	}
 	immediate := make(chan time.Time, 1)
 	immediate <- time.Now()
 	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
 	defer expirationTicker.Stop()
-	ticker := channels.Merge(immediate, expirationTicker.C)
+	ticker := channel.Merge(immediate, expirationTicker.C)
 	for {
 		select {
 		case <-ctx.Done():
@@ -36,7 +39,7 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 			if !ok {
 				return errors.New("image event channel closed")
 			}
-			log.Info("received image event", "image", event.Image, "type", event.Type)
+			log.Info("received image event", "image", event.Image.String(), "type", event.Type)
 			if _, err := update(ctx, ociClient, router, event, false, resolveLatestTag); err != nil {
 				log.Error(err, "received error when updating image")
 				continue
@@ -51,7 +54,7 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 }
 
 func all(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
-	log := logr.FromContextOrDiscard(ctx).V(5)
+	log := logr.FromContextOrDiscard(ctx).V(4)
 	imgs, err := ociClient.ListImages(ctx)
 	if err != nil {
 		return err
@@ -69,7 +72,7 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 		// Handle the list re-sync as update events; this will also prevent the
 		// update function from setting metrics values.
 		event := oci.ImageEvent{Image: img, Type: oci.UpdateEvent}
-		log.Info("sync image event", "image", event.Image, "type", event.Type)
+		log.Info("sync image event", "image", event.Image.String(), "type", event.Type)
 		keyTotal, err := update(ctx, ociClient, router, event, skipDigests, resolveLatestTag)
 		if err != nil {
 			errs = append(errs, err)

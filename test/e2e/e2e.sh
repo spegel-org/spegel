@@ -16,6 +16,7 @@ HOSTS_TOML='server = "https://docker.io"\n\n[host."https://registry-1.docker.io"
 docker exec kind-worker2 bash -c "mkdir -p /etc/containerd/certs.d/docker.io; echo -e '$HOSTS_TOML' > /etc/containerd/certs.d/docker.io/hosts.toml"
 
 # Pull images onto single node which will never run workload.
+docker exec kind-worker ctr -n k8s.io image pull ghcr.io/spegel-org/conformance:75d2816
 docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx:1.23.0
 docker exec kind-worker ctr -n k8s.io image pull docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b
 docker exec kind-worker ctr -n k8s.io image pull mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416
@@ -44,6 +45,10 @@ then
 	echo "Spegel has not properly backed up existing configuration."
 	exit 1
 fi
+
+# Run conformance tests
+kubectl --kubeconfig $KIND_KUBECONFIG apply -f test/e2e/conformance-job.yaml
+kubectl --kubeconfig $KIND_KUBECONFIG --namespace default wait --for=condition=complete job/conformance
 
 # Remove Spegel from the last node to test that the mirror fallback is working.
 SPEGEL_WORKER4=$(kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=kind-worker4)

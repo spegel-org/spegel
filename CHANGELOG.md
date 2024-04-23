@@ -21,7 +21,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## v0.0.22
+
+### Added 
+
+- [#435](https://github.com/spegel-org/spegel/pull/435) Add pprof endpoints to enable profiling.
+- [#434](https://github.com/spegel-org/spegel/pull/434) Add optional Containerd local content store to increase serve performance.
+- [#438](https://github.com/spegel-org/spegel/pull/438) Set host path type for Containerd socket.
+- [#449](https://github.com/spegel-org/spegel/pull/449) Replace zapr with slog and add log level configuration.
+
+### Changed
+
+- [#439](https://github.com/spegel-org/spegel/pull/439) Update Go version and fix toolchain version.
+
+### Fixed
+
+- [#452](https://github.com/spegel-org/spegel/pull/452) Fix Containerd Subscribe returning on any error.
+
+### Security
+
+- [#451](https://github.com/spegel-org/spegel/pull/451) Bump golang.org/x/net from 0.21.0 to 0.23.0.
+
+## v0.0.21
+
+### Added 
+
+- [#421](https://github.com/spegel-org/spegel/pull/421) Add conformance tests to e2e test.
+- [#424](https://github.com/spegel-org/spegel/pull/424) Add option to append mirror configuration instead of overwriting.
+- [#429](https://github.com/spegel-org/spegel/pull/429) Add metrics to measure duration to resolve peers.
+
+### Changed
+
+- [#395](https://github.com/spegel-org/spegel/pull/395) Replace Gin with standard lib HTTP handler.
+- [#430](https://github.com/spegel-org/spegel/pull/430) Replace XenitAB Kubernetes pkg with internal package.
+
+### Fixed
+
+- [#431](https://github.com/spegel-org/spegel/pull/431) Fix import error caused by invalid file name.
+
+## v0.0.20
+ 
+### Added 
+
+- [#416](https://github.com/spegel-org/spegel/pull/416) Add image and Helm chart signing with Cosign.
+
+### Changed
+
+- [#411](https://github.com/spegel-org/spegel/pull/411) Replace XenitAB pkg with internal package.
+
+### Fixed
+
+- [#412](https://github.com/spegel-org/spegel/pull/412) Fix http bootstrapper arg annotation.
+
+### Security
+
 - [#409](https://github.com/spegel-org/spegel/pull/409) Bump protobuf to fix CVE-2024-24786.
+- [#415](https://github.com/spegel-org/spegel/pull/415) Bump Libp2p to fix CVE-2024-22189.
 
 ## v0.0.19
 

@@ -22,8 +22,9 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/afero"
-	"github.com/xenitab/pkg/channels"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
+
+	"github.com/spegel-org/spegel/internal/channel"
 )
 
 const (
@@ -33,6 +34,7 @@ const (
 var _ Client = &Containerd{}
 
 type Containerd struct {
+	contentPath        string
 	client             *containerd.Client
 	clientGetter       func() (*containerd.Client, error)
 	listFilter         string
@@ -40,16 +42,28 @@ type Containerd struct {
 	registryConfigPath string
 }
 
-func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL) (*Containerd, error) {
+type Option func(*Containerd)
+
+func WithContentPath(path string) Option {
+	return func(c *Containerd) {
+		c.contentPath = path
+	}
+}
+
+func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL, opts ...Option) (*Containerd, error) {
 	listFilter, eventFilter := createFilters(registries)
-	return &Containerd{
+	c := &Containerd{
 		clientGetter: func() (*containerd.Client, error) {
 			return containerd.New(sock, containerd.WithDefaultNamespace(namespace))
 		},
 		listFilter:         listFilter,
 		eventFilter:        eventFilter,
 		registryConfigPath: registryConfigPath,
-	}, nil
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c, nil
 }
 
 func (c *Containerd) Client() (*containerd.Client, error) {
@@ -122,50 +136,49 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", cfg.Registry.ConfigPath, configPath)
 }
 
-func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error) {
-	imgCh := make(chan ImageEvent, 1)
-	errCh := make(chan error, 1)
-
+func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error) {
+	imgCh := make(chan ImageEvent)
+	errCh := make(chan error)
 	client, err := c.Client()
 	if err != nil {
-		errCh <- err
-		close(imgCh)
-		close(errCh)
-		return imgCh, errCh
+		return nil, nil, err
 	}
-
 	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, c.eventFilter)
 	go func() {
+		defer func() {
+			close(imgCh)
+			close(errCh)
+		}()
 		for envelope := range envelopeCh {
 			var img Image
 			imageName, eventType, err := getEventImage(envelope.Event)
 			if err != nil {
 				errCh <- err
-				return
+				continue
 			}
 			switch eventType {
 			case CreateEvent, UpdateEvent:
 				cImg, err := client.GetImage(ctx, imageName)
 				if err != nil {
 					errCh <- err
-					return
+					continue
 				}
 				img, err = Parse(cImg.Name(), cImg.Target().Digest)
 				if err != nil {
 					errCh <- err
-					return
+					continue
 				}
 			case DeleteEvent:
 				img, err = Parse(imageName, "")
 				if err != nil {
 					errCh <- err
-					return
+					continue
 				}
 			}
 			imgCh <- ImageEvent{Image: img, Type: eventType}
 		}
 	}()
-	return imgCh, channels.Merge(errCh, cErrCh)
+	return imgCh, channel.Merge(errCh, cErrCh), nil
 }
 
 func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
@@ -305,6 +318,14 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 }
 
 func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+	if c.contentPath != "" {
+		path := filepath.Join(c.contentPath, "blobs", dgst.Algorithm().String(), dgst.Encoded())
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		return file, nil
+	}
 	client, err := c.Client()
 	if err != nil {
 		return nil, err
@@ -464,69 +485,34 @@ type hostFile struct {
 }
 
 type hostConfig struct {
-	Capabilities []string `toml:"capabilities"`
+	CACert       interface{}            `toml:"ca"`
+	Client       interface{}            `toml:"client"`
+	OverridePath *bool                  `toml:"override_path"`
+	SkipVerify   *bool                  `toml:"skip_verify"`
+	Header       map[string]interface{} `toml:"header"`
+	Capabilities []string               `toml:"capabilities"`
 }
 
 // Refer to containerd registry configuration documentation for mor information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveTags bool) error {
+func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveTags, appendToBackup bool) error {
 	log := logr.FromContextOrDiscard(ctx)
-
-	if err := validate(registryURLs); err != nil {
-		return err
-	}
-
-	// Create config path dir if it does not exist
-	ok, err := afero.DirExists(fs, configPath)
+	err := validateRegistries(registryURLs)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		err := fs.MkdirAll(configPath, 0755)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Backup files and directories in config path
-	backupDirPath := path.Join(configPath, backupDir)
-	if _, err := fs.Stat(backupDirPath); os.IsNotExist(err) {
-		files, err := afero.ReadDir(fs, configPath)
-		if err != nil {
-			return err
-		}
-		if len(files) > 0 {
-			err = fs.MkdirAll(backupDirPath, 0755)
-			if err != nil {
-				return err
-			}
-			for _, fi := range files {
-				oldPath := path.Join(configPath, fi.Name())
-				newPath := path.Join(backupDirPath, fi.Name())
-				err := fs.Rename(oldPath, newPath)
-				if err != nil {
-					return err
-				}
-				log.Info("backing up Containerd host configuration", "path", oldPath)
-			}
-		}
-	}
-
-	// Remove all content from config path to start from clean slate
-	files, err := afero.ReadDir(fs, configPath)
+	err = fs.MkdirAll(configPath, 0755)
 	if err != nil {
 		return err
 	}
-	for _, fi := range files {
-		if fi.Name() == backupDir {
-			continue
-		}
-		filePath := path.Join(configPath, fi.Name())
-		err := fs.RemoveAll(filePath)
-		if err != nil {
-			return err
-		}
+	err = backupConfig(log, fs, configPath)
+	if err != nil {
+		return err
+	}
+	err = clearConfig(fs, configPath)
+	if err != nil {
+		return err
 	}
 
 	// Write mirror configuration
@@ -535,20 +521,14 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		capabilities = append(capabilities, "resolve")
 	}
 	for _, registryURL := range registryURLs {
-		// Need a special case for Docker Hub as docker.io is just an alias.
-		server := registryURL.String()
-		if registryURL.String() == "https://docker.io" {
-			server = "https://registry-1.docker.io"
+		hf, appending, err := getHostFile(fs, configPath, appendToBackup, registryURL)
+		if err != nil {
+			return err
 		}
-		hostConfigs := map[string]hostConfig{}
 		for _, u := range mirrorURLs {
-			hostConfigs[u.String()] = hostConfig{Capabilities: capabilities}
+			hf.HostConfigs[u.String()] = hostConfig{Capabilities: capabilities}
 		}
-		cfg := hostFile{
-			Server:      server,
-			HostConfigs: hostConfigs,
-		}
-		b, err := toml.Marshal(&cfg)
+		b, err := toml.Marshal(&hf)
 		if err != nil {
 			return err
 		}
@@ -561,12 +541,16 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		if err != nil {
 			return err
 		}
-		log.Info("added containerd mirror configuration", "registry", registryURL.String(), "path", fp)
+		if appending {
+			log.Info("appending to existing Containerd mirror configuration", "registry", registryURL.String(), "path", fp)
+		} else {
+			log.Info("added Containerd mirror configuration", "registry", registryURL.String(), "path", fp)
+		}
 	}
 	return nil
 }
 
-func validate(urls []url.URL) error {
+func validateRegistries(urls []url.URL) error {
 	errs := []error{}
 	for _, u := range urls {
 		if u.Scheme != "http" && u.Scheme != "https" {
@@ -583,4 +567,81 @@ func validate(urls []url.URL) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func backupConfig(log logr.Logger, fs afero.Fs, configPath string) error {
+	backupDirPath := path.Join(configPath, backupDir)
+	_, err := fs.Stat(backupDirPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err == nil {
+		return nil
+	}
+	files, err := afero.ReadDir(fs, configPath)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	err = fs.MkdirAll(backupDirPath, 0755)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		oldPath := path.Join(configPath, fi.Name())
+		newPath := path.Join(backupDirPath, fi.Name())
+		err := fs.Rename(oldPath, newPath)
+		if err != nil {
+			return err
+		}
+		log.Info("backing up Containerd host configuration", "path", oldPath)
+	}
+	return nil
+}
+
+func clearConfig(fs afero.Fs, configPath string) error {
+	files, err := afero.ReadDir(fs, configPath)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		if fi.Name() == backupDir {
+			continue
+		}
+		filePath := path.Join(configPath, fi.Name())
+		err := fs.RemoveAll(filePath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func getHostFile(fs afero.Fs, configPath string, appendToBackup bool, registryURL url.URL) (hostFile, bool, error) {
+	if appendToBackup {
+		fp := path.Join(configPath, backupDir, registryURL.Host, "hosts.toml")
+		b, err := afero.ReadFile(fs, fp)
+		if err != nil && !errors.Is(err, afero.ErrFileNotFound) {
+			return hostFile{}, false, err
+		}
+		if err == nil {
+			hf := hostFile{}
+			err := toml.Unmarshal(b, &hf)
+			if err != nil {
+				return hostFile{}, false, err
+			}
+			return hf, true, nil
+		}
+	}
+	server := registryURL.String()
+	if registryURL.String() == "https://docker.io" {
+		server = "https://registry-1.docker.io"
+	}
+	hf := hostFile{
+		Server:      server,
+		HostConfigs: map[string]hostConfig{},
+	}
+	return hf, false, nil
 }

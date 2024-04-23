@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
@@ -14,14 +15,13 @@ import (
 
 	"github.com/alexflint/go-arg"
 	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/afero"
-	pkgkubernetes "github.com/xenitab/pkg/kubernetes"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
+	"log/slog"
 
+	"github.com/spegel-org/spegel/internal/kubernetes"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
@@ -35,12 +35,13 @@ type ConfigurationCmd struct {
 	Registries                   []url.URL `arg:"--registries,required,env:REGISTRIES" help:"registries that are configured to be mirrored."`
 	MirrorRegistries             []url.URL `arg:"--mirror-registries,env:MIRROR_REGISTRIES,required" help:"registries that are configured to act as mirrors."`
 	ResolveTags                  bool      `arg:"--resolve-tags,env:RESOLVE_TAGS" default:"true" help:"When true Spegel will resolve tags to digests."`
+	AppendMirrors                bool      `arg:"--append-mirrors,env:APPEND_MIRRORS" default:"false" help:"When true existing mirror configuration will be appended to instead of replaced."`
 }
 
 type BootstrapConfig struct {
 	BootstrapKind           string `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
 	HTTPBootstrapAddr       string `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_KIND" help:"Address to serve for HTTP bootstrap."`
-	HTTPBootstrapPeer       string `àrg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
+	HTTPBootstrapPeer       string `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
 	KubeconfigPath          string `arg:"--kubeconfig-path,env:KUBECONFIG_PATH" help:"Path to the kubeconfig file."`
 	LeaderElectionName      string `arg:"--leader-election-name,env:LEADER_ELECTION_NAME" default:"spegel-leader-election" help:"Name of leader election."`
 	LeaderElectionNamespace string `arg:"--leader-election-namespace,env:LEADER_ELECTION_NAMESPACE" default:"spegel" help:"Kubernetes namespace to write leader election data."`
@@ -54,6 +55,7 @@ type RegistryCmd struct {
 	LocalAddr                    string             `arg:"--local-addr,required,env:LOCAL_ADDR" help:"Address that the local Spegel instance will be reached at."`
 	ContainerdSock               string             `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string             `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
+	ContainerdContentPath        string             `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
 	RouterAddr                   string             `arg:"--router-addr,env:ROUTER_ADDR,required" help:"address to serve router."`
 	RegistryAddr                 string             `arg:"--registry-addr,env:REGISTRY_ADDR,required" help:"address to server image registry."`
 	Registries                   []url.URL          `arg:"--registries,env:REGISTRIES,required" help:"registries that are configured to be mirrored."`
@@ -65,23 +67,25 @@ type RegistryCmd struct {
 type Arguments struct {
 	Configuration *ConfigurationCmd `arg:"subcommand:configuration"`
 	Registry      *RegistryCmd      `arg:"subcommand:registry"`
+	LogLevel      slog.Level        `arg:"--log-level,env:LOG_LEVEL" default:"INFO" help:"Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR."`
 }
 
 func main() {
 	args := &Arguments{}
 	arg.MustParse(args)
 
-	zapLog, err := zap.NewProduction()
-	if err != nil {
-		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
+	opts := slog.HandlerOptions{
+		AddSource: true,
+		Level:     args.LogLevel,
 	}
-	log := zapr.NewLogger(zapLog)
+	handler := slog.NewJSONHandler(os.Stderr, &opts)
+	log := logr.FromSlogHandler(handler)
 	klog.SetLogger(log)
 	ctx := logr.NewContext(context.Background(), log)
 
-	err = run(ctx, args)
+	err := run(ctx, args)
 	if err != nil {
-		log.Error(err, "")
+		log.Error(err, "run exit with error")
 		os.Exit(1)
 	}
 	log.Info("gracefully shutdown")
@@ -102,7 +106,7 @@ func run(ctx context.Context, args *Arguments) error {
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	fs := afero.NewOsFs()
-	err := oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries, args.ResolveTags)
+	err := oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.Registries, args.MirrorRegistries, args.ResolveTags, args.AppendMirrors)
 	if err != nil {
 		return err
 	}
@@ -114,7 +118,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// OCI Client
-	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.Registries)
+	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.Registries, oci.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
 		return err
 	}
@@ -127,6 +131,15 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	metrics.Register()
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(metrics.DefaultGatherer, promhttp.HandlerOpts{}))
+	mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	mux.Handle("/debug/pprof/heap", pprof.Handler("heap"))
+	mux.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
+	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
 		Handler: mux,
@@ -180,12 +193,13 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithResolveRetries(args.MirrorResolveRetries),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithLocalAddress(args.LocalAddr),
+		registry.WithLogger(log),
 	}
 	if args.BlobSpeed != nil {
 		registryOpts = append(registryOpts, registry.WithBlobSpeed(*args.BlobSpeed))
 	}
 	reg := registry.NewRegistry(ociClient, router, registryOpts...)
-	regSrv := reg.Server(args.RegistryAddr, log)
+	regSrv := reg.Server(args.RegistryAddr)
 	g.Go(func() error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
@@ -212,7 +226,7 @@ func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) {
 	case "http":
 		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer), nil
 	case "kubernetes":
-		cs, err := pkgkubernetes.GetKubernetesClientset(cfg.KubeconfigPath)
+		cs, err := kubernetes.GetClientset(cfg.KubeconfigPath)
 		if err != nil {
 			return nil, err
 		}

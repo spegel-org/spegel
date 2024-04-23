@@ -24,6 +24,14 @@ While the Spegel instance on the other end will log.
 {"level":"info","ts":1692304805.9035861,"caller":"gin@v0.0.9/logger.go:53","msg":"","path":"/v2/library/nginx/blobs/sha256:1cb127bd932119089b5ffb612ffa84537ddd1318e6784f2fce80916bbb8bd166","status":200,"method":"GET","latency":0.003644997,"ip":"172.18.0.5","handler":"blob"}
 ```
 
+## Will image pulls break or be delayed if a spegel instance fails or is removed?
+
+Spegel acts as a best-effort cache and the worst-case scenario is always that images are pulled from the upstream registry (e.g. Docker Hub).
+
+However, should a spegel instance fail (perhaps because the node died), there will be a time interval when its images remain advertised. Currently, spegel advertises images with a TTL of 10 minutes. Other spegel peers may try to forward requests to the failed instance, delaying the response to the pulling client. In benign scenarios, this delay is the length of an intra-cluster round trip (the HTTP request and an ICMP unreachable response), likely <1ms. Of course, there are less benign scenarios (e.g. inter-node packet loss) where no replies will come back and spegel's forwarder will eventually time out before moving on to the next available peer. Spegel uses the standard library's httputil.ReverseProxy to forward requests, which in turn depends on DefaultTransport to decide how long to wait before giving up.
+
+Please note that a client is likely to request several layers in parallel and in many cases the advertising instances will have a similar routing distance, so spegel will spread its forwards across those instances. Thus, the benign scenario is unlikely to impact pod startup time. Only when the routing distance is different (e.g. edge locations) or when an image dominated by one large layer is affected is pod startup time materially increased.
+
 ## Why am I not able to pull the new version of my tagged image?
 
 Reusing the same tag multiple times for different versions of an image is generally a bad idea. The most common scenario is the use of the `latest` tag. This makes it difficult to determine which version of the image is being used. On top of that, the image will not be updated if it is already cached on the node.

@@ -14,7 +14,7 @@ type UnknownDocument struct {
 type Client interface {
 	Name() string
 	Verify(ctx context.Context) error
-	Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error)
+	Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error)
 	ListImages(ctx context.Context) ([]Image, error)
 	AllIdentifiers(ctx context.Context, img Image) ([]string, error)
 	Resolve(ctx context.Context, ref string) (digest.Digest, error)

@@ -11,7 +11,7 @@ Make sure that you have read the [compatibility guide](../../docs/COMPATIBILITY.
 Delpoy Spegel with the Helm CLI.
 
 ```sh
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.19 spegel oci://ghcr.io/spegel-org/helm-charts/spegel
+helm upgrade --create-namespace --namespace spegel --install --version v0.0.22 spegel oci://ghcr.io/spegel-org/helm-charts/spegel
 ```
 
 ### Flux
@@ -44,7 +44,7 @@ spec:
   chart:
     spec:
       chart: spegel
-      version: "v0.0.19"
+      version: "v0.0.22"
       interval: 5m
       sourceRef:
         kind: HelmRepository
@@ -87,12 +87,15 @@ spec:
 | serviceMonitor.labels | object | `{}` | Service monitor specific labels for prometheus to discover servicemonitor. |
 | serviceMonitor.scrapeTimeout | string | `"30s"` | Prometheus scrape interval timeout. |
 | spegel.additionalMirrorRegistries | list | `[]` | Additional target mirror registries other than Spegel. |
+| spegel.appendMirrors | bool | `false` | When true existing mirror configuration will be appended to instead of replaced. |
 | spegel.blobSpeed | string | `""` | Maximum write speed per request when serving blob layers. Should be an integer followed by unit Bps, KBps, MBps, GBps, or TBps. |
+| spegel.containerdContentPath | string | `"/var/lib/containerd/io.containerd.content.v1.content"` | Path to Containerd content store.. |
 | spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
 | spegel.containerdRegistryConfigPath | string | `"/etc/containerd/certs.d"` | Path to Containerd mirror configuration. |
 | spegel.containerdSock | string | `"/run/containerd/containerd.sock"` | Path to Containerd socket. |
 | spegel.kubeconfigPath | string | `""` | Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC. |
+| spegel.logLevel | string | `"INFO"` | Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR. |
 | spegel.mirrorResolveRetries | int | `3` | Max ammount of mirrors to attempt. |
 | spegel.mirrorResolveTimeout | string | `"5s"` | Max duration spent finding a mirror. |
 | spegel.registries | list | `["https://cgr.dev","https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://gcr.io","https://registry.k8s.io","https://k8s.gcr.io","https://lscr.io"]` | Registries for which mirror configuration will be created. |

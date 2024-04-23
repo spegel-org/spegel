@@ -3,6 +3,7 @@ package oci
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -27,20 +28,21 @@ func TestOCIClient(t *testing.T) {
 	err = json.Unmarshal(b, &imgs)
 	require.NoError(t, err)
 	blobs := map[digest.Digest][]byte{}
-	fileItems, err := os.ReadDir("./testdata/blobs")
+	fileItems, err := os.ReadDir("./testdata/blobs/sha256")
 	require.NoError(t, err)
 	for _, item := range fileItems {
 		if item.IsDir() {
 			continue
 		}
-		dgst, err := digest.Parse(item.Name())
+		dgst, err := digest.Parse(fmt.Sprintf("sha256:%s", item.Name()))
 		require.NoError(t, err)
-		b, err := os.ReadFile(path.Join("./testdata/blobs", item.Name()))
+		b, err := os.ReadFile(path.Join("./testdata/blobs/sha256", item.Name()))
 		require.NoError(t, err)
 		blobs[dgst] = b
 	}
 
-	contentStore, err := local.NewStore(t.TempDir())
+	contentPath := t.TempDir()
+	contentStore, err := local.NewStore(contentPath)
 	require.NoError(t, err)
 	boltDB, err := bolt.Open(path.Join(t.TempDir(), "bolt.db"), 0644, nil)
 	require.NoError(t, err)
@@ -72,11 +74,15 @@ func TestOCIClient(t *testing.T) {
 	}
 	containerdClient, err := containerd.New("", containerd.WithServices(containerd.WithImageStore(imageStore), containerd.WithContentStore(contentStore)))
 	require.NoError(t, err)
-	containerd := &Containerd{
+	remoteContainerd := &Containerd{
 		client: containerdClient,
 	}
+	localContainerd := &Containerd{
+		contentPath: contentPath,
+		client:      containerdClient,
+	}
 
-	for _, ociClient := range []Client{containerd} {
+	for _, ociClient := range []Client{remoteContainerd, localContainerd} {
 		t.Run(ociClient.Name(), func(t *testing.T) {
 			imgs, err := ociClient.ListImages(ctx)
 			require.NoError(t, err)

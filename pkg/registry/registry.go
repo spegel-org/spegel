@@ -4,20 +4,19 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
-	pkggin "github.com/xenitab/pkg/gin"
 
+	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
@@ -27,6 +26,18 @@ import (
 const (
 	MirroredHeaderKey = "X-Spegel-Mirrored"
 )
+
+type Registry struct {
+	log              logr.Logger
+	throttler        *throttle.Throttler
+	ociClient        oci.Client
+	router           routing.Router
+	transport        http.RoundTripper
+	localAddr        string
+	resolveRetries   int
+	resolveTimeout   time.Duration
+	resolveLatestTag bool
+}
 
 type Option func(*Registry)
 
@@ -66,15 +77,10 @@ func WithBlobSpeed(blobSpeed throttle.Byterate) Option {
 	}
 }
 
-type Registry struct {
-	throttler        *throttle.Throttler
-	ociClient        oci.Client
-	router           routing.Router
-	transport        http.RoundTripper
-	localAddr        string
-	resolveRetries   int
-	resolveTimeout   time.Duration
-	resolveLatestTag bool
+func WithLogger(log logr.Logger) Option {
+	return func(r *Registry) {
+		r.log = log
+	}
 }
 
 func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *Registry {
@@ -91,128 +97,147 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *R
 	return r
 }
 
-func (r *Registry) Server(addr string, log logr.Logger) *http.Server {
-	cfg := pkggin.Config{
-		LogConfig: pkggin.LogConfig{
-			Logger:          log,
-			PathFilter:      regexp.MustCompile("/healthz"),
-			IncludeLatency:  true,
-			IncludeClientIP: true,
-			IncludeKeys:     []string{"handler"},
-		},
-		MetricsConfig: pkggin.MetricsConfig{
-			HandlerID: "registry",
-		},
-	}
-	engine := pkggin.NewEngine(cfg)
-	engine.GET("/healthz", r.readyHandler)
-	engine.Any("/v2/*params", r.metricsHandler, r.registryHandler)
+func (r *Registry) Server(addr string) *http.Server {
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: engine,
+		Handler: mux.NewServeMux(r.handle),
 	}
 	return srv
 }
 
-func (r *Registry) readyHandler(c *gin.Context) {
+func (r *Registry) handle(rw mux.ResponseWriter, req *http.Request) {
+	start := time.Now()
+	handler := req.URL.Path
+	if strings.HasPrefix(handler, "/v2") {
+		handler = "/v2/*"
+	}
+
+	defer func() {
+		latency := time.Since(start)
+		statusCode := strconv.FormatInt(int64(rw.Status()), 10)
+
+		metrics.HttpRequestsInflight.WithLabelValues(handler).Add(-1)
+		metrics.HttpRequestDurHistogram.WithLabelValues(handler, req.Method, statusCode).Observe(latency.Seconds())
+		metrics.HttpResponseSizeHistogram.WithLabelValues(handler, req.Method, statusCode).Observe(float64(rw.Size()))
+
+		// Ignore logging requests to healthz to reduce log noise
+		if req.URL.Path == "/healthz" {
+			return
+		}
+
+		// Logging
+		path := req.URL.Path
+		kvs := []interface{}{"path", path, "status", rw.Status(), "method", req.Method, "latency", latency.String(), "ip", getClientIP(req)}
+		if rw.Status() >= 200 && rw.Status() < 300 {
+			r.log.Info("", kvs...)
+			return
+		}
+		r.log.Error(rw.Error(), "", kvs...)
+	}()
+
+	metrics.HttpRequestsInflight.WithLabelValues(handler).Add(1)
+
+	if req.URL.Path == "/healthz" && req.Method == http.MethodGet {
+		r.readyHandler(rw, req)
+		return
+	}
+	if strings.HasPrefix(req.URL.Path, "/v2") && (req.Method == http.MethodGet || req.Method == http.MethodHead) {
+		r.registryHandler(rw, req)
+		return
+	}
+	rw.WriteHeader(http.StatusNotFound)
+}
+
+func (r *Registry) readyHandler(rw mux.ResponseWriter, req *http.Request) {
 	ok, err := r.router.Ready()
 	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusInternalServerError, err)
+		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 	if !ok {
-		c.Status(http.StatusInternalServerError)
+		rw.WriteHeader(http.StatusInternalServerError)
 		return
-
 	}
-	c.Status(http.StatusOK)
 }
 
-func (r *Registry) registryHandler(c *gin.Context) {
-	// Only deal with GET and HEAD requests.
-	if !(c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead) {
-		c.Status(http.StatusNotFound)
-		return
-	}
-	// Quickly return 200 for /v2/ to indicate that registry supports v2.
-	if path.Clean(c.Request.URL.Path) == "/v2" {
-		if c.Request.Method != http.MethodGet {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		c.Status(http.StatusOK)
+func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
+	// Quickly return 200 for /v2 to indicate that registry supports v2.
+	if path.Clean(req.URL.Path) == "/v2" {
 		return
 	}
 
 	// Parse out path components from request.
-	ref, dgst, refType, err := parsePathComponents(c.Query("ns"), c.Request.URL.Path)
+	registryName := req.URL.Query().Get("ns")
+	ref, dgst, refType, err := parsePathComponents(registryName, req.URL.Path)
 	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
+		rw.WriteError(http.StatusNotFound, err)
 		return
 	}
 
+	// Check if latest tag should be resolved
 	if !r.resolveLatestTag && ref != "" {
 		_, tag, _ := strings.Cut(ref, ":")
 		if tag == "latest" {
-			c.AbortWithStatus(http.StatusNotFound)
+			rw.WriteHeader(http.StatusNotFound)
 			return
 		}
 	}
 
 	// Request with mirror header are proxied.
-	if c.Request.Header.Get(MirroredHeaderKey) != "true" {
+	if req.Header.Get(MirroredHeaderKey) != "true" {
 		// Set mirrored header in request to stop infinite loops
-		c.Request.Header.Set(MirroredHeaderKey, "true")
-
+		req.Header.Set(MirroredHeaderKey, "true")
 		key := dgst.String()
 		if key == "" {
 			key = ref
 		}
-		r.handleMirror(c, key)
+		r.handleMirror(rw, req, key)
+		sourceType := "internal"
+		if r.isExternalRequest(req) {
+			sourceType = "external"
+		}
+		cacheType := "hit"
+		if rw.Status() != http.StatusOK {
+			cacheType = "miss"
+		}
+		metrics.MirrorRequestsTotal.WithLabelValues(registryName, cacheType, sourceType).Inc()
 		return
 	}
 
 	// Serve registry endpoints.
 	if dgst == "" {
-		dgst, err = r.ociClient.Resolve(c, ref)
+		dgst, err = r.ociClient.Resolve(req.Context(), ref)
 		if err != nil {
-			//nolint:errcheck // ignore
-			c.AbortWithError(http.StatusNotFound, err)
+			rw.WriteError(http.StatusNotFound, err)
 			return
 		}
 	}
+
 	switch refType {
 	case referenceTypeManifest:
-		r.handleManifest(c, dgst)
-		return
+		r.handleManifest(rw, req, dgst)
 	case referenceTypeBlob:
-		r.handleBlob(c, dgst)
-		return
+		r.handleBlob(rw, req, dgst)
+	default:
+		// If nothing matches return 404.
+		rw.WriteHeader(http.StatusNotFound)
 	}
-
-	// If nothing matches return 404.
-	c.Status(http.StatusNotFound)
 }
 
-func (r *Registry) handleMirror(c *gin.Context, key string) {
-	c.Set("handler", "mirror")
-
-	log := pkggin.FromContextOrDiscard(c).WithValues("key", key, "path", c.Request.URL.Path, "ip", c.RemoteIP())
+func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, key string) {
+	log := r.log.WithValues("key", key, "path", req.URL.Path, "ip", getClientIP(req))
 
 	// Resolve mirror with the requested key
-	resolveCtx, cancel := context.WithTimeout(c, r.resolveTimeout)
+	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
 	defer cancel()
 	resolveCtx = logr.NewContext(resolveCtx, log)
-	isExternal := r.isExternalRequest(c)
+	isExternal := r.isExternalRequest(req)
 	if isExternal {
 		log.Info("handling mirror request from external node")
 	}
 	peerCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
 	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusInternalServerError, err)
+		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 	// TODO: Refactor context cancel and mirror channel closing
@@ -220,15 +245,12 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 		select {
 		case <-resolveCtx.Done():
 			// Request has been closed by server or client. No use continuing.
-			//nolint:errcheck // ignore
-			c.AbortWithError(http.StatusNotFound, fmt.Errorf("request closed for key: %s", key))
+			rw.WriteError(http.StatusNotFound, fmt.Errorf("request closed for key: %s", key))
 			return
 		case ipAddr, ok := <-peerCh:
 			// Channel closed means no more mirrors will be received and max retries has been reached.
 			if !ok {
-				// TODO: Change to a 404 instead
-				//nolint:errcheck // ignore
-				c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("mirror resolve retries exhausted for key: %s", key))
+				rw.WriteError(http.StatusNotFound, fmt.Errorf("mirror resolve retries exhausted for key: %s", key))
 				return
 			}
 
@@ -237,7 +259,7 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 			// If the response writer has been written to it means that the request was properly proxied.
 			succeeded := false
 			scheme := "http"
-			if c.Request.TLS != nil {
+			if req.TLS != nil {
 				scheme = "https"
 			}
 			u := &url.URL{
@@ -258,90 +280,79 @@ func (r *Registry) handleMirror(c *gin.Context, key string) {
 				succeeded = true
 				return nil
 			}
-			proxy.ServeHTTP(c.Writer, c.Request)
+			proxy.ServeHTTP(rw, req)
 			if !succeeded {
 				break
 			}
-			log.V(5).Info("mirrored request", "path", c.Request.URL.Path, "url", u.String())
+			log.V(4).Info("mirrored request", "url", u.String())
 			return
 		}
 	}
 }
 
-func (r *Registry) handleManifest(c *gin.Context, dgst digest.Digest) {
-	c.Set("handler", "manifest")
-	b, mediaType, err := r.ociClient.GetManifest(c, dgst)
+func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, dgst digest.Digest) {
+	b, mediaType, err := r.ociClient.GetManifest(req.Context(), dgst)
 	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
+		rw.WriteError(http.StatusNotFound, err)
 		return
 	}
-	c.Header("Content-Type", mediaType)
-	c.Header("Content-Length", strconv.FormatInt(int64(len(b)), 10))
-	c.Header("Docker-Content-Digest", dgst.String())
-	if c.Request.Method == http.MethodHead {
+	rw.Header().Set("Content-Type", mediaType)
+	rw.Header().Set("Content-Length", strconv.FormatInt(int64(len(b)), 10))
+	rw.Header().Set("Docker-Content-Digest", dgst.String())
+	if req.Method == http.MethodHead {
 		return
 	}
-	_, err = c.Writer.Write(b)
+	_, err = rw.Write(b)
 	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusNotFound, err)
+		rw.WriteError(http.StatusNotFound, err)
 		return
 	}
 }
 
-func (r *Registry) handleBlob(c *gin.Context, dgst digest.Digest) {
-	c.Set("handler", "blob")
-	size, err := r.ociClient.Size(c, dgst)
+func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dgst digest.Digest) {
+	size, err := r.ociClient.Size(req.Context(), dgst)
 	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusInternalServerError, err)
+		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
-	c.Header("Content-Length", strconv.FormatInt(size, 10))
-	c.Header("Docker-Content-Digest", dgst.String())
-	if c.Request.Method == http.MethodHead {
+	rw.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	rw.Header().Set("Docker-Content-Digest", dgst.String())
+	if req.Method == http.MethodHead {
 		return
 	}
-	var w io.Writer = c.Writer
+	var w io.Writer = rw
 	if r.throttler != nil {
-		w = r.throttler.Writer(c.Writer)
+		w = r.throttler.Writer(rw)
 	}
-	rc, err := r.ociClient.GetBlob(c, dgst)
+	rc, err := r.ociClient.GetBlob(req.Context(), dgst)
 	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusInternalServerError, err)
+		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 	defer rc.Close()
 	_, err = io.Copy(w, rc)
 	if err != nil {
-		//nolint:errcheck // ignore
-		c.AbortWithError(http.StatusInternalServerError, err)
+		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 }
 
-func (r *Registry) metricsHandler(c *gin.Context) {
-	c.Next()
-	handler, ok := c.Get("handler")
-	if !ok {
-		return
-	}
-	if handler != "mirror" {
-		return
-	}
-	sourceType := "internal"
-	if r.isExternalRequest(c) {
-		sourceType = "external"
-	}
-	cacheType := "hit"
-	if c.Writer.Status() != http.StatusOK {
-		cacheType = "miss"
-	}
-	metrics.MirrorRequestsTotal.WithLabelValues(c.Query("ns"), cacheType, sourceType).Inc()
+func (r *Registry) isExternalRequest(req *http.Request) bool {
+	return req.Host != r.localAddr
 }
 
-func (r *Registry) isExternalRequest(c *gin.Context) bool {
-	return c.Request.Host != r.localAddr
+func getClientIP(req *http.Request) string {
+	forwardedFor := req.Header.Get("X-Forwarded-For")
+	if forwardedFor != "" {
+		comps := strings.Split(forwardedFor, ",")
+		if len(comps) > 1 {
+			return comps[0]
+		}
+		return forwardedFor
+	}
+	h, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return ""
+	}
+	return h
 }

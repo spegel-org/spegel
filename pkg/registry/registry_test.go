@@ -8,32 +8,11 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
-
-type TestResponseRecorder struct {
-	*httptest.ResponseRecorder
-	closeChannel chan bool
-}
-
-func (r *TestResponseRecorder) CloseNotify() <-chan bool {
-	return r.closeChannel
-}
-
-//nolint:unused // ignore
-func (r *TestResponseRecorder) closeClient() {
-	r.closeChannel <- true
-}
-
-func CreateTestResponseRecorder() *TestResponseRecorder {
-	return &TestResponseRecorder{
-		httptest.NewRecorder(),
-		make(chan bool, 1),
-	}
-}
 
 func TestMirrorHandler(t *testing.T) {
 	badSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -81,9 +60,9 @@ func TestMirrorHandler(t *testing.T) {
 			expectedHeaders: nil,
 		},
 		{
-			name:            "request should not timeout and give 500 if all peers fail",
+			name:            "request should not timeout and give 404 if all peers fail",
 			key:             "no-working-peers",
-			expectedStatus:  http.StatusInternalServerError,
+			expectedStatus:  http.StatusNotFound,
 			expectedBody:    "",
 			expectedHeaders: nil,
 		},
@@ -111,12 +90,12 @@ func TestMirrorHandler(t *testing.T) {
 	}
 	for _, tt := range tests {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
-			t.Run(tt.name, func(t *testing.T) {
-				rw := CreateTestResponseRecorder()
-				c, _ := gin.CreateTestContext(rw)
-				target := fmt.Sprintf("http://example.com/%s", tt.key)
-				c.Request = httptest.NewRequest(method, target, nil)
-				reg.handleMirror(c, tt.key)
+			t.Run(fmt.Sprintf("%s-%s", method, tt.name), func(t *testing.T) {
+				target := fmt.Sprintf("http://example.com/v2/foo/bar/blobs/%s", tt.key)
+				rw := httptest.NewRecorder()
+				req := httptest.NewRequest(method, target, nil)
+				m := mux.NewServeMux(reg.handle)
+				m.ServeHTTP(rw, req)
 
 				resp := rw.Result()
 				defer resp.Body.Close()
@@ -139,5 +118,45 @@ func TestMirrorHandler(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestGetClientIP(t *testing.T) {
+	tests := []struct {
+		name     string
+		request  *http.Request
+		expected string
+	}{
+		{
+			name: "x forwarded for single",
+			request: &http.Request{
+				Header: http.Header{
+					"X-Forwarded-For": []string{"localhost"},
+				},
+			},
+			expected: "localhost",
+		},
+		{
+			name: "x forwarded for multiple",
+			request: &http.Request{
+				Header: http.Header{
+					"X-Forwarded-For": []string{"localhost,127.0.0.1"},
+				},
+			},
+			expected: "localhost",
+		},
+		{
+			name: "remote address",
+			request: &http.Request{
+				RemoteAddr: "127.0.0.1:9090",
+			},
+			expected: "127.0.0.1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ip := getClientIP(tt.request)
+			require.Equal(t, tt.expected, ip)
+		})
 	}
 }
