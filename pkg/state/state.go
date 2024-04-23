@@ -16,7 +16,10 @@ import (
 
 func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
 	log := logr.FromContextOrDiscard(ctx)
-	eventCh, errCh := ociClient.Subscribe(ctx)
+	eventCh, errCh, err := ociClient.Subscribe(ctx)
+	if err != nil {
+		return err
+	}
 	immediate := make(chan time.Time, 1)
 	immediate <- time.Now()
 	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)

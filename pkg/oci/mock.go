@@ -27,8 +27,8 @@ func (m *MockClient) Verify(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockClient) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error) {
-	return nil, nil
+func (m *MockClient) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error) {
+	return nil, nil, nil
 }
 
 func (m *MockClient) ListImages(ctx context.Context) ([]Image, error) {

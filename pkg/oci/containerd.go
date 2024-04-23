@@ -136,50 +136,49 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", cfg.Registry.ConfigPath, configPath)
 }
 
-func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error) {
-	imgCh := make(chan ImageEvent, 1)
-	errCh := make(chan error, 1)
-
+func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error) {
+	imgCh := make(chan ImageEvent)
+	errCh := make(chan error)
 	client, err := c.Client()
 	if err != nil {
-		errCh <- err
-		close(imgCh)
-		close(errCh)
-		return imgCh, errCh
+		return nil, nil, err
 	}
-
 	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, c.eventFilter)
 	go func() {
+		defer func() {
+			close(imgCh)
+			close(errCh)
+		}()
 		for envelope := range envelopeCh {
 			var img Image
 			imageName, eventType, err := getEventImage(envelope.Event)
 			if err != nil {
 				errCh <- err
-				return
+				continue
 			}
 			switch eventType {
 			case CreateEvent, UpdateEvent:
 				cImg, err := client.GetImage(ctx, imageName)
 				if err != nil {
 					errCh <- err
-					return
+					continue
 				}
 				img, err = Parse(cImg.Name(), cImg.Target().Digest)
 				if err != nil {
 					errCh <- err
-					return
+					continue
 				}
 			case DeleteEvent:
 				img, err = Parse(imageName, "")
 				if err != nil {
 					errCh <- err
-					return
+					continue
 				}
 			}
 			imgCh <- ImageEvent{Image: img, Type: eventType}
 		}
 	}()
-	return imgCh, channel.Merge(errCh, cErrCh)
+	return imgCh, channel.Merge(errCh, cErrCh), nil
 }
 
 func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {

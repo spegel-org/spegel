@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#452](https://github.com/spegel-org/spegel/pull/452) Fix Containerd Subscribe returning on any error.
+
 ### Security
 
 - [#451](https://github.com/spegel-org/spegel/pull/451) Bump golang.org/x/net from 0.21.0 to 0.23.0.
