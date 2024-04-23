@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.22
+
+### Added 
+
 - [#435](https://github.com/spegel-org/spegel/pull/435) Add pprof endpoints to enable profiling.
 - [#434](https://github.com/spegel-org/spegel/pull/434) Add optional Containerd local content store to increase serve performance.
 - [#438](https://github.com/spegel-org/spegel/pull/438) Set host path type for Containerd socket.
@@ -17,10 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - [#439](https://github.com/spegel-org/spegel/pull/439) Update Go version and fix toolchain version.
-
-### Deprecated
-
-### Removed
 
 ### Fixed
 
