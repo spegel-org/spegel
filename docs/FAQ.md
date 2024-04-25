@@ -7,6 +7,10 @@ Frequently asked questions, please read these before creating a new issue.
 Spegel is being used by multiple users in production for over a year without any major issues. The great thing is that pulling images would not stop working if you for some reason would find an issue with Spegel.
 A fallback to the original registry will always occur if Spegel can't be reached or serve the requested image.
 
+## What performance increase can I expect with Spegel?
+
+Read the [benchmark documentation](./BENCHMARK.md) for information of expected gains.
+
 ## How do I know that Spegel is working? 
 
 Spegel is meant to be a painless experience to install, meaning that it may be difficult initially to know if things are working or not. Simply put a good indicator that things are working is if all Spegel pods have started and are in a ready state.
