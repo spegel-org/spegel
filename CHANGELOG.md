@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#388](https://github.com/XenitAB/spegel/pull/388) Add support for deploying the Grafana dashboard with the Helm chart.
+
 ### Changed
 
 ### Deprecated
