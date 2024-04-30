@@ -21,6 +21,7 @@ Spegel has been tested on the following Kubernetes distributions for compatibili
 | --- | --- |
 | :green_circle: | AKS |
 | :green_circle: | Minikube |
+| :green_circle: | Kind |
 | :yellow_circle: | EKS |
 | :yellow_circle: | K3S |
 | :yellow_circle: | Talos |
@@ -48,6 +49,30 @@ EOL
 
 /etc/eks/bootstrap.sh
 ```
+
+## Kind
+
+Spegel uses Kind for its end-to-end tests.
+
+Discard unpacked layers is enabled by default, meaning that layers that are not required for the container runtime will be removed after consumed.
+This needs to be disabled as otherwise all of the required layers of an image would not be present on the node.
+
+In order to be more like a "real" Kubernetes cluster, you may want to set [Containerd's metadata sharing policy](https://github.com/containerd/containerd/blob/main/docs/ops.md#bolt-metadata-plugin) to `isolated`.
+
+```yaml
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = "/etc/containerd/certs.d"
+  [plugins."io.containerd.grpc.v1.cri".containerd]
+    discard_unpacked_layers = false
+  [plugins."io.containerd.metadata.v1.bolt"]
+    content_sharing_policy = "isolated"
+```
+
+For a full example, see the end-to-end tests' [Kind configuration](../test/e2e/kind-config-iptables.yaml) for a full example.
 
 ## K3S
 
