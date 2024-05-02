@@ -4,7 +4,7 @@ go 1.21.9
 
 require (
 	github.com/alexflint/go-arg v1.4.3
-	github.com/containerd/containerd v1.7.15
+	github.com/containerd/containerd v1.7.16
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/go-logr/logr v1.4.1
 	github.com/ipfs/go-cid v0.4.1
@@ -16,7 +16,7 @@ require (
 	github.com/norwoodj/helm-docs v1.12.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
-	github.com/pelletier/go-toml/v2 v2.2.1
+	github.com/pelletier/go-toml/v2 v2.2.2
 	github.com/prometheus/client_golang v1.19.0
 	github.com/spf13/afero v1.11.0
 	github.com/stretchr/testify v1.9.0

@@ -40,7 +40,7 @@ type ConfigurationCmd struct {
 
 type BootstrapConfig struct {
 	BootstrapKind           string `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
-	HTTPBootstrapAddr       string `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_KIND" help:"Address to serve for HTTP bootstrap."`
+	HTTPBootstrapAddr       string `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap."`
 	HTTPBootstrapPeer       string `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
 	KubeconfigPath          string `arg:"--kubeconfig-path,env:KUBECONFIG_PATH" help:"Path to the kubeconfig file."`
 	LeaderElectionName      string `arg:"--leader-election-name,env:LEADER_ELECTION_NAME" default:"spegel-leader-election" help:"Name of leader election."`
