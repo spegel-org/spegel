@@ -41,50 +41,7 @@ Please consult the [FAQ](./docs/FAQ.md) if you run into any problems.
 
 ## Developing
 
-### Building
-
-Pre-requisites:
-
-* Go 1.21
-
-Spegel itself is a plain Docker image:
-
-```shell
-make docker-build
-```
-
-### Local testing
-
-Pre-requisites:
-
-* [kind](https://kind.sigs.k8s.io/)
-* [docker](https://www.docker.com/)
-* [helm](https://helm.sh/)
-* [kubectl](https://kubernetes.io/docs/tasks/tools/)
-
-Spegel can be tested using a local Kind cluster:
-
-```shell
-kind create cluster --config ./test/e2e/kind-config-iptables.yaml
-kubectl create namespace spegel
-```
-
-You can now build and test spegel. Note that we need to ask kind to copy the image into the Kind cluster:
-
-```shell
-TAG=$(date +%s)
-make docker-build TAG=$TAG
-kind load docker-image ghcr.io/spegel-org/spegel:$TAG
-helm upgrade --wait --install --namespace=spegel spegel ./charts/spegel \
-  --set "image.repository=ghcr.io/spegel-org/spegel" \
-  --set "image.tag=$TAG" \
-  --set "nodeSelector.spegel=schedule"
-kubectl --namespace spegel rollout status daemonset spegel --timeout 60s
-```
-
-If all goes well, you will see see something like `daemon set "spegel" successfully rolled out`.
-
-See [How do I know that Spegel is working?](./docs/FAQ.md#how-do-i-know-that-spegel-is-working) on how to verify.
+See [contribution guidelines](./CONTRIBUTING.md) for instructions on how to build and test Spegel.
 
 ## Architecture
 
