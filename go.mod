@@ -4,7 +4,7 @@ go 1.21.9
 
 require (
 	github.com/alexflint/go-arg v1.4.3
-	github.com/containerd/containerd v1.7.15
+	github.com/containerd/containerd v1.7.16
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/go-logr/logr v1.4.1
 	github.com/ipfs/go-cid v0.4.1
