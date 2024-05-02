@@ -39,7 +39,7 @@ make docker-build
 It is possible to specify a different image name and tag.
 
 ```shell
-make docker-build IMG=exmaple.com/spegel TAG=feature
+make docker-build IMG=example.com/spegel TAG=feature
 ```
 
 ### Local testing
