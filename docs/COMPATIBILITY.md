@@ -21,9 +21,9 @@ Spegel has been tested on the following Kubernetes distributions for compatibili
 | --- | --- |
 | :green_circle: | AKS |
 | :green_circle: | Minikube |
-| :green_circle: | Kind |
 | :yellow_circle: | EKS |
 | :yellow_circle: | K3S |
+| :yellow_circle: | Kind |
 | :yellow_circle: | Talos |
 | :red_circle: | GKE |
 | :red_circle: | DigitalOcean |
