@@ -1,5 +1,6 @@
 TAG = $$(git rev-parse --short HEAD)
-IMG ?= ghcr.io/spegel-org/spegel:$(TAG)
+IMG ?= ghcr.io/spegel-org/spegel
+REF = $(IMG):$(TAG)
 CNI ?= iptables
 
 lint:
@@ -10,10 +11,10 @@ test:
 	go test ./...
 
 docker-build:
-	docker build -t ${IMG} .
+	docker build -t ${REF} .
 
 e2e: docker-build
-	./test/e2e/e2e.sh ${IMG} ${CNI}
+	./test/e2e/e2e.sh ${REF} ${CNI}
 
 tools:
 	GO111MODULE=on go install github.com/norwoodj/helm-docs/cmd/helm-docs
