@@ -19,7 +19,7 @@ jobs:
       - name: Setup golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.55.2
+          version: v1.58.0
           args: --timeout 3m0s
   unit:
     needs: lint
