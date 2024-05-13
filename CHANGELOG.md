@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#460](https://github.com/spegel-org/spegel/pull/460) Fix environment variable for http-bootstrap-addr flag.
+- [#471](https://github.com/spegel-org/spegel/pull/471) Fix handler key in request logging.
 
 ### Security
 

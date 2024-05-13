@@ -107,42 +107,46 @@ func (r *Registry) Server(addr string) *http.Server {
 
 func (r *Registry) handle(rw mux.ResponseWriter, req *http.Request) {
 	start := time.Now()
-	handler := req.URL.Path
-	if strings.HasPrefix(handler, "/v2") {
-		handler = "/v2/*"
+	handler := ""
+	path := req.URL.Path
+	if strings.HasPrefix(path, "/v2") {
+		path = "/v2/*"
 	}
-
 	defer func() {
 		latency := time.Since(start)
 		statusCode := strconv.FormatInt(int64(rw.Status()), 10)
 
-		metrics.HttpRequestsInflight.WithLabelValues(handler).Add(-1)
-		metrics.HttpRequestDurHistogram.WithLabelValues(handler, req.Method, statusCode).Observe(latency.Seconds())
-		metrics.HttpResponseSizeHistogram.WithLabelValues(handler, req.Method, statusCode).Observe(float64(rw.Size()))
+		metrics.HttpRequestsInflight.WithLabelValues(path).Add(-1)
+		metrics.HttpRequestDurHistogram.WithLabelValues(path, req.Method, statusCode).Observe(latency.Seconds())
+		metrics.HttpResponseSizeHistogram.WithLabelValues(path, req.Method, statusCode).Observe(float64(rw.Size()))
 
 		// Ignore logging requests to healthz to reduce log noise
 		if req.URL.Path == "/healthz" {
 			return
 		}
 
-		// Logging
-		path := req.URL.Path
-		kvs := []interface{}{"path", path, "status", rw.Status(), "method", req.Method, "latency", latency.String(), "ip", getClientIP(req)}
+		kvs := []interface{}{
+			"path", req.URL.Path,
+			"status", rw.Status(),
+			"method", req.Method,
+			"latency", latency.String(),
+			"ip", getClientIP(req),
+			"handler", handler,
+		}
 		if rw.Status() >= 200 && rw.Status() < 300 {
 			r.log.Info("", kvs...)
 			return
 		}
 		r.log.Error(rw.Error(), "", kvs...)
 	}()
-
-	metrics.HttpRequestsInflight.WithLabelValues(handler).Add(1)
+	metrics.HttpRequestsInflight.WithLabelValues(path).Add(1)
 
 	if req.URL.Path == "/healthz" && req.Method == http.MethodGet {
 		r.readyHandler(rw, req)
 		return
 	}
 	if strings.HasPrefix(req.URL.Path, "/v2") && (req.Method == http.MethodGet || req.Method == http.MethodHead) {
-		r.registryHandler(rw, req)
+		handler = r.registryHandler(rw, req)
 		return
 	}
 	rw.WriteHeader(http.StatusNotFound)
@@ -160,10 +164,10 @@ func (r *Registry) readyHandler(rw mux.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
+func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) string {
 	// Quickly return 200 for /v2 to indicate that registry supports v2.
 	if path.Clean(req.URL.Path) == "/v2" {
-		return
+		return "registry"
 	}
 
 	// Parse out path components from request.
@@ -171,7 +175,7 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
 	ref, dgst, refType, err := parsePathComponents(registryName, req.URL.Path)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, err)
-		return
+		return ""
 	}
 
 	// Check if latest tag should be resolved
@@ -179,7 +183,7 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
 		_, tag, _ := strings.Cut(ref, ":")
 		if tag == "latest" {
 			rw.WriteHeader(http.StatusNotFound)
-			return
+			return ""
 		}
 	}
 
@@ -201,7 +205,7 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
 			cacheType = "miss"
 		}
 		metrics.MirrorRequestsTotal.WithLabelValues(registryName, cacheType, sourceType).Inc()
-		return
+		return "mirror"
 	}
 
 	// Serve registry endpoints.
@@ -209,19 +213,22 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
 		dgst, err = r.ociClient.Resolve(req.Context(), ref)
 		if err != nil {
 			rw.WriteError(http.StatusNotFound, err)
-			return
+			return ""
 		}
 	}
 
 	switch refType {
 	case referenceTypeManifest:
 		r.handleManifest(rw, req, dgst)
+		return "manifest"
 	case referenceTypeBlob:
 		r.handleBlob(rw, req, dgst)
-	default:
-		// If nothing matches return 404.
-		rw.WriteHeader(http.StatusNotFound)
+		return "blob"
 	}
+
+	// If nothing matches return 404.
+	rw.WriteHeader(http.StatusNotFound)
+	return ""
 }
 
 func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, key string) {
