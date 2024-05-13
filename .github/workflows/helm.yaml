@@ -1,0 +1,25 @@
+name: helm
+on:
+  pull_request:
+    paths:
+      - "charts/**"
+jobs:
+  docs:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run helm-docs
+        run: make helm-docs
+      - name: Check if working tree is dirty
+        run: |
+          if [[ $(git diff --stat) != '' ]]; then
+            git diff
+            echo 'run make helm-docs and commit changes'
+            exit 1
+          fi
