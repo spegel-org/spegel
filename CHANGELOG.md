@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#475](https://github.com/XenitAB/spegel/pull/475) Move resolving ref to digest to manifest handler.
+
 ### Deprecated
 
 ### Removed
