@@ -1,14 +1,11 @@
 name: release
-
 on:
   release:
     types: [published]
-
 permissions:
   contents: read
   packages: write
   id-token: write
-
 jobs:
   release:
     runs-on: ubuntu-latest
