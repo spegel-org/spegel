@@ -209,17 +209,9 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 	}
 
 	// Serve registry endpoints.
-	if dgst == "" {
-		dgst, err = r.ociClient.Resolve(req.Context(), ref)
-		if err != nil {
-			rw.WriteError(http.StatusNotFound, err)
-			return ""
-		}
-	}
-
 	switch refType {
 	case referenceTypeManifest:
-		r.handleManifest(rw, req, dgst)
+		r.handleManifest(rw, req, ref, dgst)
 		return "manifest"
 	case referenceTypeBlob:
 		r.handleBlob(rw, req, dgst)
@@ -297,7 +289,15 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, key st
 	}
 }
 
-func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, dgst digest.Digest) {
+func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, ref string, dgst digest.Digest) {
+	if dgst == "" {
+		var err error
+		dgst, err = r.ociClient.Resolve(req.Context(), ref)
+		if err != nil {
+			rw.WriteError(http.StatusNotFound, err)
+			return
+		}
+	}
 	b, mediaType, err := r.ociClient.GetManifest(req.Context(), dgst)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, err)
