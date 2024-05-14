@@ -1,11 +1,8 @@
 name: helm
 on:
   pull_request:
-    paths:
-      - "charts/**"
 jobs:
   docs:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
