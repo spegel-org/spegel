@@ -30,7 +30,7 @@ type KubernetesBootstrapper struct {
 	mx                      sync.RWMutex
 }
 
-func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) Bootstrapper {
+func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) *KubernetesBootstrapper {
 	return &KubernetesBootstrapper{
 		leaderElectionNamespace: namespace,
 		leaderElectioName:       name,

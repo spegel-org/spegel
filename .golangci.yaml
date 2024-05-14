@@ -15,6 +15,7 @@ linters:
     - bodyclose
     - goimports
     - importas
+    - ireturn
 linters-settings:
   govet:
     enable-all: true

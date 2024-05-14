@@ -6,7 +6,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func GetClientset(kubeconfigPath string) (kubernetes.Interface, error) {
+func GetClientset(kubeconfigPath string) (*kubernetes.Clientset, error) {
 	if kubeconfigPath != "" {
 		cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
