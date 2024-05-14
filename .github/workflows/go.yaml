@@ -13,9 +13,6 @@ jobs:
           go-version-file: go.mod
       - name: Setup golangci-lint
         uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.58.0
-          args: --timeout 3m0s
   unit:
     runs-on: ubuntu-latest
     steps:
