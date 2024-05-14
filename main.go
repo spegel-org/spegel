@@ -13,13 +13,14 @@ import (
 	"syscall"
 	"time"
 
+	"log/slog"
+
 	"github.com/alexflint/go-arg"
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
-	"log/slog"
 
 	"github.com/spegel-org/spegel/internal/kubernetes"
 	"github.com/spegel-org/spegel/pkg/metrics"

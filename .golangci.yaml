@@ -13,6 +13,7 @@ linters:
     - testifylint
     - nolintlint
     - bodyclose
+    - goimports
     - importas
 linters-settings:
   govet:

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#475](https://github.com/XenitAB/spegel/pull/475) Move resolving ref to digest to manifest handler.
 - [#477](https://github.com/XenitAB/spegel/pull/477) Refactor distribution ref to simplify registry routing.
+- [#479](https://github.com/XenitAB/spegel/pull/479) Enable goimports linter and fix errors.
 
 ### Deprecated
 
