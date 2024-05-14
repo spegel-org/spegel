@@ -12,44 +12,44 @@ func TestParsePathComponents(t *testing.T) {
 		name            string
 		registry        string
 		path            string
-		expectedRef     string
+		expectedName    string
 		expectedDgst    digest.Digest
-		expectedRefType referenceType
+		expectedRefKind referenceKind
 	}{
 		{
 			name:            "valid manifest tag",
 			registry:        "example.com",
 			path:            "/v2/foo/bar/manifests/hello-world",
-			expectedRef:     "example.com/foo/bar:hello-world",
+			expectedName:    "example.com/foo/bar:hello-world",
 			expectedDgst:    "",
-			expectedRefType: referenceTypeManifest,
+			expectedRefKind: referenceKindManifest,
 		},
 		{
 			name:            "valid blob digest",
 			registry:        "docker.io",
 			path:            "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
-			expectedRef:     "",
+			expectedName:    "",
 			expectedDgst:    digest.Digest("sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369"),
-			expectedRefType: referenceTypeBlob,
+			expectedRefKind: referenceKindBlob,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ref, dgst, refType, err := parsePathComponents(tt.registry, tt.path)
+			ref, err := parsePathComponents(tt.registry, tt.path)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedRef, ref)
-			require.Equal(t, tt.expectedDgst, dgst)
-			require.Equal(t, tt.expectedRefType, refType)
+			require.Equal(t, tt.expectedName, ref.name)
+			require.Equal(t, tt.expectedDgst, ref.dgst)
+			require.Equal(t, tt.expectedRefKind, ref.kind)
 		})
 	}
 }
 
 func TestParsePathComponentsInvalidPath(t *testing.T) {
-	_, _, _, err := parsePathComponents("example.com", "/v2/spegel-org/spegel/v0.0.1")
+	_, err := parsePathComponents("example.com", "/v2/spegel-org/spegel/v0.0.1")
 	require.EqualError(t, err, "distribution path could not be parsed")
 }
 
 func TestParsePathComponentsMissingRegistry(t *testing.T) {
-	_, _, _, err := parsePathComponents("", "/v2/spegel-org/spegel/manifests/v0.0.1")
+	_, err := parsePathComponents("", "/v2/spegel-org/spegel/manifests/v0.0.1")
 	require.EqualError(t, err, "registry parameter needs to be set for tag references")
 }

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/opencontainers/go-digest"
 
 	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/spegel-org/spegel/pkg/metrics"
@@ -172,30 +171,17 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 
 	// Parse out path components from request.
 	registryName := req.URL.Query().Get("ns")
-	ref, dgst, refType, err := parsePathComponents(registryName, req.URL.Path)
+	ref, err := parsePathComponents(registryName, req.URL.Path)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, err)
 		return ""
-	}
-
-	// Check if latest tag should be resolved
-	if !r.resolveLatestTag && ref != "" {
-		_, tag, _ := strings.Cut(ref, ":")
-		if tag == "latest" {
-			rw.WriteHeader(http.StatusNotFound)
-			return ""
-		}
 	}
 
 	// Request with mirror header are proxied.
 	if req.Header.Get(MirroredHeaderKey) != "true" {
 		// Set mirrored header in request to stop infinite loops
 		req.Header.Set(MirroredHeaderKey, "true")
-		key := dgst.String()
-		if key == "" {
-			key = ref
-		}
-		r.handleMirror(rw, req, key)
+		r.handleMirror(rw, req, ref)
 		sourceType := "internal"
 		if r.isExternalRequest(req) {
 			sourceType = "external"
@@ -209,12 +195,12 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 	}
 
 	// Serve registry endpoints.
-	switch refType {
-	case referenceTypeManifest:
-		r.handleManifest(rw, req, ref, dgst)
+	switch ref.kind {
+	case referenceKindManifest:
+		r.handleManifest(rw, req, ref)
 		return "manifest"
-	case referenceTypeBlob:
-		r.handleBlob(rw, req, dgst)
+	case referenceKindBlob:
+		r.handleBlob(rw, req, ref)
 		return "blob"
 	}
 
@@ -223,7 +209,18 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 	return ""
 }
 
-func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, key string) {
+func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref reference) {
+	if !r.resolveLatestTag && ref.hasLatestTag() {
+		r.log.V(4).Info("skipping mirror request for image with latest tag", "image", ref.name)
+		rw.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	key := ref.dgst.String()
+	if key == "" {
+		key = ref.name
+	}
+
 	log := r.log.WithValues("key", key, "path", req.URL.Path, "ip", getClientIP(req))
 
 	// Resolve mirror with the requested key
@@ -289,23 +286,23 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, key st
 	}
 }
 
-func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, ref string, dgst digest.Digest) {
-	if dgst == "" {
+func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, ref reference) {
+	if ref.dgst == "" {
 		var err error
-		dgst, err = r.ociClient.Resolve(req.Context(), ref)
+		ref.dgst, err = r.ociClient.Resolve(req.Context(), ref.name)
 		if err != nil {
 			rw.WriteError(http.StatusNotFound, err)
 			return
 		}
 	}
-	b, mediaType, err := r.ociClient.GetManifest(req.Context(), dgst)
+	b, mediaType, err := r.ociClient.GetManifest(req.Context(), ref.dgst)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, err)
 		return
 	}
 	rw.Header().Set("Content-Type", mediaType)
 	rw.Header().Set("Content-Length", strconv.FormatInt(int64(len(b)), 10))
-	rw.Header().Set("Docker-Content-Digest", dgst.String())
+	rw.Header().Set("Docker-Content-Digest", ref.dgst.String())
 	if req.Method == http.MethodHead {
 		return
 	}
@@ -316,14 +313,18 @@ func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, ref 
 	}
 }
 
-func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dgst digest.Digest) {
-	size, err := r.ociClient.Size(req.Context(), dgst)
+func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, ref reference) {
+	if ref.dgst == "" {
+		rw.WriteHeader(http.StatusNotFound)
+		return
+	}
+	size, err := r.ociClient.Size(req.Context(), ref.dgst)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
 	rw.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	rw.Header().Set("Docker-Content-Digest", dgst.String())
+	rw.Header().Set("Docker-Content-Digest", ref.dgst.String())
 	if req.Method == http.MethodHead {
 		return
 	}
@@ -331,7 +332,7 @@ func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dgst dig
 	if r.throttler != nil {
 		w = r.throttler.Writer(rw)
 	}
-	rc, err := r.ociClient.GetBlob(req.Context(), dgst)
+	rc, err := r.ociClient.GetBlob(req.Context(), ref.dgst)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return

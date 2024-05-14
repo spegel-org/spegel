@@ -3,16 +3,31 @@ package registry
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/opencontainers/go-digest"
 )
 
-type referenceType string
+type referenceKind string
 
 const (
-	referenceTypeManifest = "Manifest"
-	referenceTypeBlob     = "Blob"
+	referenceKindManifest = "Manifest"
+	referenceKindBlob     = "Blob"
 )
+
+type reference struct {
+	kind referenceKind
+	name string
+	dgst digest.Digest
+}
+
+func (r reference) hasLatestTag() bool {
+	if r.name == "" {
+		return false
+	}
+	_, tag, _ := strings.Cut(r.name, ":")
+	return tag == "latest"
+}
 
 // Package is used to parse components from requests which comform with the OCI distribution spec.
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md
@@ -27,22 +42,34 @@ var (
 	blobsRegexDigest    = regexp.MustCompile(`/v2/` + nameRegex.String() + `/blobs/(.*)`)
 )
 
-func parsePathComponents(registry, path string) (string, digest.Digest, referenceType, error) {
+func parsePathComponents(registry, path string) (reference, error) {
 	comps := manifestRegexTag.FindStringSubmatch(path)
 	if len(comps) == 6 {
 		if registry == "" {
-			return "", "", "", fmt.Errorf("registry parameter needs to be set for tag references")
+			return reference{}, fmt.Errorf("registry parameter needs to be set for tag references")
 		}
-		ref := fmt.Sprintf("%s/%s:%s", registry, comps[1], comps[5])
-		return ref, "", referenceTypeManifest, nil
+		name := fmt.Sprintf("%s/%s:%s", registry, comps[1], comps[5])
+		ref := reference{
+			kind: referenceKindManifest,
+			name: name,
+		}
+		return ref, nil
 	}
 	comps = manifestRegexDigest.FindStringSubmatch(path)
 	if len(comps) == 6 {
-		return "", digest.Digest(comps[5]), referenceTypeManifest, nil
+		ref := reference{
+			kind: referenceKindManifest,
+			dgst: digest.Digest(comps[5]),
+		}
+		return ref, nil
 	}
 	comps = blobsRegexDigest.FindStringSubmatch(path)
 	if len(comps) == 6 {
-		return "", digest.Digest(comps[5]), referenceTypeBlob, nil
+		ref := reference{
+			kind: referenceKindBlob,
+			dgst: digest.Digest(comps[5]),
+		}
+		return ref, nil
 	}
-	return "", "", "", fmt.Errorf("distribution path could not be parsed")
+	return reference{}, fmt.Errorf("distribution path could not be parsed")
 }
