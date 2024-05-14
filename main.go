@@ -222,7 +222,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	return nil
 }
 
-func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) {
+func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //nolint: ireturn // Return type can be different structs.
 	switch cfg.BootstrapKind {
 	case "http":
 		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer), nil
