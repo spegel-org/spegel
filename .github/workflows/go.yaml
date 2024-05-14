@@ -1,11 +1,6 @@
 name: go
 on:
   pull_request:
-    paths: 
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - ".golangci.yaml"
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -22,7 +17,6 @@ jobs:
           version: v1.58.0
           args: --timeout 3m0s
   unit:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

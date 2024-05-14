@@ -1,16 +1,8 @@
 name: e2e
 on:
   pull_request:
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - "Dockerfile"
-      - "test/**"
-      - "charts/**"
 jobs:
   test:
-    needs: lint
     runs-on: ubuntu-latest
     strategy:
       matrix:
