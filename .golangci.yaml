@@ -1,3 +1,5 @@
+run:
+  timeout: 3m
 linters:
   disable-all: true
   enable:
@@ -9,7 +11,16 @@ linters:
     - unused
     - misspell
     - testifylint
+    - nolintlint
+    - bodyclose
+    - importas
 linters-settings:
   govet:
-    enable:
-      - fieldalignment
+    enable-all: true
+    disable:
+      - shadow
+  testifylint:
+    enable-all: true
+  nolintlint:
+    require-explanation: true
+    require-specific: true
