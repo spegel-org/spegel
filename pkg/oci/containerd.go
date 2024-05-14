@@ -88,7 +88,7 @@ func (c *Containerd) Verify(ctx context.Context) error {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("could not reach Containerd service")
+		return errors.New("could not reach Containerd service")
 	}
 	resp, err := runtimeapi.NewRuntimeServiceClient(client.Conn()).Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
 	if err != nil {
@@ -104,7 +104,7 @@ func (c *Containerd) Verify(ctx context.Context) error {
 func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) error {
 	str, ok := resp.Info["config"]
 	if !ok {
-		return fmt.Errorf("could not get config data from info response")
+		return errors.New("could not get config data from info response")
 	}
 	cfg := &struct {
 		Registry struct {
@@ -121,10 +121,10 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 		return err
 	}
 	if cfg.Containerd.Runtimes.DiscardUnpackedLayers {
-		return fmt.Errorf("Containerd discard unpacked layers cannot be enabled")
+		return errors.New("Containerd discard unpacked layers cannot be enabled")
 	}
 	if cfg.Registry.ConfigPath == "" {
-		return fmt.Errorf("Containerd registry config path needs to be set for mirror configuration to take effect")
+		return errors.New("Containerd registry config path needs to be set for mirror configuration to take effect")
 	}
 	paths := filepath.SplitList(cfg.Registry.ConfigPath)
 	for _, path := range paths {
@@ -257,7 +257,7 @@ func (c *Containerd) AllIdentifiers(ctx context.Context, img Image) ([]string, e
 		return nil, fmt.Errorf("failed to walk image manifests: %w", err)
 	}
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("no image digests found")
+		return nil, errors.New("no image digests found")
 	}
 	return keys, nil
 }
@@ -399,7 +399,7 @@ func (c *Containerd) lookupMediaType(ctx context.Context, dgst digest.Digest) (s
 		return "", err
 	}
 	if parentDgst == "" {
-		return "", fmt.Errorf("could not find parent")
+		return "", errors.New("could not find parent")
 	}
 	b, err := content.ReadBlob(ctx, client.ContentStore(), ocispec.Descriptor{Digest: parentDgst})
 	if err != nil {
@@ -426,7 +426,7 @@ func (c *Containerd) lookupMediaType(ctx context.Context, dgst digest.Digest) (s
 			return layer.MediaType, nil
 		}
 	}
-	return "", fmt.Errorf("could not find reference in parent")
+	return "", errors.New("could not find reference in parent")
 }
 
 func getContentFilter(labels map[string]string) (string, error) {
@@ -436,7 +436,7 @@ func getContentFilter(labels map[string]string) (string, error) {
 		}
 		return fmt.Sprintf(`labels."%s"==%s`, k, v), nil
 	}
-	return "", fmt.Errorf("could not find distribution label to create content filter")
+	return "", errors.New("could not find distribution label to create content filter")
 }
 
 func getEventImage(e typeurl.Any) (string, EventType, error) {

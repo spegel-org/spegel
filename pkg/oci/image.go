@@ -1,6 +1,7 @@
 package oci
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -33,16 +34,16 @@ type ImageEvent struct {
 
 func NewImage(name, registry, repository, tag string, dgst digest.Digest) (Image, error) {
 	if name == "" {
-		return Image{}, fmt.Errorf("image needs to contain a name")
+		return Image{}, errors.New("image needs to contain a name")
 	}
 	if registry == "" {
-		return Image{}, fmt.Errorf("image needs to contain a registry")
+		return Image{}, errors.New("image needs to contain a registry")
 	}
 	if repository == "" {
-		return Image{}, fmt.Errorf("image needs to repository a digest")
+		return Image{}, errors.New("image needs to repository a digest")
 	}
 	if dgst == "" {
-		return Image{}, fmt.Errorf("image needs to contain a digest")
+		return Image{}, errors.New("image needs to contain a digest")
 	}
 	return Image{
 		Name:       name,
@@ -76,17 +77,17 @@ var splitRe = regexp.MustCompile(`[:@]`)
 
 func Parse(s string, extraDgst digest.Digest) (Image, error) {
 	if strings.Contains(s, "://") {
-		return Image{}, fmt.Errorf("invalid reference")
+		return Image{}, errors.New("invalid reference")
 	}
 	u, err := url.Parse("dummy://" + s)
 	if err != nil {
 		return Image{}, err
 	}
 	if u.Scheme != "dummy" {
-		return Image{}, fmt.Errorf("invalid reference")
+		return Image{}, errors.New("invalid reference")
 	}
 	if u.Host == "" {
-		return Image{}, fmt.Errorf("hostname required")
+		return Image{}, errors.New("hostname required")
 	}
 	var object string
 	if idx := splitRe.FindStringIndex(u.Path); idx != nil {

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#477](https://github.com/XenitAB/spegel/pull/477) Refactor distribution ref to simplify registry routing.
 - [#479](https://github.com/XenitAB/spegel/pull/479) Enable goimports linter and fix errors.
 - [#480](https://github.com/XenitAB/spegel/pull/480) Enable ireturn linter and fix errors.
+- [#481](https://github.com/XenitAB/spegel/pull/481) Enable perfsprint linter and fix errors.
 
 ### Deprecated
 

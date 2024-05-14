@@ -101,7 +101,7 @@ func run(ctx context.Context, args *Arguments) error {
 	case args.Registry != nil:
 		return registryCommand(ctx, args.Registry)
 	default:
-		return fmt.Errorf("unknown subcommand")
+		return errors.New("unknown subcommand")
 	}
 }
 

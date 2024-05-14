@@ -260,7 +260,7 @@ func ipInMultiaddr(multiAddr ma.Multiaddr) (netip.Addr, error) {
 		}
 		return ipAddr, nil
 	}
-	return netip.Addr{}, fmt.Errorf("IP not found in address")
+	return netip.Addr{}, errors.New("IP not found in address")
 }
 
 func isIp6(m ma.Multiaddr) bool {
