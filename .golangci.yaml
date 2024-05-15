@@ -19,6 +19,10 @@ linters:
     - perfsprint
     - gocritic
 linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    disable-default-exclusions: true
   govet:
     enable-all: true
     disable:
