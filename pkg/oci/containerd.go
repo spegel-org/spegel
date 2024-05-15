@@ -434,7 +434,7 @@ func getContentFilter(labels map[string]string) (string, error) {
 		if !strings.HasPrefix(k, "containerd.io/distribution.source") {
 			continue
 		}
-		return fmt.Sprintf(`labels."%s"==%s`, k, v), nil
+		return fmt.Sprintf(`labels.%q==%s`, k, v), nil
 	}
 	return "", errors.New("could not find distribution label to create content filter")
 }
@@ -502,7 +502,7 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 	if err != nil {
 		return err
 	}
-	err = fs.MkdirAll(configPath, 0755)
+	err = fs.MkdirAll(configPath, 0o755)
 	if err != nil {
 		return err
 	}
@@ -533,11 +533,11 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 			return err
 		}
 		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
-		err = fs.MkdirAll(path.Dir(fp), 0755)
+		err = fs.MkdirAll(path.Dir(fp), 0o755)
 		if err != nil {
 			return err
 		}
-		err = afero.WriteFile(fs, fp, b, 0644)
+		err = afero.WriteFile(fs, fp, b, 0o644)
 		if err != nil {
 			return err
 		}
@@ -585,7 +585,7 @@ func backupConfig(log logr.Logger, fs afero.Fs, configPath string) error {
 	if len(files) == 0 {
 		return nil
 	}
-	err = fs.MkdirAll(backupDirPath, 0755)
+	err = fs.MkdirAll(backupDirPath, 0o755)
 	if err != nil {
 		return err
 	}
