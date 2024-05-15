@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -46,7 +47,7 @@ func parsePathComponents(registry, path string) (reference, error) {
 	comps := manifestRegexTag.FindStringSubmatch(path)
 	if len(comps) == 6 {
 		if registry == "" {
-			return reference{}, fmt.Errorf("registry parameter needs to be set for tag references")
+			return reference{}, errors.New("registry parameter needs to be set for tag references")
 		}
 		name := fmt.Sprintf("%s/%s:%s", registry, comps[1], comps[5])
 		ref := reference{
@@ -71,5 +72,5 @@ func parsePathComponents(registry, path string) (reference, error) {
 		}
 		return ref, nil
 	}
-	return reference{}, fmt.Errorf("distribution path could not be parsed")
+	return reference{}, errors.New("distribution path could not be parsed")
 }

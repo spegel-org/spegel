@@ -16,6 +16,7 @@ linters:
     - goimports
     - importas
     - ireturn
+    - perfsprint
 linters-settings:
   govet:
     enable-all: true
@@ -26,3 +27,5 @@ linters-settings:
   nolintlint:
     require-explanation: true
     require-specific: true
+  perfsprint:
+    strconcat: false
