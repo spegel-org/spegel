@@ -17,6 +17,7 @@ linters:
     - importas
     - ireturn
     - perfsprint
+    - gocritic
 linters-settings:
   govet:
     enable-all: true
@@ -29,3 +30,12 @@ linters-settings:
     require-specific: true
   perfsprint:
     strconcat: false
+  gocritic:
+    enable-all: true
+    disabled-checks:
+      - importShadow
+      - hugeParam
+      - rangeValCopy
+      - whyNoLint
+      - unnamedResult
+      - httpNoBody

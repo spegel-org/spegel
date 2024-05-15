@@ -59,7 +59,7 @@ func TestVerifyStatusResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resp := &runtimeapi.StatusResponse{
 				Info: map[string]string{
-					"config": fmt.Sprintf(`{"registry": {"configPath": "%s"}, "containerd": {"runtimes":{"discardUnpackedLayers": %v}}}`, tt.configPath, tt.discardUnpackedLayers),
+					"config": fmt.Sprintf(`{"registry": {"configPath": %q}, "containerd": {"runtimes":{"discardUnpackedLayers": %v}}}`, tt.configPath, tt.discardUnpackedLayers),
 				},
 			}
 			err := verifyStatusResponse(resp, tt.requiredConfigPath)
@@ -309,11 +309,11 @@ capabilities = ['pull', 'resolve']
 		t.Run(tt.name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			if tt.createConfigPathDir {
-				err := fs.Mkdir(registryConfigPath, 0755)
+				err := fs.Mkdir(registryConfigPath, 0o755)
 				require.NoError(t, err)
 			}
 			for k, v := range tt.existingFiles {
-				err := afero.WriteFile(fs, k, []byte(v), 0644)
+				err := afero.WriteFile(fs, k, []byte(v), 0o644)
 				require.NoError(t, err)
 			}
 			err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags, tt.appendToBackup)

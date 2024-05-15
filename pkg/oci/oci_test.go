@@ -44,7 +44,7 @@ func TestOCIClient(t *testing.T) {
 	contentPath := t.TempDir()
 	contentStore, err := local.NewStore(contentPath)
 	require.NoError(t, err)
-	boltDB, err := bolt.Open(path.Join(t.TempDir(), "bolt.db"), 0644, nil)
+	boltDB, err := bolt.Open(path.Join(t.TempDir(), "bolt.db"), 0o644, nil)
 	require.NoError(t, err)
 	db := metadata.NewDB(boltDB, contentStore, nil)
 	imageStore := metadata.NewImageStore(db)
