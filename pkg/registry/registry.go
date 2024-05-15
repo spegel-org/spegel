@@ -170,8 +170,8 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 	}
 
 	// Parse out path components from request.
-	registryName := req.URL.Query().Get("ns")
-	ref, err := parsePathComponents(registryName, req.URL.Path)
+	originalRegistry := req.URL.Query().Get("ns")
+	ref, err := parsePathComponents(originalRegistry, req.URL.Path)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, err)
 		return ""
@@ -182,15 +182,6 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 		// Set mirrored header in request to stop infinite loops
 		req.Header.Set(MirroredHeaderKey, "true")
 		r.handleMirror(rw, req, ref)
-		sourceType := "internal"
-		if r.isExternalRequest(req) {
-			sourceType = "external"
-		}
-		cacheType := "hit"
-		if rw.Status() != http.StatusOK {
-			cacheType = "miss"
-		}
-		metrics.MirrorRequestsTotal.WithLabelValues(registryName, cacheType, sourceType).Inc()
 		return "mirror"
 	}
 
@@ -210,12 +201,6 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 }
 
 func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref reference) {
-	if !r.resolveLatestTag && ref.hasLatestTag() {
-		r.log.V(4).Info("skipping mirror request for image with latest tag", "image", ref.name)
-		rw.WriteHeader(http.StatusNotFound)
-		return
-	}
-
 	key := ref.dgst.String()
 	if key == "" {
 		key = ref.name
@@ -223,14 +208,33 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 
 	log := r.log.WithValues("key", key, "path", req.URL.Path, "ip", getClientIP(req))
 
-	// Resolve mirror with the requested key
-	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
-	defer cancel()
-	resolveCtx = logr.NewContext(resolveCtx, log)
 	isExternal := r.isExternalRequest(req)
 	if isExternal {
 		log.Info("handling mirror request from external node")
 	}
+
+	defer func() {
+		sourceType := "internal"
+		if isExternal {
+			sourceType = "external"
+		}
+		cacheType := "hit"
+		if rw.Status() != http.StatusOK {
+			cacheType = "miss"
+		}
+		metrics.MirrorRequestsTotal.WithLabelValues(ref.originalRegistry, cacheType, sourceType).Inc()
+	}()
+
+	if !r.resolveLatestTag && ref.hasLatestTag() {
+		r.log.V(4).Info("skipping mirror request for image with latest tag", "image", ref.name)
+		rw.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	// Resolve mirror with the requested key
+	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
+	defer cancel()
+	resolveCtx = logr.NewContext(resolveCtx, log)
 	peerCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
