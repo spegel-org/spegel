@@ -52,11 +52,13 @@ func (r *response) WriteError(statusCode int, err error) {
 
 func (r *response) Flush() {
 	r.writtenHeader = true
+	//nolint: errcheck // No method to throw the error.
 	flusher := r.ResponseWriter.(http.Flusher)
 	flusher.Flush()
 }
 
 func (r *response) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	//nolint: errcheck // No method to throw the error.
 	hijacker := r.ResponseWriter.(http.Hijacker)
 	return hijacker.Hijack()
 }
