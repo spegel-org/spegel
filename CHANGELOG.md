@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#481](https://github.com/XenitAB/spegel/pull/481) Enable perfsprint linter and fix errors.
 - [#482](https://github.com/XenitAB/spegel/pull/482) Enable gocritic linter and fix errors.
 - [#483](https://github.com/XenitAB/spegel/pull/483) Update errcheck linter configuration and fix errors.
+- [#487](https://github.com/XenitAB/spegel/pull/487) Move mirror metrics code to mirror handler.
 
 ### Deprecated
 

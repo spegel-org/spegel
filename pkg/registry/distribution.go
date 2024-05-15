@@ -17,9 +17,10 @@ const (
 )
 
 type reference struct {
-	kind referenceKind
-	name string
-	dgst digest.Digest
+	kind             referenceKind
+	name             string
+	dgst             digest.Digest
+	originalRegistry string
 }
 
 func (r reference) hasLatestTag() bool {
@@ -43,32 +44,35 @@ var (
 	blobsRegexDigest    = regexp.MustCompile(`/v2/` + nameRegex.String() + `/blobs/(.*)`)
 )
 
-func parsePathComponents(registry, path string) (reference, error) {
+func parsePathComponents(originalRegistry, path string) (reference, error) {
 	comps := manifestRegexTag.FindStringSubmatch(path)
 	if len(comps) == 6 {
-		if registry == "" {
+		if originalRegistry == "" {
 			return reference{}, errors.New("registry parameter needs to be set for tag references")
 		}
-		name := fmt.Sprintf("%s/%s:%s", registry, comps[1], comps[5])
+		name := fmt.Sprintf("%s/%s:%s", originalRegistry, comps[1], comps[5])
 		ref := reference{
-			kind: referenceKindManifest,
-			name: name,
+			kind:             referenceKindManifest,
+			name:             name,
+			originalRegistry: originalRegistry,
 		}
 		return ref, nil
 	}
 	comps = manifestRegexDigest.FindStringSubmatch(path)
 	if len(comps) == 6 {
 		ref := reference{
-			kind: referenceKindManifest,
-			dgst: digest.Digest(comps[5]),
+			kind:             referenceKindManifest,
+			dgst:             digest.Digest(comps[5]),
+			originalRegistry: originalRegistry,
 		}
 		return ref, nil
 	}
 	comps = blobsRegexDigest.FindStringSubmatch(path)
 	if len(comps) == 6 {
 		ref := reference{
-			kind: referenceKindBlob,
-			dgst: digest.Digest(comps[5]),
+			kind:             referenceKindBlob,
+			dgst:             digest.Digest(comps[5]),
+			originalRegistry: originalRegistry,
 		}
 		return ref, nil
 	}
