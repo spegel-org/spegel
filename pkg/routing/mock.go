@@ -28,8 +28,9 @@ func (m *MockRouter) Ready() (bool, error) {
 func (m *MockRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {
 	peerCh := make(chan netip.AddrPort, count)
 	peers, ok := m.resolver[key]
-	// Not found will look forever until timeout.
+	// If not peers exist close the channel to stop any consumer.
 	if !ok {
+		close(peerCh)
 		return peerCh, nil
 	}
 	go func() {
