@@ -246,8 +246,7 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 	mirrorAttempts := 0
 	for {
 		select {
-		// TODO: Refactor context cancel and mirror channel closing
-		case <-resolveCtx.Done():
+		case <-req.Context().Done():
 			// Request has been closed by server or client. No use continuing.
 			rw.WriteError(http.StatusNotFound, fmt.Errorf("mirroring for image component %s has been cancelled: %w", key, resolveCtx.Err()))
 			return
