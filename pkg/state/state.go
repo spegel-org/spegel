@@ -20,16 +20,17 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 	if err != nil {
 		return err
 	}
-	immediate := make(chan time.Time, 1)
-	immediate <- time.Now()
+	immediateCh := make(chan time.Time, 1)
+	immediateCh <- time.Now()
+	close(immediateCh)
 	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
 	defer expirationTicker.Stop()
-	ticker := channel.Merge(immediate, expirationTicker.C)
+	tickerCh := channel.Merge(immediateCh, expirationTicker.C)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker:
+		case <-tickerCh:
 			log.Info("running scheduled image state update")
 			if err := all(ctx, ociClient, router, resolveLatestTag); err != nil {
 				log.Error(err, "received errors when updating all images")
