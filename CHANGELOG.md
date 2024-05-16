@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#483](https://github.com/XenitAB/spegel/pull/483) Update errcheck linter configuration and fix errors.
 - [#487](https://github.com/XenitAB/spegel/pull/487) Move mirror metrics code to mirror handler.
 - [#488](https://github.com/XenitAB/spegel/pull/488) Update existing registry errors and add more detail.
+- [#490](https://github.com/XenitAB/spegel/pull/490) Close immediate channel after writing to it to close wait group in merge logic.
 
 ### Deprecated
 
