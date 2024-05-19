@@ -44,10 +44,10 @@ else
 	for NODE in control-plane worker2 worker3 worker4
 	do
 		NAME=$KIND_NAME-$NODE
-		docker exec $NAME ctr -n k8s.io image rm docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd
-		docker exec $NAME ctr -n k8s.io image rm docker.io/library/nginx:1.23.0
-		docker exec $NAME ctr -n k8s.io image rm docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b
-		docker exec $NAME ctr -n k8s.io image rm mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416
+		docker exec $NAME crictl rmi docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd || true
+		docker exec $NAME crictl rmi docker.io/library/nginx:1.23.0 || true
+		docker exec $NAME crictl rmi docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b || true
+		docker exec $NAME crictl rmi mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416 || true
 	done
 
 	# Delete Spegel from all nodes

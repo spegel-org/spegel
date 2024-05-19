@@ -31,6 +31,13 @@ func (r reference) hasLatestTag() bool {
 	return tag == "latest"
 }
 
+func (r reference) tagOrDigest() string {
+	if r.name != "" {
+		return r.name
+	}
+	return r.dgst.String()
+}
+
 // Package is used to parse components from requests which comform with the OCI distribution spec.
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md
 // /v2/<name>/manifests/<reference>

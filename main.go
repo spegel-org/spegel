@@ -29,6 +29,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/state"
 	"github.com/spegel-org/spegel/pkg/throttle"
+	"github.com/spegel-org/spegel/pkg/visualize"
 )
 
 type ConfigurationCmd struct {
@@ -63,6 +64,7 @@ type RegistryCmd struct {
 	MirrorResolveTimeout         time.Duration      `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"5s" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries         int                `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
 	ResolveLatestTag             bool               `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
+	VisualizeEnabled             bool               `arg:"--visualize-enabled,env:VISUALIZE_ENABLED" default:"false" help:"When true visualizer will run and record events."`
 }
 
 type Arguments struct {
@@ -141,6 +143,11 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
 	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
 	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+	var eventStore visualize.EventStore
+	if args.VisualizeEnabled {
+		eventStore = visualize.NewMemoryStore()
+		mux.Handle("/visualize/", visualize.Handler(eventStore))
+	}
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
 		Handler: mux,
@@ -195,6 +202,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithLocalAddress(args.LocalAddr),
 		registry.WithLogger(log),
+		registry.WithEventStore(eventStore),
 	}
 	if args.BlobSpeed != nil {
 		registryOpts = append(registryOpts, registry.WithBlobSpeed(*args.BlobSpeed))

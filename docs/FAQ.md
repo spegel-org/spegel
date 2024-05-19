@@ -13,20 +13,23 @@ Read the [benchmark documentation](./BENCHMARK.md) for information of expected g
 
 ## How do I know that Spegel is working? 
 
-Spegel is meant to be a painless experience to install, meaning that it may be difficult initially to know if things are working or not. Simply put a good indicator that things are working is if all Spegel pods have started and are in a ready state.
-Spegel does a couple of checks on startup to verify that any required configuration is correct, if it is not it will exit with an error. While it runs it will log all received requests, both those it mirrors and it serves.
+Spegel is meant to be a painless experience to install. Image pulls will fallback to the original registry if Spegel does not work, meaning that it can be difficult to determine if things are working or not. Spegel has a UI that visualizes incoming and outgoing requests, this will allow you understand if images are pulled from other Spegel instances or not.
 
-An incoming request to Spegel that is mirrored will receive the following log.
+The UI is disabled by default as it adds additional overhead. To access the UI enable the feature in the Helm values.
 
-```
-{"level":"info","ts":1692304805.9038486,"caller":"gin@v0.0.9/logger.go:53","msg":"","path":"/v2/library/nginx/blobs/sha256:1cb127bd932119089b5ffb612ffa84537ddd1318e6784f2fce80916bbb8bd166","status":200,"method":"GET","latency":0.005075836,"ip":"172.18.0.5","handler":"mirror"}
+```yaml
+spegel:
+  visualize:
+    enabled: true
 ```
 
-While the Spegel instance on the other end will log.
+After all Spegel instances have restarted you can port forward to one of the Spegel pods.
 
+```shell
+kubectl -n spegel port-forward ${POD_NAME} 9090
 ```
-{"level":"info","ts":1692304805.9035861,"caller":"gin@v0.0.9/logger.go:53","msg":"","path":"/v2/library/nginx/blobs/sha256:1cb127bd932119089b5ffb612ffa84537ddd1318e6784f2fce80916bbb8bd166","status":200,"method":"GET","latency":0.003644997,"ip":"172.18.0.5","handler":"blob"}
-```
+
+Open the UI at `http://localhost:9090/visualize` in a browser. If all is configured propery you should be presented with and interface showing registry requests.
 
 ## Will image pulls break or be delayed if a spegel instance fails or is removed?
 

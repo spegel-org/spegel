@@ -160,3 +160,6 @@ spegel:
   blobSpeed: ""
   # -- When true existing mirror configuration will be appended to instead of replaced.
   appendMirrors: false
+  visualize:
+    # -- When true registry requests will be recorded and UI will be served.
+    enabled: false

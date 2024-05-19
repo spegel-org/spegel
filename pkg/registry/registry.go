@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/netip"
 	"net/url"
 	"path"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/throttle"
+	"github.com/spegel-org/spegel/pkg/visualize"
 )
 
 const (
@@ -28,6 +30,7 @@ const (
 )
 
 type Registry struct {
+	eventStore       visualize.EventStore
 	log              logr.Logger
 	throttler        *throttle.Throttler
 	ociClient        oci.Client
@@ -80,6 +83,12 @@ func WithBlobSpeed(blobSpeed throttle.Byterate) Option {
 func WithLogger(log logr.Logger) Option {
 	return func(r *Registry) {
 		r.log = log
+	}
+}
+
+func WithEventStore(eventStore visualize.EventStore) Option {
+	return func(r *Registry) {
+		r.eventStore = eventStore
 	}
 }
 
@@ -188,6 +197,17 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 		return "mirror"
 	}
 
+	if r.eventStore != nil {
+		defer func() {
+			ip := getClientIP(req)
+			addr, err := netip.ParseAddr(ip)
+			if err != nil {
+				return
+			}
+			r.eventStore.RecordRequest(ref.tagOrDigest(), addr, req.Method, rw.Status(), false)
+		}()
+	}
+
 	// Serve registry endpoints.
 	switch ref.kind {
 	case referenceKindManifest:
@@ -203,12 +223,7 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 }
 
 func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref reference) {
-	key := ref.dgst.String()
-	if key == "" {
-		key = ref.name
-	}
-
-	log := r.log.WithValues("key", key, "path", req.URL.Path, "ip", getClientIP(req))
+	log := r.log.WithValues("key", ref.tagOrDigest(), "path", req.URL.Path, "ip", getClientIP(req))
 
 	isExternal := r.isExternalRequest(req)
 	if isExternal {
@@ -237,7 +252,7 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
 	defer cancel()
 	resolveCtx = logr.NewContext(resolveCtx, log)
-	peerCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
+	peerCh, err := r.router.Resolve(resolveCtx, ref.tagOrDigest(), isExternal, r.resolveRetries)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("error occurred when attempting to resolve mirrors: %w", err))
 		return
@@ -248,12 +263,18 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 		select {
 		case <-req.Context().Done():
 			// Request has been closed by server or client. No use continuing.
-			rw.WriteError(http.StatusNotFound, fmt.Errorf("mirroring for image component %s has been cancelled: %w", key, resolveCtx.Err()))
+			rw.WriteError(http.StatusNotFound, fmt.Errorf("mirroring for image component %s has been cancelled: %w", ref.tagOrDigest(), resolveCtx.Err()))
 			return
 		case ipAddr, ok := <-peerCh:
 			// Channel closed means no more mirrors will be received and max retries has been reached.
 			if !ok {
-				err = fmt.Errorf("mirror with image component %s could not be found", key)
+				// Register not found if no mirror attempts have been made.
+				fmt.Println("mirror channel closed", ref.tagOrDigest(), mirrorAttempts)
+				if r.eventStore != nil && mirrorAttempts == 0 {
+					r.eventStore.RecordNoMirrors(ref.tagOrDigest())
+				}
+
+				err = fmt.Errorf("mirror with image component %s could not be found", ref.tagOrDigest())
 				if mirrorAttempts > 0 {
 					err = errors.Join(err, fmt.Errorf("requests to %d mirrors failed, all attempts have been exhausted or timeout has been reached", mirrorAttempts))
 				}
@@ -288,6 +309,12 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 				return nil
 			}
 			proxy.ServeHTTP(rw, req)
+
+			// Track image events if enabled
+			if r.eventStore != nil {
+				r.eventStore.RecordRequest(ref.tagOrDigest(), ipAddr.Addr(), req.Method, rw.Status(), true)
+			}
+
 			if !succeeded {
 				break
 			}
