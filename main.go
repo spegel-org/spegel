@@ -29,6 +29,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/state"
 	"github.com/spegel-org/spegel/pkg/throttle"
+	"github.com/spegel-org/spegel/pkg/visualize"
 )
 
 type ConfigurationCmd struct {
@@ -63,9 +64,19 @@ type RegistryCmd struct {
 	MirrorResolveTimeout         time.Duration      `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"5s" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries         int                `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
 	ResolveLatestTag             bool               `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
+	VisualizeEnabled             bool               `arg:"--visualize-enabled,env:VISUALIZE_ENABLED" default:"false" help:"When true visualizer will run and record events."`
+}
+
+type VisualizationCmd struct {
+	ContainerdRegistryConfigPath string    `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
+	ContainerdSock               string    `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
+	ContainerdNamespace          string    `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
+	ContainerdContentPath        string    `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
+	Registries                   []url.URL `arg:"--registries,env:REGISTRIES,required" help:"registries that are configured to be mirrored."`
 }
 
 type Arguments struct {
+	Visualization *VisualizationCmd `arg:"subcommand:visualization"`
 	Configuration *ConfigurationCmd `arg:"subcommand:configuration"`
 	Registry      *RegistryCmd      `arg:"subcommand:registry"`
 	LogLevel      slog.Level        `arg:"--log-level,env:LOG_LEVEL" default:"INFO" help:"Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR."`
@@ -96,6 +107,8 @@ func run(ctx context.Context, args *Arguments) error {
 	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
 	defer cancel()
 	switch {
+	case args.Visualization != nil:
+		return visualizeCommand(ctx, args.Visualization)
 	case args.Configuration != nil:
 		return configurationCommand(ctx, args.Configuration)
 	case args.Registry != nil:
@@ -103,6 +116,38 @@ func run(ctx context.Context, args *Arguments) error {
 	default:
 		return errors.New("unknown subcommand")
 	}
+}
+
+func visualizeCommand(ctx context.Context, args *VisualizationCmd) error {
+	eventStore := visualize.NewMemoryStore()
+	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.Registries, oci.WithContentPath(args.ContainerdContentPath))
+	if err != nil {
+		return err
+	}
+	imgs, err := ociClient.ListImages(ctx)
+	if err != nil {
+		return err
+	}
+	for _, img := range imgs {
+		ids, err := ociClient.AllIdentifiers(ctx, img)
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			eventStore.RecordExisting(id, img.Registry)
+		}
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/visualize/", visualize.Handler(ociClient, eventStore))
+	srv := &http.Server{
+		Addr:    ":9090",
+		Handler: mux,
+	}
+	err = srv.ListenAndServe()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
@@ -141,6 +186,11 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	mux.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
 	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
 	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
+	var eventStore visualize.EventStore
+	if args.VisualizeEnabled {
+		eventStore = visualize.NewMemoryStore()
+		mux.Handle("/visualize/", visualize.Handler(ociClient, eventStore))
+	}
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
 		Handler: mux,
@@ -195,6 +245,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithLocalAddress(args.LocalAddr),
 		registry.WithLogger(log),
+		registry.WithEventStore(eventStore),
 	}
 	if args.BlobSpeed != nil {
 		registryOpts = append(registryOpts, registry.WithBlobSpeed(*args.BlobSpeed))

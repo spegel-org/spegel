@@ -160,3 +160,5 @@ spegel:
   blobSpeed: ""
   # -- When true existing mirror configuration will be appended to instead of replaced.
   appendMirrors: false
+  # -- When true visualizer will run and record events.
+  viualizeEnabled: false

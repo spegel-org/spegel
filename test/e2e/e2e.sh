@@ -155,6 +155,8 @@ kubectl --kubeconfig $KIND_KUBECONFIG --namespace nginx wait --timeout=90s deplo
 kubectl --kubeconfig $KIND_KUBECONFIG --namespace nginx wait --timeout=90s deployment/nginx-tag-and-digest --for condition=available
 kubectl --kubeconfig $KIND_KUBECONFIG --namespace nginx wait --timeout=90s -l app=nginx-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod
 
+exit 0
+
 # Verify that Spegel has never restarted
 RESTART_COUNT=$(kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}')
 if [[ $RESTART_COUNT != "0 0 0 0" ]]

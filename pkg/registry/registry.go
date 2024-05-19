@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/netip"
 	"net/url"
 	"path"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/throttle"
+	"github.com/spegel-org/spegel/pkg/visualize"
 )
 
 const (
@@ -37,6 +39,7 @@ type Registry struct {
 	resolveRetries   int
 	resolveTimeout   time.Duration
 	resolveLatestTag bool
+	eventStore       visualize.EventStore
 }
 
 type Option func(*Registry)
@@ -80,6 +83,12 @@ func WithBlobSpeed(blobSpeed throttle.Byterate) Option {
 func WithLogger(log logr.Logger) Option {
 	return func(r *Registry) {
 		r.log = log
+	}
+}
+
+func WithEventStore(eventStore visualize.EventStore) Option {
+	return func(r *Registry) {
+		r.eventStore = eventStore
 	}
 }
 
@@ -188,6 +197,23 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 		return "mirror"
 	}
 
+	defer func() {
+		if req.Method != http.MethodGet {
+			return
+		}
+		id := ref.name
+		if id == "" {
+			// First 7 character plus sha256: prefix
+			id = ref.dgst.String()[:14]
+		}
+		ip := getClientIP(req)
+		addr, err := netip.ParseAddr(ip)
+		if err != nil {
+			return
+		}
+		r.eventStore.RecordRequest(id, addr, rw.Status(), false)
+	}()
+
 	// Serve registry endpoints.
 	switch ref.kind {
 	case referenceKindManifest:
@@ -288,6 +314,19 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 				return nil
 			}
 			proxy.ServeHTTP(rw, req)
+
+			// Track image events if enabled
+			if r.eventStore != nil {
+				if req.Method != http.MethodGet {
+					return
+				}
+				id := ref.name
+				if id == "" {
+					id = ref.dgst.String()
+				}
+				r.eventStore.RecordRequest(id, ipAddr.Addr(), rw.Status(), true)
+			}
+
 			if !succeeded {
 				break
 			}

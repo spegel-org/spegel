@@ -101,5 +101,6 @@ spec:
 | spegel.registries | list | `["https://cgr.dev","https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://gcr.io","https://registry.k8s.io","https://k8s.gcr.io","https://lscr.io"]` | Registries for which mirror configuration will be created. |
 | spegel.resolveLatestTag | bool | `true` | When true latest tags will be resolved to digests. |
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |
+| spegel.viualizeEnabled | bool | `false` | When true visualizer will run and record events. |
 | tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
 | updateStrategy | object | `{}` | An update strategy to replace existing pods with new pods. |
