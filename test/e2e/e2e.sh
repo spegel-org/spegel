@@ -39,8 +39,6 @@ else
 	kubectl --kubeconfig $KIND_KUBECONFIG --namespace nginx delete deployments --all
 	kubectl --kubeconfig $KIND_KUBECONFIG --namespace conformance delete jobs --all
 	helm --kubeconfig $KIND_KUBECONFIG uninstall --ignore-not-found --namespace spegel spegel
-	# Delete lease due to bug causing forcing us to wait for Spegel to fails once.
-	kubectl --kubeconfig $KIND_KUBECONFIG --namespace spegel delete lease spegel-leader-election
 
 	# Delete test images from all expect one node
 	for NODE in control-plane worker2 worker3 worker4
