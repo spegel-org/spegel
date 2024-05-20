@@ -2,7 +2,6 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: conformance
-  namespace: default
 spec:
   backoffLimit: 0
   template:
