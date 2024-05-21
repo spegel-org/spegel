@@ -135,7 +135,7 @@ func (r *P2PRouter) Close() error {
 	return r.host.Close()
 }
 
-func (r *P2PRouter) Ready() (bool, error) {
+func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 	addrInfo, err := r.bootstrapper.Get()
 	if err != nil {
 		return false, err
@@ -144,6 +144,10 @@ func (r *P2PRouter) Ready() (bool, error) {
 		return true, nil
 	}
 	if r.kdht.RoutingTable().Size() == 0 {
+		err := r.kdht.Bootstrap(ctx)
+		if err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 	return true, nil

@@ -19,7 +19,7 @@ func NewMockRouter(resolver map[string][]netip.AddrPort, self netip.AddrPort) *M
 	}
 }
 
-func (m *MockRouter) Ready() (bool, error) {
+func (m *MockRouter) Ready(ctx context.Context) (bool, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 	return len(m.resolver) > 0, nil

@@ -153,8 +153,8 @@ func (r *Registry) handle(rw mux.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(http.StatusNotFound)
 }
 
-func (r *Registry) readyHandler(rw mux.ResponseWriter, _ *http.Request) {
-	ok, err := r.router.Ready()
+func (r *Registry) readyHandler(rw mux.ResponseWriter, req *http.Request) {
+	ok, err := r.router.Ready(req.Context())
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine router readiness: %w", err))
 		return
