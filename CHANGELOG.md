@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#488](https://github.com/XenitAB/spegel/pull/488) Update existing registry errors and add more detail.
 - [#490](https://github.com/XenitAB/spegel/pull/490) Close immediate channel after writing to it to close wait group in merge logic.
 - [#495](https://github.com/XenitAB/spegel/pull/495) Modify e2e tests to allow reusing the same kind cluster.
+- [#498](https://github.com/spegel-org/spegel/pull/498) Update to Go 1.22.
 
 ### Deprecated
 
