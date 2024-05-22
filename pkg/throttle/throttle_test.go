@@ -9,6 +9,8 @@ import (
 )
 
 func TestThrottler(t *testing.T) {
+	t.Parallel()
+
 	br := 500 * Bps
 	throttler := NewThrottler(br)
 	w := throttler.Writer(bytes.NewBuffer([]byte{}))

@@ -9,6 +9,8 @@ import (
 )
 
 func TestListenMultiaddrs(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		addr     string
@@ -32,6 +34,8 @@ func TestListenMultiaddrs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			multiAddrs, err := listenMultiaddrs(tt.addr)
 			require.NoError(t, err)
 			require.Equal(t, len(tt.expected), len(multiAddrs))
@@ -43,6 +47,8 @@ func TestListenMultiaddrs(t *testing.T) {
 }
 
 func TestIPInMultiaddr(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		ma       string
 		expected netip.Addr
@@ -61,6 +67,8 @@ func TestIPInMultiaddr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			multiAddr, err := ma.NewMultiaddr(tt.ma)
 			require.NoError(t, err)
 			v, err := ipInMultiaddr(multiAddr)
@@ -71,6 +79,8 @@ func TestIPInMultiaddr(t *testing.T) {
 }
 
 func TestIsIp6(t *testing.T) {
+	t.Parallel()
+
 	m, err := ma.NewMultiaddr("/ip6/::")
 	require.NoError(t, err)
 	require.True(t, isIp6(m))

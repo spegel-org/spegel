@@ -22,6 +22,8 @@ import (
 )
 
 func TestOCIClient(t *testing.T) {
+	t.Parallel()
+
 	b, err := os.ReadFile("./testdata/images.json")
 	require.NoError(t, err)
 	imgs := []map[string]string{}
@@ -84,6 +86,8 @@ func TestOCIClient(t *testing.T) {
 
 	for _, ociClient := range []Client{remoteContainerd, localContainerd} {
 		t.Run(ociClient.Name(), func(t *testing.T) {
+			t.Parallel()
+
 			imgs, err := ociClient.ListImages(ctx)
 			require.NoError(t, err)
 			require.Len(t, imgs, 5)
@@ -130,6 +134,8 @@ func TestOCIClient(t *testing.T) {
 			}
 			for _, tt := range contentTests {
 				t.Run(tt.mediaType, func(t *testing.T) {
+					t.Parallel()
+
 					size, err := ociClient.Size(ctx, tt.dgst)
 					require.NoError(t, err)
 					require.Equal(t, tt.size, size)
@@ -249,6 +255,8 @@ func TestOCIClient(t *testing.T) {
 			}
 			for _, tt := range identifiersTests {
 				t.Run(tt.imageName, func(t *testing.T) {
+					t.Parallel()
+
 					img, err := Parse(tt.imageName, digest.Digest(tt.imageDigest))
 					require.NoError(t, err)
 					keys, err := ociClient.AllIdentifiers(ctx, img)
