@@ -10,6 +10,8 @@ import (
 )
 
 func TestHTTPBootstrap(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 

@@ -18,6 +18,7 @@ linters:
     - ireturn
     - perfsprint
     - gocritic
+    - paralleltest
 linters-settings:
   errcheck:
     check-type-assertions: true

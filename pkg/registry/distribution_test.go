@@ -8,6 +8,8 @@ import (
 )
 
 func TestParsePathComponents(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name            string
 		registry        string
@@ -35,6 +37,8 @@ func TestParsePathComponents(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			ref, err := parsePathComponents(tt.registry, tt.path)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedName, ref.name)
@@ -45,11 +49,15 @@ func TestParsePathComponents(t *testing.T) {
 }
 
 func TestParsePathComponentsInvalidPath(t *testing.T) {
+	t.Parallel()
+
 	_, err := parsePathComponents("example.com", "/v2/spegel-org/spegel/v0.0.1")
 	require.EqualError(t, err, "distribution path could not be parsed")
 }
 
 func TestParsePathComponentsMissingRegistry(t *testing.T) {
+	t.Parallel()
+
 	_, err := parsePathComponents("", "/v2/spegel-org/spegel/manifests/v0.0.1")
 	require.EqualError(t, err, "registry parameter needs to be set for tag references")
 }

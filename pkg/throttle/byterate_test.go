@@ -8,6 +8,8 @@ import (
 )
 
 func TestByterateUnmarshalValid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input    string
 		expected Byterate
@@ -35,6 +37,8 @@ func TestByterateUnmarshalValid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+
 			var br Byterate
 			err := br.UnmarshalText([]byte(tt.input))
 			require.NoError(t, err)
@@ -44,6 +48,8 @@ func TestByterateUnmarshalValid(t *testing.T) {
 }
 
 func TestByterateUnmarshalInvalid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input string
 	}{
@@ -59,6 +65,8 @@ func TestByterateUnmarshalInvalid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+
 			var br Byterate
 			err := br.UnmarshalText([]byte(tt.input))
 			require.EqualError(t, err, fmt.Sprintf("invalid byterate format %s should be n Bps, n KBps, n MBps, n GBps, or n TBps", tt.input))

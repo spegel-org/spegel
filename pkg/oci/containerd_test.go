@@ -13,6 +13,8 @@ import (
 )
 
 func TestVerifyStatusResponse(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name                  string
 		configPath            string
@@ -57,6 +59,8 @@ func TestVerifyStatusResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			resp := &runtimeapi.StatusResponse{
 				Info: map[string]string{
 					"config": fmt.Sprintf(`{"registry": {"configPath": %q}, "containerd": {"runtimes":{"discardUnpackedLayers": %v}}}`, tt.configPath, tt.discardUnpackedLayers),
@@ -73,6 +77,8 @@ func TestVerifyStatusResponse(t *testing.T) {
 }
 
 func TestCreateFilter(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name                string
 		expectedListFilter  string
@@ -95,6 +101,8 @@ func TestCreateFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			listFilter, eventFilter := createFilters(stringListToUrlList(t, tt.registries))
 			require.Equal(t, tt.expectedListFilter, listFilter)
 			require.Equal(t, tt.expectedEventFilter, eventFilter)
@@ -103,6 +111,8 @@ func TestCreateFilter(t *testing.T) {
 }
 
 func TestMirrorConfiguration(t *testing.T) {
+	t.Parallel()
+
 	registryConfigPath := "/etc/containerd/certs.d"
 
 	tests := []struct {
@@ -307,6 +317,8 @@ capabilities = ['pull', 'resolve']
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			fs := afero.NewMemMapFs()
 			if tt.createConfigPathDir {
 				err := fs.Mkdir(registryConfigPath, 0o755)
@@ -340,6 +352,8 @@ capabilities = ['pull', 'resolve']
 }
 
 func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
+	t.Parallel()
+
 	fs := afero.NewMemMapFs()
 	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 

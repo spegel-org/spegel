@@ -9,6 +9,8 @@ import (
 )
 
 func TestParseImage(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name               string
 		image              string
@@ -54,6 +56,8 @@ func TestParseImage(t *testing.T) {
 	for _, registry := range registries {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s_%s", tt.name, registry), func(t *testing.T) {
+				t.Parallel()
+
 				for _, extraDgst := range []string{tt.expectedDigest.String(), ""} {
 					img, err := Parse(fmt.Sprintf("%s/%s", registry, tt.image), digest.Digest(extraDgst))
 					if !tt.digestInImage && extraDgst == "" {
@@ -73,11 +77,15 @@ func TestParseImage(t *testing.T) {
 }
 
 func TestParseImageDigestDoesNotMatch(t *testing.T) {
+	t.Parallel()
+
 	_, err := Parse("quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb", digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"))
 	require.EqualError(t, err, "invalid digest set does not match parsed digest: quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb")
 }
 
 func TestParseImageNoTagOrDigest(t *testing.T) {
+	t.Parallel()
+
 	_, err := Parse("ghcr.io/spegel-org/spegel", digest.Digest(""))
 	require.EqualError(t, err, "image needs to contain a digest")
 }

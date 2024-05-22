@@ -15,6 +15,8 @@ import (
 )
 
 func TestMirrorHandler(t *testing.T) {
+	t.Parallel()
+
 	badSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Header().Set("foo", "bar")
@@ -23,7 +25,9 @@ func TestMirrorHandler(t *testing.T) {
 			w.Write([]byte("hello world"))
 		}
 	}))
-	defer badSvr.Close()
+	t.Cleanup(func() {
+		badSvr.Close()
+	})
 	badAddrPort := netip.MustParseAddrPort(badSvr.Listener.Addr().String())
 	goodSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("foo", "bar")
@@ -32,7 +36,9 @@ func TestMirrorHandler(t *testing.T) {
 			w.Write([]byte("hello world"))
 		}
 	}))
-	defer goodSvr.Close()
+	t.Cleanup(func() {
+		goodSvr.Close()
+	})
 	goodAddrPort := netip.MustParseAddrPort(goodSvr.Listener.Addr().String())
 	unreachableAddrPort := netip.MustParseAddrPort("127.0.0.1:0")
 
@@ -91,6 +97,8 @@ func TestMirrorHandler(t *testing.T) {
 	for _, tt := range tests {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
 			t.Run(fmt.Sprintf("%s-%s", method, tt.name), func(t *testing.T) {
+				t.Parallel()
+
 				target := fmt.Sprintf("http://example.com/v2/foo/bar/blobs/%s", tt.key)
 				rw := httptest.NewRecorder()
 				req := httptest.NewRequest(method, target, nil)
@@ -122,6 +130,8 @@ func TestMirrorHandler(t *testing.T) {
 }
 
 func TestGetClientIP(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		request  *http.Request
@@ -155,6 +165,8 @@ func TestGetClientIP(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			ip := getClientIP(tt.request)
 			require.Equal(t, tt.expected, ip)
 		})
