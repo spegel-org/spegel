@@ -9,21 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
-- [#388](https://github.com/XenitAB/spegel/pull/388) Add support for deploying the Grafana dashboard with the Helm chart.
+- [#388](https://github.com/spegel-org/spegel/pull/388) Add support for deploying the Grafana dashboard with the Helm chart.
 
 ### Changed
 
-- [#475](https://github.com/XenitAB/spegel/pull/475) Move resolving ref to digest to manifest handler.
-- [#477](https://github.com/XenitAB/spegel/pull/477) Refactor distribution ref to simplify registry routing.
-- [#479](https://github.com/XenitAB/spegel/pull/479) Enable goimports linter and fix errors.
-- [#480](https://github.com/XenitAB/spegel/pull/480) Enable ireturn linter and fix errors.
-- [#481](https://github.com/XenitAB/spegel/pull/481) Enable perfsprint linter and fix errors.
-- [#482](https://github.com/XenitAB/spegel/pull/482) Enable gocritic linter and fix errors.
-- [#483](https://github.com/XenitAB/spegel/pull/483) Update errcheck linter configuration and fix errors.
-- [#487](https://github.com/XenitAB/spegel/pull/487) Move mirror metrics code to mirror handler.
-- [#488](https://github.com/XenitAB/spegel/pull/488) Update existing registry errors and add more detail.
-- [#490](https://github.com/XenitAB/spegel/pull/490) Close immediate channel after writing to it to close wait group in merge logic.
-- [#495](https://github.com/XenitAB/spegel/pull/495) Modify e2e tests to allow reusing the same kind cluster.
+- [#475](https://github.com/spegel-org/spegel/pull/475) Move resolving ref to digest to manifest handler.
+- [#477](https://github.com/spegel-org/spegel/pull/477) Refactor distribution ref to simplify registry routing.
+- [#479](https://github.com/spegel-org/spegel/pull/479) Enable goimports linter and fix errors.
+- [#480](https://github.com/spegel-org/spegel/pull/480) Enable ireturn linter and fix errors.
+- [#481](https://github.com/spegel-org/spegel/pull/481) Enable perfsprint linter and fix errors.
+- [#482](https://github.com/spegel-org/spegel/pull/482) Enable gocritic linter and fix errors.
+- [#483](https://github.com/spegel-org/spegel/pull/483) Update errcheck linter configuration and fix errors.
+- [#487](https://github.com/spegel-org/spegel/pull/487) Move mirror metrics code to mirror handler.
+- [#488](https://github.com/spegel-org/spegel/pull/488) Update existing registry errors and add more detail.
+- [#495](https://github.com/spegel-org/spegel/pull/495) Modify e2e tests to allow reusing the same kind cluster.
 - [#498](https://github.com/spegel-org/spegel/pull/498) Update to Go 1.22.
 - [#499](https://github.com/spegel-org/spegel/pull/499) Add paralleltest linter and set all unit tests to run in parallel.
 
@@ -35,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#460](https://github.com/spegel-org/spegel/pull/460) Fix environment variable for http-bootstrap-addr flag.
 - [#471](https://github.com/spegel-org/spegel/pull/471) Fix handler key in request logging.
+- [#490](https://github.com/spegel-org/spegel/pull/490) Close immediate channel after writing to it to close wait group in merge logic.
 - [#491](https://github.com/spegel-org/spegel/pull/491) Fix so that resolve timeout does not cancel mirroring attempts.
 - [#496](https://github.com/spegel-org/spegel/pull/496) Fix p2p bootstrap to run on failed readiness check.
 
