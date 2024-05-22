@@ -48,7 +48,7 @@ func TestMirrorHandler(t *testing.T) {
 		"first-peer-error":  {unreachableAddrPort, goodAddrPort},
 		"last-peer-working": {badAddrPort, badAddrPort, goodAddrPort},
 	}
-	router := routing.NewMockRouter(resolver, netip.AddrPort{})
+	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
 	reg := NewRegistry(nil, router)
 
 	tests := []struct {

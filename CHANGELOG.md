@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#495](https://github.com/spegel-org/spegel/pull/495) Modify e2e tests to allow reusing the same kind cluster.
 - [#498](https://github.com/spegel-org/spegel/pull/498) Update to Go 1.22.
 - [#499](https://github.com/spegel-org/spegel/pull/499) Add paralleltest linter and set all unit tests to run in parallel.
+- [#501](https://github.com/spegel-org/spegel/pull/501) Rename mock router to memory router and add tests.
 
 ### Deprecated
 
