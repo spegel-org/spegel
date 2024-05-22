@@ -6,7 +6,7 @@ require (
 	github.com/alexflint/go-arg v1.5.0
 	github.com/containerd/containerd v1.7.17
 	github.com/containerd/typeurl/v2 v2.1.1
-	github.com/go-logr/logr v1.4.1
+	github.com/go-logr/logr v1.4.2
 	github.com/ipfs/go-cid v0.4.1
 	github.com/libp2p/go-libp2p v0.33.2
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
