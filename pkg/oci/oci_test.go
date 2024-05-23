@@ -9,21 +9,16 @@ import (
 	"path"
 	"testing"
 
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/content/local"
-	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
-	bolt "go.etcd.io/bbolt"
 )
 
 func TestOCIClient(t *testing.T) {
 	t.Parallel()
 
+	// Load the test images
 	b, err := os.ReadFile("./testdata/images.json")
 	require.NoError(t, err)
 	imgs := []map[string]string{}
@@ -43,67 +38,31 @@ func TestOCIClient(t *testing.T) {
 		blobs[dgst] = b
 	}
 
-	contentPath := t.TempDir()
-	contentStore, err := local.NewStore(contentPath)
-	require.NoError(t, err)
-	boltDB, err := bolt.Open(path.Join(t.TempDir(), "bolt.db"), 0o644, nil)
-	require.NoError(t, err)
-	db := metadata.NewDB(boltDB, contentStore, nil)
-	imageStore := metadata.NewImageStore(db)
-	ctx := namespaces.WithNamespace(context.TODO(), "k8s.io")
-	for _, img := range imgs {
-		dgst, err := digest.Parse(img["digest"])
-		require.NoError(t, err)
-		cImg := images.Image{
-			Name: img["name"],
-			Target: ocispec.Descriptor{
-				MediaType: img["mediaType"],
-				Digest:    dgst,
-				Size:      int64(len(blobs[dgst])),
-			},
-		}
-		_, err = imageStore.Create(ctx, cImg)
-		require.NoError(t, err)
-	}
-	for k, v := range blobs {
-		writer, err := contentStore.Writer(ctx, content.WithRef(k.String()))
-		require.NoError(t, err)
-		_, err = writer.Write(v)
-		require.NoError(t, err)
-		err = writer.Commit(ctx, int64(len(v)), k)
-		require.NoError(t, err)
-		writer.Close()
-	}
-	containerdClient, err := containerd.New("", containerd.WithServices(containerd.WithImageStore(imageStore), containerd.WithContentStore(contentStore)))
-	require.NoError(t, err)
-	remoteContainerd := &Containerd{
-		client: containerdClient,
-	}
-	localContainerd := &Containerd{
-		contentPath: contentPath,
-		client:      containerdClient,
-	}
-
-	for _, ociClient := range []Client{remoteContainerd, localContainerd} {
-		t.Run(ociClient.Name(), func(t *testing.T) {
+	ctx := namespaces.WithNamespace(context.Background(), "k8s.io")
+	clients := []Client{}
+	clients = append(clients, createTestMemory(t, imgs, blobs))
+	clients = append(clients, createTestContainerd(t, ctx, imgs, blobs, false))
+	clients = append(clients, createTestContainerd(t, ctx, imgs, blobs, true))
+	for _, client := range clients {
+		t.Run(client.Name(), func(t *testing.T) {
 			t.Parallel()
 
-			imgs, err := ociClient.ListImages(ctx)
+			imgs, err := client.ListImages(ctx)
 			require.NoError(t, err)
 			require.Len(t, imgs, 5)
 			for _, img := range imgs {
-				_, err := ociClient.Resolve(ctx, img.Name)
+				_, err := client.Resolve(ctx, img.Name)
 				require.NoError(t, err)
 			}
 
 			noPlatformName := "example.com/org/no-platform:test"
-			dgst, err := ociClient.Resolve(ctx, noPlatformName)
+			dgst, err := client.Resolve(ctx, noPlatformName)
 			require.NoError(t, err)
 			img := Image{
 				Name:   noPlatformName,
 				Digest: dgst,
 			}
-			_, err = ociClient.AllIdentifiers(ctx, img)
+			_, err = client.AllIdentifiers(ctx, img)
 			require.EqualError(t, err, "failed to walk image manifests: could not find any platforms with local content in manifest list: sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9")
 
 			contentTests := []struct {
@@ -136,16 +95,16 @@ func TestOCIClient(t *testing.T) {
 				t.Run(tt.mediaType, func(t *testing.T) {
 					t.Parallel()
 
-					size, err := ociClient.Size(ctx, tt.dgst)
+					size, err := client.Size(ctx, tt.dgst)
 					require.NoError(t, err)
 					require.Equal(t, tt.size, size)
 					if tt.mediaType != ocispec.MediaTypeImageLayer {
-						b, mediaType, err := ociClient.GetManifest(ctx, tt.dgst)
+						b, mediaType, err := client.GetManifest(ctx, tt.dgst)
 						require.NoError(t, err)
 						require.Equal(t, tt.mediaType, mediaType)
 						require.Equal(t, blobs[tt.dgst], b)
 					} else {
-						rc, err := ociClient.GetBlob(ctx, tt.dgst)
+						rc, err := client.GetBlob(ctx, tt.dgst)
 						require.NoError(t, err)
 						defer rc.Close()
 						b, err := io.ReadAll(rc)
@@ -259,7 +218,7 @@ func TestOCIClient(t *testing.T) {
 
 					img, err := Parse(tt.imageName, digest.Digest(tt.imageDigest))
 					require.NoError(t, err)
-					keys, err := ociClient.AllIdentifiers(ctx, img)
+					keys, err := client.AllIdentifiers(ctx, img)
 					require.NoError(t, err)
 					require.Equal(t, tt.expectedKeys, keys)
 				})
