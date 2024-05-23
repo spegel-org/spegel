@@ -46,7 +46,7 @@ func TestBasic(t *testing.T) {
 				imgs = append(imgs, img)
 			}
 			ociClient := oci.NewMockClient(imgs)
-			router := routing.NewMockRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
+			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
 
 			ctx, cancel := context.WithCancel(context.TODO())
 			go func() {
@@ -57,14 +57,14 @@ func TestBasic(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, img := range imgs {
-				peers, ok := router.LookupKey(img.Digest.String())
+				peers, ok := router.Lookup(img.Digest.String())
 				require.True(t, ok)
 				require.Len(t, peers, 1)
 				tagName, ok := img.TagName()
 				if !ok {
 					continue
 				}
-				peers, ok = router.LookupKey(tagName)
+				peers, ok = router.Lookup(tagName)
 				if img.IsLatestTag() && !tt.resolveLatestTag {
 					require.False(t, ok)
 					continue
