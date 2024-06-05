@@ -4,7 +4,7 @@ go 1.22.3
 
 require (
 	github.com/alexflint/go-arg v1.5.0
-	github.com/containerd/containerd v1.7.17
+	github.com/containerd/containerd v1.7.18
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/go-logr/logr v1.4.2
 	github.com/ipfs/go-cid v0.4.1
@@ -42,6 +42,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/continuity v0.4.2 // indirect
+	github.com/containerd/errdefs v0.1.0 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.4 // indirect
