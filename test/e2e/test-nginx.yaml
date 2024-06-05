@@ -100,7 +100,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: docker.io/library/nginx:1.24.0-bullseye-perl
+        image: docker.io/library/nginx:1.1.0-bullseye-perl
         imagePullPolicy: Always
         ports:
         - containerPort: 80
