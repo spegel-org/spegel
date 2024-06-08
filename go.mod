@@ -23,9 +23,9 @@ require (
 	go.etcd.io/bbolt v1.3.10
 	golang.org/x/sync v0.7.0
 	golang.org/x/time v0.5.0
-	k8s.io/client-go v0.28.8
+	k8s.io/client-go v0.30.1
 	k8s.io/cri-api v0.28.8
-	k8s.io/klog/v2 v2.100.1
+	k8s.io/klog/v2 v2.120.1
 )
 
 require (
@@ -53,7 +53,7 @@ require (
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
-	github.com/emicklei/go-restful/v3 v3.10.2 // indirect
+	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
@@ -190,13 +190,13 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.28.8 // indirect
-	k8s.io/apimachinery v0.28.8 // indirect
+	k8s.io/api v0.30.1 // indirect
+	k8s.io/apimachinery v0.30.1 // indirect
 	k8s.io/helm v2.17.0+incompatible // indirect
-	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9 // indirect
-	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect
+	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
+	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
