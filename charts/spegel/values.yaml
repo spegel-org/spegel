@@ -139,7 +139,7 @@ spegel:
   # -- Max ammount of mirrors to attempt.
   mirrorResolveRetries: 3
   # -- Max duration spent finding a mirror.
-  mirrorResolveTimeout: "5s"
+  mirrorResolveTimeout: "20ms"
   # -- Path to Containerd socket.
   containerdSock: "/run/containerd/containerd.sock"
   # -- Containerd namespace where images are stored.

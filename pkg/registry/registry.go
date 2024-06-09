@@ -88,7 +88,7 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *R
 		ociClient:        ociClient,
 		router:           router,
 		resolveRetries:   3,
-		resolveTimeout:   1 * time.Second,
+		resolveTimeout:   20 * time.Millisecond,
 		resolveLatestTag: true,
 	}
 	for _, opt := range opts {
