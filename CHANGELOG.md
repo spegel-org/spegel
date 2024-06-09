@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.23
+
+### Added
+
 - [#388](https://github.com/spegel-org/spegel/pull/388) Add support for deploying the Grafana dashboard with the Helm chart.
 
 ### Changed
@@ -26,10 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#498](https://github.com/spegel-org/spegel/pull/498) Update to Go 1.22.
 - [#499](https://github.com/spegel-org/spegel/pull/499) Add paralleltest linter and set all unit tests to run in parallel.
 - [#501](https://github.com/spegel-org/spegel/pull/501) Rename mock router to memory router and add tests.
-
-### Deprecated
-
-### Removed
+- [#507](https://github.com/spegel-org/spegel/pull/507) Change default resolve timeout to 20ms.
 
 ### Fixed
 
@@ -38,8 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#490](https://github.com/spegel-org/spegel/pull/490) Close immediate channel after writing to it to close wait group in merge logic.
 - [#491](https://github.com/spegel-org/spegel/pull/491) Fix so that resolve timeout does not cancel mirroring attempts.
 - [#496](https://github.com/spegel-org/spegel/pull/496) Fix p2p bootstrap to run on failed readiness check.
-
-### Security
 
 ## v0.0.22
 
