@@ -60,7 +60,7 @@ type RegistryCmd struct {
 	RouterAddr                   string             `arg:"--router-addr,env:ROUTER_ADDR,required" help:"address to serve router."`
 	RegistryAddr                 string             `arg:"--registry-addr,env:REGISTRY_ADDR,required" help:"address to server image registry."`
 	Registries                   []url.URL          `arg:"--registries,env:REGISTRIES,required" help:"registries that are configured to be mirrored."`
-	MirrorResolveTimeout         time.Duration      `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"5s" help:"Max duration spent finding a mirror."`
+	MirrorResolveTimeout         time.Duration      `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries         int                `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
 	ResolveLatestTag             bool               `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
 }

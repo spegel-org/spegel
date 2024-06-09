@@ -97,7 +97,7 @@ spec:
 | spegel.kubeconfigPath | string | `""` | Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC. |
 | spegel.logLevel | string | `"INFO"` | Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR. |
 | spegel.mirrorResolveRetries | int | `3` | Max ammount of mirrors to attempt. |
-| spegel.mirrorResolveTimeout | string | `"5s"` | Max duration spent finding a mirror. |
+| spegel.mirrorResolveTimeout | string | `"20ms"` | Max duration spent finding a mirror. |
 | spegel.registries | list | `["https://cgr.dev","https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://gcr.io","https://registry.k8s.io","https://k8s.gcr.io","https://lscr.io"]` | Registries for which mirror configuration will be created. |
 | spegel.resolveLatestTag | bool | `true` | When true latest tags will be resolved to digests. |
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |
