@@ -46,7 +46,7 @@ jobs:
           images: ghcr.io/spegel-org/spegel
           tags: type=raw,value=${{ steps.prep.outputs.VERSION }}
       - name: Publish multi-arch image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         id: build
         with:
           push: true
