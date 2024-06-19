@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- [#517](https://github.com/spegel-org/spegel/pull/517) Remove deprecated CopyLayer function.
+
 ### Fixed
 
 ### Security

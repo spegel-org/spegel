@@ -343,23 +343,6 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCl
 	}, nil
 }
 
-func (c *Containerd) CopyLayer(ctx context.Context, dgst digest.Digest, dst io.Writer) error {
-	client, err := c.Client()
-	if err != nil {
-		return err
-	}
-	ra, err := client.ContentStore().ReaderAt(ctx, ocispec.Descriptor{Digest: dgst})
-	if err != nil {
-		return err
-	}
-	defer ra.Close()
-	_, err = io.Copy(dst, content.NewReader(ra))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // lookupMediaType will resolve the media type for a digest without looking at the content.
 // Only use this as a fallback method as it is a lot slower than reading it from the file.
 // TODO: A cache would be helpful to speed up lookups for the same digets.
