@@ -45,7 +45,7 @@ func TestBasic(t *testing.T) {
 				require.NoError(t, err)
 				imgs = append(imgs, img)
 			}
-			ociClient := oci.NewMockClient(imgs)
+			ociClient := oci.NewLocalClient(imgs)
 			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
 
 			ctx, cancel := context.WithCancel(context.TODO())

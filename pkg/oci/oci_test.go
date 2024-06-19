@@ -84,7 +84,10 @@ func TestOCIClient(t *testing.T) {
 		client:      containerdClient,
 	}
 
-	for _, ociClient := range []Client{remoteContainerd, localContainerd} {
+	localClient := NewLocalClient(t.TempDir())
+
+	ociClients := []Client{remoteContainerd, localContainerd, localClient}
+	for _, ociClient := range ociClients {
 		t.Run(ociClient.Name(), func(t *testing.T) {
 			t.Parallel()
 
