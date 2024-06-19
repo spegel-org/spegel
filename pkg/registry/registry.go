@@ -97,12 +97,16 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *R
 	return r
 }
 
-func (r *Registry) Server(addr string) *http.Server {
+func (r *Registry) Server(addr string) (*http.Server, error) {
+	m, err := mux.NewServeMux(r.handle)
+	if err != nil {
+		return nil, err
+	}
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: mux.NewServeMux(r.handle),
+		Handler: m,
 	}
-	return srv
+	return srv, nil
 }
 
 func (r *Registry) handle(rw mux.ResponseWriter, req *http.Request) {

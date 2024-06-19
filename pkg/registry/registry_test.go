@@ -102,7 +102,8 @@ func TestMirrorHandler(t *testing.T) {
 				target := fmt.Sprintf("http://example.com/v2/foo/bar/blobs/%s", tt.key)
 				rw := httptest.NewRecorder()
 				req := httptest.NewRequest(method, target, nil)
-				m := mux.NewServeMux(reg.handle)
+				m, err := mux.NewServeMux(reg.handle)
+				require.NoError(t, err)
 				m.ServeHTTP(rw, req)
 
 				resp := rw.Result()

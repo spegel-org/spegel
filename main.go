@@ -200,7 +200,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registryOpts = append(registryOpts, registry.WithBlobSpeed(*args.BlobSpeed))
 	}
 	reg := registry.NewRegistry(ociClient, router, registryOpts...)
-	regSrv := reg.Server(args.RegistryAddr)
+	regSrv, err := reg.Server(args.RegistryAddr)
+	if err != nil {
+		return err
+	}
 	g.Go(func() error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
