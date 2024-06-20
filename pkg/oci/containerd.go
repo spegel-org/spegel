@@ -423,9 +423,12 @@ func getContentFilter(labels map[string]string) (string, error) {
 }
 
 func getEventImage(e typeurl.Any) (string, EventType, error) {
+	if e == nil {
+		return "", "", errors.New("any cannot be nil")
+	}
 	evt, err := typeurl.UnmarshalAny(e)
 	if err != nil {
-		return "", UnknownEvent, fmt.Errorf("failed to unmarshalany: %w", err)
+		return "", "", fmt.Errorf("failed to unmarshal any: %w", err)
 	}
 	switch e := evt.(type) {
 	case *eventtypes.ImageCreate:
@@ -435,7 +438,7 @@ func getEventImage(e typeurl.Any) (string, EventType, error) {
 	case *eventtypes.ImageDelete:
 		return e.Name, DeleteEvent, nil
 	default:
-		return "", UnknownEvent, errors.New("unsupported event")
+		return "", "", errors.New("unsupported event type")
 	}
 }
 

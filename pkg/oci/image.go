@@ -21,10 +21,9 @@ type Image struct {
 type EventType string
 
 const (
-	CreateEvent  EventType = "CREATE"
-	UpdateEvent  EventType = "UPDATE"
-	DeleteEvent  EventType = "DELETE"
-	UnknownEvent EventType = ""
+	CreateEvent EventType = "CREATE"
+	UpdateEvent EventType = "UPDATE"
+	DeleteEvent EventType = "DELETE"
 )
 
 type ImageEvent struct {
