@@ -7,10 +7,27 @@ import (
 	"net/url"
 	"testing"
 
+	eventtypes "github.com/containerd/containerd/api/events"
+	"github.com/containerd/typeurl/v2"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
+
+func TestNewContainerd(t *testing.T) {
+	t.Parallel()
+
+	c, err := NewContainerd("socket", "namespace", "foo", nil)
+	require.NoError(t, err)
+	require.Empty(t, c.contentPath)
+	require.Nil(t, c.client)
+	require.Equal(t, "foo", c.registryConfigPath)
+
+	c, err = NewContainerd("socket", "namespace", "foo", nil, WithContentPath("local"))
+	require.NoError(t, err)
+	require.Equal(t, "local", c.contentPath)
+}
 
 func TestVerifyStatusResponse(t *testing.T) {
 	t.Parallel()
@@ -56,7 +73,6 @@ func TestVerifyStatusResponse(t *testing.T) {
 			expectedErrMsg:        "Containerd discard unpacked layers cannot be enabled",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -98,7 +114,6 @@ func TestCreateFilter(t *testing.T) {
 			expectedEventFilter: `topic~="/images/create|/images/update|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -107,6 +122,112 @@ func TestCreateFilter(t *testing.T) {
 			require.Equal(t, tt.expectedListFilter, listFilter)
 			require.Equal(t, tt.expectedEventFilter, eventFilter)
 		})
+	}
+}
+
+func TestGetEventImage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		data              interface{}
+		expectedErr       string
+		expectedName      string
+		expectedEventType EventType
+	}{
+		{
+			name:        "type url is nil",
+			data:        nil,
+			expectedErr: "any cannot be nil",
+		},
+		{
+			name:        "unknown event",
+			data:        &eventtypes.ContainerCreate{},
+			expectedErr: "unsupported event type",
+		},
+		{
+			name: "create event",
+			data: &eventtypes.ImageCreate{
+				Name: "create",
+			},
+			expectedName:      "create",
+			expectedEventType: CreateEvent,
+		},
+		{
+			name: "update event",
+			data: &eventtypes.ImageUpdate{
+				Name: "update",
+			},
+			expectedName:      "update",
+			expectedEventType: UpdateEvent,
+		},
+		{
+			name: "delete event",
+			data: &eventtypes.ImageDelete{
+				Name: "delete",
+			},
+			expectedName:      "delete",
+			expectedEventType: DeleteEvent,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var e typeurl.Any
+			var err error
+			if tt.data != nil {
+				e, err = typeurl.MarshalAny(tt.data)
+				require.NoError(t, err)
+			}
+
+			name, event, err := getEventImage(e)
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedName, name)
+			require.Equal(t, tt.expectedEventType, event)
+		})
+	}
+}
+
+func TestIsImageConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cImg     ocispec.Image
+		expected bool
+	}{
+		{
+			name: "image with required fields set",
+			cImg: ocispec.Image{
+				Platform: ocispec.Platform{
+					Architecture: "dummy",
+					OS:           "dummy",
+				},
+				RootFS: ocispec.RootFS{
+					Type: "dummy",
+				},
+			},
+			expected: true,
+		},
+		{
+			name:     "image with other fields setk",
+			cImg:     ocispec.Image{},
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ok := isImageConfig(tt.cImg)
+			require.Equal(t, tt.expected, ok)
+		})
+
 	}
 }
 
