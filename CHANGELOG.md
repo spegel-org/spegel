@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#518](https://github.com/spegel-org/spegel/pull/518) Extend tests for image.
 - [#519](https://github.com/spegel-org/spegel/pull/519) Extend tests for containerd.
+- [#520](https://github.com/spegel-org/spegel/pull/520) Add tests for metrics.
 
 ### Deprecated
 
