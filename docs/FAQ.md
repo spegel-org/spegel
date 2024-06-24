@@ -124,3 +124,7 @@ spegel:
   additionalMirrorRegistries:
     - https://zot.example.com
 ```
+
+## Why is my node running out of disk space?
+
+By default the kubelet on every node is configured to [garbage collect](https://kubernetes.io/docs/concepts/architecture/garbage-collection/#containers-images) unused images when the disk space starts to run out. Some Kubernetes clusters come with image garbage collection disabled by default. This can cause a nodes disk to fill up quickly, especially on nodes with small disks to begin with. Spegel does not have a built in garbage collection instead it depends completely on the kubelt garbage collection beign properly configured.
