@@ -103,6 +103,10 @@ serviceMonitor:
   scrapeTimeout: 30s
   # -- Service monitor specific labels for prometheus to discover servicemonitor.
   labels: {}
+  # -- List of relabeling rules to apply the target’s metadata labels.
+  relabelings: []
+  # -- List of relabeling rules to apply to the samples before ingestion.
+  metricRelabelings: []
 
 grafanaDashboard:
   # -- If true creates a Grafana dashboard.
