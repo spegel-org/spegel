@@ -85,6 +85,8 @@ spec:
 | serviceMonitor.enabled | bool | `false` | If true creates a Prometheus Service Monitor. |
 | serviceMonitor.interval | string | `"60s"` | Prometheus scrape interval. |
 | serviceMonitor.labels | object | `{}` | Service monitor specific labels for prometheus to discover servicemonitor. |
+| serviceMonitor.metricRelabelings | list | `[]` | List of relabeling rules to apply to the samples before ingestion. |
+| serviceMonitor.relabelings | list | `[]` | List of relabeling rules to apply the target’s metadata labels. |
 | serviceMonitor.scrapeTimeout | string | `"30s"` | Prometheus scrape interval timeout. |
 | spegel.additionalMirrorRegistries | list | `[]` | Additional target mirror registries other than Spegel. |
 | spegel.appendMirrors | bool | `false` | When true existing mirror configuration will be appended to instead of replaced. |
