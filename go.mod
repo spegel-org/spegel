@@ -3,7 +3,7 @@ module github.com/spegel-org/spegel
 go 1.22.3
 
 require (
-	github.com/alexflint/go-arg v1.5.0
+	github.com/alexflint/go-arg v1.5.1
 	github.com/containerd/containerd v1.7.18
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/go-logr/logr v1.4.2
