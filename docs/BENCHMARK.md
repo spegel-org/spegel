@@ -4,7 +4,7 @@ Spegel performance is measured using the [Benchmark tool](https://github.com/spe
 
 ## Method
 
-The benchmarks were run on AKS v1.29 with 50 `Standard_D4ds_v5` nodes. The environment was setup using the provided [Terraform configuration](https://github.com/spegel-org/benchmark/tree/main/terraform). Spegel v0.0.22 is installed in the cluster using the default configuration.
+The benchmarks were run on AKS v1.29 with 50 `Standard_D4ds_v5` nodes. The environment was setup using the provided [Terraform configuration](https://github.com/spegel-org/benchmark/tree/main/terraform). Spegel v0.0.23 is installed in the cluster using the default configuration.
 
 The measurements are done using the generated [benchmark images](https://github.com/spegel-org/benchmark/pkgs/container/benchmark). These images are provided as a v1 and v2 to simulate a rolling upgrade.
 
@@ -33,27 +33,27 @@ The results are compared to the [baseline results](https://github.com/spegel-org
 
 | Image | Baseline | Spegel |
 | --- | :---: | :---: | 
-| 10 MB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/10MB-1.png) | ![](../benchmark/v0.0.22/10MB-1.png) |
-| 10 MB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/10MB-4.png) | ![](../benchmark/v0.0.22/10MB-4.png) |
-| 100 MB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/100MB-1.png) | ![](../benchmark/v0.0.22/100MB-1.png) |
-| 100 MB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/100MB-4.png) | ![](../benchmark/v0.0.22/100MB-4.png) |
-| 1 GB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/1GB-1.png) | ![](../benchmark/v0.0.22/1GB-1.png) |
-| 1 GB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/1GB-4.png) | ![](../benchmark/v0.0.22/1GB-4.png) |
+| 10 MB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/10MB-1.png) | ![](../benchmark/v0.0.23/10MB-1.png) |
+| 10 MB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/10MB-4.png) | ![](../benchmark/v0.0.23/10MB-4.png) |
+| 100 MB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/100MB-1.png) | ![](../benchmark/v0.0.23/100MB-1.png) |
+| 100 MB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/100MB-4.png) | ![](../benchmark/v0.0.23/100MB-4.png) |
+| 1 GB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/1GB-1.png) | ![](../benchmark/v0.0.23/1GB-1.png) |
+| 1 GB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/1GB-4.png) | ![](../benchmark/v0.0.23/1GB-4.png) |
 
 ## Analysis
 
-The image pull duration for v1 and v2 versions differ in shape. This is due to how Kubernetes rolls outs pods for new daemonsets compared to when one is updated. For the v1 images pods are created in batches with no check that the previous batch has started successfully. Images and it's layers are not advertised until the whole image has been pulled. When nodes pull the same image in parallel they will both fetch the image from the original registry. As the new batch of pods are created before the previous batch has pulled the image it means that they will also have to pull the image from the source registry. Batched pod creations is a known weakness of Spegel which does not have a solution currently. Any performance increase seen in the graphs are most likely coincidental due to the time at which the benchmarks were run. On the other hand it can be observed that performance at times can be worse with Spegel. The performance reduction originates when waiting for the router to timeout when the image does not exist in the cluster. Currently the timeout default is 5 seconds. A lower value would remove these issues at the risk of timeout occurring even when an image does exist within the cluster. The default value was set to a high value initially, but will be revised in a future release to bring the performance to be on par with the baseline.
+The image pull duration for v1 and v2 versions differ in shape. This is due to how Kubernetes rolls outs pods for new daemonsets compared to when one is updated. For the v1 images pods are created in batches with no check that the previous batch has started successfully. Images and it's layers are not advertised until the whole image has been pulled. When nodes pull the same image in parallel they will both fetch the image from the original registry. As the new batch of pods are created before the previous batch has pulled the image it means that they will also have to pull the image from the source registry. Batched pod creations is a known weakness of Spegel which does not have a solution currently. Any performance increase seen in the graphs are most likely coincidental due to the time at which the benchmarks were run. 
 
-The v2 images however see a greater performance improvement as each pod will wait for the other to complete pulling the image. This means that the first pod will have to pull the image from the source registry. After that the second pod should be able to pull the image from the node which the first pod is deployed to. The table below shows the average pull duration for the baseline and Spegel benchmark. The improvement percentage is calculated with the equation `(baseline - spegel)/baseline * 100`. We see the largest performance increase will small images. Images with more layers do seem to be slower compared to their single layer counterparts. One explanation for this is that multiple layers require multiple requests, and in Spegel case multiple layer discovery calls.
+The v2 images however see a greater performance improvement as each pod will wait for the other to complete pulling the image. This means that the first pod will have to pull the image from the source registry. After that the second pod should be able to pull the image from the node which the first pod is deployed to. The table below shows the average pull duration for the baseline and Spegel benchmark. The improvement percentage is calculated with the equation `(baseline - spegel)/baseline * 100`. Images with multiple layers are faster than the the same sized images with singular layers. One explanation is that they benefit from layers being pulled in parallel.
 
 | Image | Baseline (avg) | Spegel (avg) | Improvement |
 | --- | --- | --- | --- |
-| 10 MB 1 layer | 1220 ms | 181 ms | 85.16% |
-| 10 MB 4 layers | 1409 ms | 407 ms | 71.11% |
-| 100 MB 1 layer | 1725 ms | 559 ms | 67.59% |
-| 100 MB 4 layers | 1573 ms | 526 ms | 66.56% |
-| 1 GB 1 layer | 8429 ms | 6942 ms | 17.64% |
-| 1 GB 4 layers | 7310 ms | 5478 ms | 18.32% |
+| 10 MB 1 layer | 1220 ms | 210 ms | 81.25% |
+| 10 MB 4 layers | 1409 ms | 155 ms | 88.99% |
+| 100 MB 1 layer | 1725 ms | 560 ms | 67.53% |
+| 100 MB 4 layers | 1573 ms | 500 ms | 68.21% |
+| 1 GB 1 layer | 8429 ms | 6682 ms | 20.72% |
+| 1 GB 4 layers | 7310 ms | 5125 ms | 29.89% |
 
 While better the performance improvements get less as the images get larger. The best explanation is that the disk bandwidth is getting saturated. Spegel serves image layers from disk and relies on the OS to copy from disk to the TCP socket. Ignoring the overhead in discovering layers the next bottle neck is the network and disk bandwidth available. For the benchmark `Standard_D4ds_v5` VMs with ephemeral disk were used. These VMs have a non-guaranteed throughput of 250 MB/s. With some rough calculations we can see that `1024 MB / 4.392 s = 233 MB/s` which is approaching the max performance of the disk.  
 
