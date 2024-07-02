@@ -30,7 +30,7 @@ func (m *MemoryRouter) Resolve(ctx context.Context, key string, allowSelf bool, 
 	m.mx.RLock()
 	peers, ok := m.resolver[key]
 	m.mx.RUnlock()
-	// If not peers exist close the channel to stop any consumer.
+	// If no peers exist close the channel to stop any consumer.
 	if !ok {
 		close(peerCh)
 		return peerCh, nil
