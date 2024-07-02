@@ -88,3 +88,11 @@ func TestIsIp6(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, isIp6(m))
 }
+
+func TestCreateCid(t *testing.T) {
+	t.Parallel()
+
+	c, err := createCid("foobar")
+	require.NoError(t, err)
+	require.Equal(t, "bafkreigdvoh7cnza5cwzar65hfdgwpejotszfqx2ha6uuolaofgk54ge6i", c.String())
+}
