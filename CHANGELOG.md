@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#535](https://github.com/spegel-org/spegel/pull/535) Fix Docker build casing checks.
+
 ### Security
 
 ## v0.0.23
