@@ -9,7 +9,6 @@ import (
 
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/typeurl/v2"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -190,44 +189,6 @@ func TestGetEventImage(t *testing.T) {
 			require.Equal(t, tt.expectedName, name)
 			require.Equal(t, tt.expectedEventType, event)
 		})
-	}
-}
-
-func TestIsImageConfig(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		cImg     ocispec.Image
-		expected bool
-	}{
-		{
-			name: "image with required fields set",
-			cImg: ocispec.Image{
-				Platform: ocispec.Platform{
-					Architecture: "dummy",
-					OS:           "dummy",
-				},
-				RootFS: ocispec.RootFS{
-					Type: "dummy",
-				},
-			},
-			expected: true,
-		},
-		{
-			name:     "image with other fields setk",
-			cImg:     ocispec.Image{},
-			expected: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			ok := isImageConfig(tt.cImg)
-			require.Equal(t, tt.expected, ok)
-		})
-
 	}
 }
 

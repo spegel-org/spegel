@@ -2,18 +2,60 @@ package state
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"math/rand/v2"
 	"net/netip"
+	"strconv"
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
+	"github.com/go-logr/logr"
+	tlog "github.com/go-logr/logr/testing"
+	"github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
-func TestBasic(t *testing.T) {
+func TestTrack(t *testing.T) {
 	t.Parallel()
+	ociClient := oci.NewMemory()
+
+	imgRefs := []string{
+		"docker.io/library/ubuntu:latest",
+		"ghcr.io/spegel-org/spegel:v0.0.9",
+		"docker.io/library/alpine",
+	}
+	imgs := []oci.Image{}
+	for _, imageStr := range imgRefs {
+		manifest := ocispec.Manifest{
+			Versioned: specs.Versioned{
+				SchemaVersion: 2,
+			},
+			MediaType: ocispec.MediaTypeImageManifest,
+			Annotations: map[string]string{
+				"random": strconv.Itoa(rand.Int()),
+			},
+		}
+		b, err := json.Marshal(&manifest)
+		require.NoError(t, err)
+		hash := sha256.New()
+		_, err = hash.Write(b)
+		require.NoError(t, err)
+		dgst := digest.NewDigest(digest.SHA256, hash)
+		ociClient.AddBlob(b, dgst)
+		img, err := oci.Parse(imageStr, dgst)
+		require.NoError(t, err)
+		ociClient.AddImage(img)
+
+		imgs = append(imgs, img)
+	}
 
 	tests := []struct {
 		name             string
@@ -28,33 +70,20 @@ func TestBasic(t *testing.T) {
 			resolveLatestTag: false,
 		},
 	}
-
-	imgRefs := []string{
-		"docker.io/library/ubuntu:latest@sha256:b060fffe8e1561c9c3e6dea6db487b900100fc26830b9ea2ec966c151ab4c020",
-		"ghcr.io/spegel-org/spegel:v0.0.9@sha256:fa32bd3bcd49a45a62cfc1b0fed6a0b63bf8af95db5bad7ec22865aee0a4b795",
-		"docker.io/library/alpine@sha256:25fad2a32ad1f6f510e528448ae1ec69a28ef81916a004d3629874104f8a7f70",
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			imgs := []oci.Image{}
-			for _, imageStr := range imgRefs {
-				img, err := oci.Parse(imageStr, "")
-				require.NoError(t, err)
-				imgs = append(imgs, img)
-			}
-			ociClient := oci.NewMockClient(imgs)
-			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
+			log := tlog.NewTestLogger(t)
+			ctx := logr.NewContext(context.Background(), log)
+			ctx, cancel := context.WithCancel(ctx)
 
-			ctx, cancel := context.WithCancel(context.TODO())
-			go func() {
-				time.Sleep(2 * time.Second)
-				cancel()
-			}()
-			err := Track(ctx, ociClient, router, tt.resolveLatestTag)
-			require.NoError(t, err)
+			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
+			g, gCtx := errgroup.WithContext(ctx)
+			g.Go(func() error {
+				return Track(gCtx, ociClient, router, tt.resolveLatestTag)
+			})
+			time.Sleep(100 * time.Millisecond)
 
 			for _, img := range imgs {
 				peers, ok := router.Lookup(img.Digest.String())
@@ -72,6 +101,10 @@ func TestBasic(t *testing.T) {
 				require.True(t, ok)
 				require.Len(t, peers, 1)
 			}
+
+			cancel()
+			err := g.Wait()
+			require.NoError(t, err)
 		})
 	}
 }

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#538](https://github.com/spegel-org/spegel/pull/538) Replace mock OCI client with in memory client.
+
 ### Changed
 
 - [#518](https://github.com/spegel-org/spegel/pull/518) Extend tests for image.

@@ -22,14 +22,16 @@ func NewMemoryRouter(resolver map[string][]netip.AddrPort, self netip.AddrPort) 
 func (m *MemoryRouter) Ready(ctx context.Context) (bool, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
+
 	return len(m.resolver) > 0, nil
 }
 
 func (m *MemoryRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {
-	peerCh := make(chan netip.AddrPort, count)
 	m.mx.RLock()
 	peers, ok := m.resolver[key]
 	m.mx.RUnlock()
+
+	peerCh := make(chan netip.AddrPort, count)
 	// If no peers exist close the channel to stop any consumer.
 	if !ok {
 		close(peerCh)
@@ -54,16 +56,24 @@ func (m *MemoryRouter) Advertise(ctx context.Context, keys []string) error {
 func (m *MemoryRouter) Add(key string, ap netip.AddrPort) {
 	m.mx.Lock()
 	defer m.mx.Unlock()
-	if v, ok := m.resolver[key]; ok {
-		m.resolver[key] = append(v, ap)
+
+	v, ok := m.resolver[key]
+	if !ok {
+		m.resolver[key] = []netip.AddrPort{ap}
 		return
 	}
-	m.resolver[key] = []netip.AddrPort{ap}
+	for _, h := range v {
+		if h == ap {
+			return
+		}
+	}
+	m.resolver[key] = append(v, ap)
 }
 
 func (m *MemoryRouter) Lookup(key string) ([]netip.AddrPort, bool) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
+
 	v, ok := m.resolver[key]
 	return v, ok
 }
