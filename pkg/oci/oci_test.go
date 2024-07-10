@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/containerd/containerd"
@@ -84,9 +85,32 @@ func TestOCIClient(t *testing.T) {
 		client:      containerdClient,
 	}
 
-	for _, ociClient := range []Client{remoteContainerd, localContainerd} {
+	memoryClient := NewMemory()
+	for _, img := range imgs {
+		dgst, err := digest.Parse(img["digest"])
+		require.NoError(t, err)
+		img, err := Parse(img["name"], dgst)
+		require.NoError(t, err)
+		memoryClient.AddImage(img)
+	}
+	for k, v := range blobs {
+		memoryClient.AddBlob(v, k)
+	}
+
+	for _, ociClient := range []Client{remoteContainerd, localContainerd, memoryClient} {
 		t.Run(ociClient.Name(), func(t *testing.T) {
 			t.Parallel()
+
+			b, mt, err := ociClient.GetManifest(ctx, digest.FromString("foo"))
+			require.Empty(t, b)
+			require.Empty(t, mt)
+			require.ErrorIs(t, err, ErrNotFound)
+			rc, err := ociClient.GetBlob(ctx, digest.FromString("foo"))
+			require.Empty(t, rc)
+			require.ErrorIs(t, err, ErrNotFound)
+			size, err := ociClient.Size(ctx, digest.FromString("foo"))
+			require.Empty(t, size)
+			require.ErrorIs(t, err, ErrNotFound)
 
 			imgs, err := ociClient.ListImages(ctx)
 			require.NoError(t, err)
@@ -103,8 +127,8 @@ func TestOCIClient(t *testing.T) {
 				Name:   noPlatformName,
 				Digest: dgst,
 			}
-			_, err = ociClient.AllIdentifiers(ctx, img)
-			require.EqualError(t, err, "failed to walk image manifests: could not find any platforms with local content in manifest list: sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9")
+			_, err = WalkImage(ctx, ociClient, img)
+			require.EqualError(t, err, "failed to walk image manifests: could not find any platforms with local content in manifest sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9")
 
 			contentTests := []struct {
 				mediaType string
@@ -259,11 +283,62 @@ func TestOCIClient(t *testing.T) {
 
 					img, err := Parse(tt.imageName, digest.Digest(tt.imageDigest))
 					require.NoError(t, err)
-					keys, err := ociClient.AllIdentifiers(ctx, img)
+					keys, err := WalkImage(ctx, ociClient, img)
 					require.NoError(t, err)
 					require.Equal(t, tt.expectedKeys, keys)
 				})
 			}
 		})
 	}
+}
+
+func TestDetermineMediaType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		dgst              digest.Digest
+		expectedMediaType string
+	}{
+		{
+			name:              "image config",
+			dgst:              digest.Digest("sha256:68b8a989a3e08ddbdb3a0077d35c0d0e59c9ecf23d0634584def8bdbb7d6824f"),
+			expectedMediaType: ocispec.MediaTypeImageConfig,
+		},
+		{
+			name:              "image index",
+			dgst:              digest.Digest("sha256:9430beb291fa7b96997711fc486bc46133c719631aefdbeebe58dd3489217bfe"),
+			expectedMediaType: ocispec.MediaTypeImageIndex,
+		},
+		{
+			name:              "image index without media type",
+			dgst:              digest.Digest("sha256:d8df04365d06181f037251de953aca85cc16457581a8fc168f4957c978e1008b"),
+			expectedMediaType: ocispec.MediaTypeImageIndex,
+		},
+		{
+			name:              "image manifest",
+			dgst:              digest.Digest("sha256:dce623533c59af554b85f859e91fc1cbb7f574e873c82f36b9ea05a09feb0b53"),
+			expectedMediaType: ocispec.MediaTypeImageManifest,
+		},
+		{
+			name:              "image manifest without media type",
+			dgst:              digest.Digest("sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9"),
+			expectedMediaType: ocispec.MediaTypeImageManifest,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			b, err := os.ReadFile(filepath.Join("testdata", "blobs", tt.dgst.Algorithm().String(), tt.dgst.Encoded()))
+			require.NoError(t, err)
+			mt, err := DetermineMediaType(b)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedMediaType, mt)
+		})
+	}
+
+	mt, err := DetermineMediaType([]byte("{}"))
+	require.EqualError(t, err, "not able to determine media type")
+	require.Empty(t, mt)
 }

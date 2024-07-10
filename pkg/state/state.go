@@ -94,8 +94,8 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 func update(ctx context.Context, ociClient oci.Client, router routing.Router, event oci.ImageEvent, skipDigests, resolveLatestTag bool) (int, error) {
 	keys := []string{}
 	if !(!resolveLatestTag && event.Image.IsLatestTag()) {
-		if tagRef, ok := event.Image.TagName(); ok {
-			keys = append(keys, tagRef)
+		if tagName, ok := event.Image.TagName(); ok {
+			keys = append(keys, tagName)
 		}
 	}
 	if event.Type == oci.DeleteEvent {
@@ -107,7 +107,7 @@ func update(ctx context.Context, ociClient oci.Client, router routing.Router, ev
 		return 0, nil
 	}
 	if !skipDigests {
-		dgsts, err := ociClient.AllIdentifiers(ctx, event.Image)
+		dgsts, err := oci.WalkImage(ctx, ociClient, event.Image)
 		if err != nil {
 			return 0, fmt.Errorf("could not get digests for image %s: %w", event.Image.String(), err)
 		}

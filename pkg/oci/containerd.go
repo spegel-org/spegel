@@ -15,7 +15,7 @@ import (
 	"github.com/containerd/containerd"
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/images"
+	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
@@ -201,67 +201,6 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	return imgs, nil
 }
 
-func (c *Containerd) AllIdentifiers(ctx context.Context, img Image) ([]string, error) {
-	client, err := c.Client()
-	if err != nil {
-		return nil, err
-	}
-	cImg, err := client.ImageService().Get(ctx, img.Name)
-	if err != nil {
-		return nil, err
-	}
-	keys := []string{}
-	err = images.Walk(ctx, images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-		keys = append(keys, desc.Digest.String())
-		switch desc.MediaType {
-		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-			var idx ocispec.Index
-			b, err := content.ReadBlob(ctx, client.ContentStore(), desc)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read blob for manifest list: %w", err)
-			}
-			if err := json.Unmarshal(b, &idx); err != nil {
-				return nil, err
-			}
-			var descs []ocispec.Descriptor
-			for _, m := range idx.Manifests {
-				// Skip index layers that do not exist locally
-				if _, err := client.ContentStore().Info(ctx, m.Digest); err != nil {
-					continue
-				}
-				descs = append(descs, m)
-			}
-			if len(descs) == 0 {
-				return nil, fmt.Errorf("could not find any platforms with local content in manifest list: %v", desc.Digest)
-			}
-			return descs, nil
-		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-			var manifest ocispec.Manifest
-			b, err := content.ReadBlob(ctx, client.ContentStore(), desc)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read blob for manifest: %w", err)
-			}
-			if err := json.Unmarshal(b, &manifest); err != nil {
-				return nil, err
-			}
-			keys = append(keys, manifest.Config.Digest.String())
-			for _, layer := range manifest.Layers {
-				keys = append(keys, layer.Digest.String())
-			}
-			return nil, nil
-		default:
-			return nil, fmt.Errorf("unexpected media type %v for digest: %v", desc.MediaType, desc.Digest)
-		}
-	}), cImg.Target)
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk image manifests: %w", err)
-	}
-	if len(keys) == 0 {
-		return nil, errors.New("no image digests found")
-	}
-	return keys, nil
-}
-
 func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
 	client, err := c.Client()
 	if err != nil {
@@ -280,6 +219,9 @@ func (c *Containerd) Size(ctx context.Context, dgst digest.Digest) (int64, error
 		return 0, err
 	}
 	info, err := client.ContentStore().Info(ctx, dgst)
+	if errors.Is(err, errdefs.ErrNotFound) {
+		return 0, errors.Join(ErrNotFound, err)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -292,27 +234,15 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 		return nil, "", err
 	}
 	b, err := content.ReadBlob(ctx, client.ContentStore(), ocispec.Descriptor{Digest: dgst})
+	if errors.Is(err, errdefs.ErrNotFound) {
+		return nil, "", errors.Join(ErrNotFound, err)
+	}
 	if err != nil {
 		return nil, "", err
 	}
-	var ud UnknownDocument
-	if err := json.Unmarshal(b, &ud); err != nil {
-		return nil, "", err
-	}
-	if ud.MediaType != "" {
-		return b, ud.MediaType, nil
-	}
-	var ic ocispec.Image
-	if err := json.Unmarshal(b, &ic); err != nil {
-		return nil, "", err
-	}
-	if isImageConfig(ic) {
-		return b, ocispec.MediaTypeImageConfig, nil
-	}
-	// Media type is not a required field. We need a fallback method if the field is not set.
-	mt, err := c.lookupMediaType(ctx, dgst)
+	mt, err := DetermineMediaType(b)
 	if err != nil {
-		return nil, "", fmt.Errorf("could not get media type for %s: %w", dgst.String(), err)
+		return nil, "", err
 	}
 	return b, mt, nil
 }
@@ -321,6 +251,9 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCl
 	if c.contentPath != "" {
 		path := filepath.Join(c.contentPath, "blobs", dgst.Algorithm().String(), dgst.Encoded())
 		file, err := os.Open(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, errors.Join(ErrNotFound, err)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -331,6 +264,9 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCl
 		return nil, err
 	}
 	ra, err := client.ContentStore().ReaderAt(ctx, ocispec.Descriptor{Digest: dgst})
+	if errors.Is(err, errdefs.ErrNotFound) {
+		return nil, errors.Join(ErrNotFound, err)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -341,85 +277,6 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCl
 		Reader: content.NewReader(ra),
 		Closer: ra,
 	}, nil
-}
-
-// lookupMediaType will resolve the media type for a digest without looking at the content.
-// Only use this as a fallback method as it is a lot slower than reading it from the file.
-// TODO: A cache would be helpful to speed up lookups for the same digets.
-func (c *Containerd) lookupMediaType(ctx context.Context, dgst digest.Digest) (string, error) {
-	logr.FromContextOrDiscard(ctx).Info("using Containerd fallback method to determine media type", "digest", dgst.String())
-	client, err := c.Client()
-	if err != nil {
-		return "", err
-	}
-	images, err := client.ImageService().List(ctx, fmt.Sprintf("target.digest==%s", dgst.String()))
-	if err != nil {
-		return "", err
-	}
-	if len(images) > 0 {
-		return images[0].Target.MediaType, nil
-	}
-	info, err := client.ContentStore().Info(ctx, dgst)
-	if err != nil {
-		return "", err
-	}
-	filter, err := getContentFilter(info.Labels)
-	if err != nil {
-		return "", err
-	}
-	var parentDgst digest.Digest
-	err = client.ContentStore().Walk(ctx, func(info content.Info) error {
-		for _, v := range info.Labels {
-			if v != dgst.String() {
-				continue
-			}
-			parentDgst = info.Digest
-			return filepath.SkipAll
-		}
-		return nil
-	}, filter)
-	if err != nil && !errors.Is(err, filepath.SkipAll) {
-		return "", err
-	}
-	if parentDgst == "" {
-		return "", errors.New("could not find parent")
-	}
-	b, err := content.ReadBlob(ctx, client.ContentStore(), ocispec.Descriptor{Digest: parentDgst})
-	if err != nil {
-		return "", err
-	}
-	var idx ocispec.Index
-	if err := json.Unmarshal(b, &idx); err != nil {
-		return "", err
-	}
-	for _, desc := range idx.Manifests {
-		if desc.Digest == dgst {
-			return desc.MediaType, nil
-		}
-	}
-	var manifest ocispec.Manifest
-	if err := json.Unmarshal(b, &manifest); err != nil {
-		return "", err
-	}
-	if manifest.Config.Digest == dgst {
-		return manifest.Config.MediaType, nil
-	}
-	for _, layer := range manifest.Layers {
-		if layer.Digest == dgst {
-			return layer.MediaType, nil
-		}
-	}
-	return "", errors.New("could not find reference in parent")
-}
-
-func getContentFilter(labels map[string]string) (string, error) {
-	for k, v := range labels {
-		if !strings.HasPrefix(k, "containerd.io/distribution.source") {
-			continue
-		}
-		return fmt.Sprintf(`labels.%q==%s`, k, v), nil
-	}
-	return "", errors.New("could not find distribution label to create content filter")
 }
 
 func getEventImage(e typeurl.Any) (string, EventType, error) {
@@ -452,19 +309,6 @@ func createFilters(registries []url.URL) (string, string) {
 	return listFilter, eventFilter
 }
 
-func isImageConfig(ic ocispec.Image) bool {
-	if ic.Architecture == "" {
-		return false
-	}
-	if ic.OS == "" {
-		return false
-	}
-	if ic.RootFS.Type == "" {
-		return false
-	}
-	return true
-}
-
 type hostFile struct {
 	HostConfigs map[string]hostConfig `toml:"host"`
 	Server      string                `toml:"server"`
@@ -479,7 +323,7 @@ type hostConfig struct {
 	Capabilities []string               `toml:"capabilities"`
 }
 
-// Refer to containerd registry configuration documentation for mor information about required configuration.
+// Refer to containerd registry configuration documentation for more information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
 func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveTags, appendToBackup bool) error {
