@@ -128,3 +128,9 @@ spegel:
 ## Why is my node running out of disk space?
 
 By default the kubelet on every node is configured to [garbage collect](https://kubernetes.io/docs/concepts/architecture/garbage-collection/#containers-images) unused images when the disk space starts to run out. Some Kubernetes clusters come with image garbage collection disabled by default. This can cause a nodes disk to fill up quickly, especially on nodes with small disks to begin with. Spegel does not have a built in garbage collection instead it depends completely on the kubelt garbage collection beign properly configured.
+
+## What should I do if other pods are scheduled on new nodes before Spegel?
+
+The Kubernetes scheduler will assign pods to nodes as soon as the node reports as ready. This causes a race to schedule and start Spegel on any new node, before other pods are scheduled. If this does not happen the mirror configuration will not be written to the node before the node starts pulling images for other new pods scheduled on it. Defeating the purpose of Spegel in this scenario. This problem is not unique to Spegel, but is a wider problem in Kubernetes for critical daemonsets. There are two closed KEPs [#1003](https://github.com/kubernetes/enhancements/pull/1003) and [#75890](https://github.com/kubernetes/kubernetes/issues/75890) which attempted to solve this without being accepted.
+
+The best solution to address this problem currently is to use [nidhogg](https://github.com/pelotech/nidhogg) to taint nodes which are not running pods from specific daemonsets. It implements for the most part the features suggested in both KEPs. Ensuring that all image pulls go through Spegel, even on new nodes.
