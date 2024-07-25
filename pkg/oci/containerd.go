@@ -1,6 +1,7 @@
 package oci
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/containerd/containerd"
 	eventtypes "github.com/containerd/containerd/api/events"
@@ -21,6 +23,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
+	tomlu "github.com/pelletier/go-toml/v2/unstable"
 	"github.com/spf13/afero"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 
@@ -29,6 +32,17 @@ import (
 
 const (
 	backupDir = "_backup"
+
+	hostsTemplate string = `{{ if .Server -}}
+server = '{{ .Server }}'
+
+{{ end -}}
+[host]
+{{- range $host := .OrderedHosts }}
+[host.'{{ $host }}']
+{{ index $.HostConfigs $host | toToml }}
+{{ end -}}
+`
 )
 
 var _ Client = &Containerd{}
@@ -312,6 +326,8 @@ func createFilters(registries []url.URL) (string, string) {
 type hostFile struct {
 	HostConfigs map[string]hostConfig `toml:"host"`
 	Server      string                `toml:"server"`
+
+	OrderedHosts []string `toml:"-"`
 }
 
 type hostConfig struct {
@@ -345,6 +361,14 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		return err
 	}
 
+	hostsTemplate := template.Must(
+		template.New("hosts.toml").
+			Funcs(template.FuncMap{
+				"toToml": toToml,
+			}).
+			Parse(hostsTemplate),
+	)
+
 	// Write mirror configuration
 	capabilities := []string{"pull"}
 	if resolveTags {
@@ -355,11 +379,15 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		if err != nil {
 			return err
 		}
+		orderedHosts := make([]string, 0, len(mirrorURLs)+len(hf.OrderedHosts))
 		for _, u := range mirrorURLs {
-			hf.HostConfigs[u.String()] = hostConfig{Capabilities: capabilities}
+			host := u.String()
+			hf.HostConfigs[host] = hostConfig{Capabilities: capabilities}
+			orderedHosts = append(orderedHosts, host)
 		}
-		b, err := toml.Marshal(&hf)
-		if err != nil {
+		hf.OrderedHosts = append(orderedHosts, hf.OrderedHosts...)
+		b := &bytes.Buffer{}
+		if err := hostsTemplate.Execute(b, hf); err != nil {
 			return err
 		}
 		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
@@ -367,7 +395,7 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		if err != nil {
 			return err
 		}
-		err = afero.WriteFile(fs, fp, b, 0o644)
+		err = afero.WriteFile(fs, fp, b.Bytes(), 0o644)
 		if err != nil {
 			return err
 		}
@@ -462,6 +490,7 @@ func getHostFile(fs afero.Fs, configPath string, appendToBackup bool, registryUR
 			if err != nil {
 				return hostFile{}, false, err
 			}
+			hf.OrderedHosts = getOrderedHosts(b)
 			return hf, true, nil
 		}
 	}
@@ -474,4 +503,34 @@ func getHostFile(fs afero.Fs, configPath string, appendToBackup bool, registryUR
 		HostConfigs: map[string]hostConfig{},
 	}
 	return hf, false, nil
+}
+
+// getOrderedHosts parses the given byte slice as TOML data and returns a slice of
+// strings containing the ordered hosts found in the TOML data.
+func getOrderedHosts(b []byte) []string {
+	p := tomlu.Parser{}
+	p.Reset(b)
+	orderedHosts := []string{}
+	for p.NextExpression() {
+		e := p.Expression()
+		if e.Kind != tomlu.Table {
+			continue
+		}
+		ki := e.Key()
+		// check if the expression is a host ("[host.'xxx']")
+		if ki.Next() && string(ki.Node().Data) == "host" &&
+			ki.Next() && ki.IsLast() {
+			orderedHosts = append(orderedHosts, string(ki.Node().Data))
+		}
+	}
+	return orderedHosts
+}
+
+func toToml(v any) (string, error) {
+	var buf bytes.Buffer
+	enc := toml.NewEncoder(&buf)
+	if err := enc.Encode(v); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(buf.String()), nil
 }
