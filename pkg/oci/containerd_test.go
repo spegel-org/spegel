@@ -208,15 +208,18 @@ func TestMirrorConfiguration(t *testing.T) {
 		appendToBackup      bool
 	}{
 		{
-			name:        "multiple mirros",
+			name:        "multiple mirrors",
 			resolveTags: true,
 			registries:  stringListToUrlList(t, []string{"http://foo.bar:5000"}),
-			mirrors:     stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"}),
+			mirrors:     stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.2:5001", "http://127.0.0.1:5001"}),
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host]
 [host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://127.0.0.2:5001']
 capabilities = ['pull', 'resolve']
 
 [host.'http://127.0.0.1:5001']
@@ -360,6 +363,10 @@ client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 [host.'http://example.com:30021']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+
+[host.'http://bar.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 `,
 			},
 			expectedFiles: map[string]string{
@@ -371,6 +378,10 @@ capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 
 [host.'http://example.com:30021']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+
+[host.'http://bar.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 `,
@@ -385,6 +396,10 @@ client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 capabilities = ['pull', 'resolve']
 
 [host.'http://example.com:30021']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+capabilities = ['pull', 'resolve']
+
+[host.'http://bar.com:30020']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 capabilities = ['pull', 'resolve']
 `,
@@ -465,4 +480,53 @@ func stringListToUrlList(t *testing.T, list []string) []url.URL {
 		urls = append(urls, *u)
 	}
 	return urls
+}
+
+func TestGetOrderedHosts(t *testing.T) {
+	t.Parallel()
+
+	type args struct {
+		b []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{
+			name: "empty file",
+			args: args{b: []byte{}},
+			want: []string{},
+		},
+		{
+			name: "ordered hosts",
+			args: args{b: []byte(`server = 'http://foo.bar:5000'
+
+[host]
+[host.'http://127.0.0.4:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://127.0.0.3:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://127.0.0.2:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://127.0.0.5:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+`)},
+			want: []string{"http://127.0.0.4:5000", "http://127.0.0.3:5000", "http://127.0.0.2:5000", "http://127.0.0.5:5000", "http://127.0.0.1:5000"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := getOrderedHosts(tt.args.b)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }
