@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/containerd/containerd"
@@ -21,6 +22,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
+	tomlu "github.com/pelletier/go-toml/v2/unstable"
 	"github.com/spf13/afero"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 
@@ -312,6 +314,13 @@ func createFilters(registries []url.URL) (string, string) {
 type hostFile struct {
 	HostConfigs map[string]hostConfig `toml:"host"`
 	Server      string                `toml:"server"`
+
+	orderedHosts []string `toml:"-"`
+}
+
+type hostFileOut struct {
+	HostConfigs any    `toml:"host"`
+	Server      string `toml:"server"`
 }
 
 type hostConfig struct {
@@ -350,15 +359,48 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 	if resolveTags {
 		capabilities = append(capabilities, "resolve")
 	}
+
+	hostConfigType := reflect.TypeFor[hostConfig]()
 	for _, registryURL := range registryURLs {
 		hf, appending, err := getHostFile(fs, configPath, appendToBackup, registryURL)
 		if err != nil {
 			return err
 		}
-		for _, u := range mirrorURLs {
-			hf.HostConfigs[u.String()] = hostConfig{Capabilities: capabilities}
+
+		// We make a struct to represent the hosts which allow us to control the order of the hosts in the output toml table
+		// Hosts order is important as containerd will try them in the order of apparition
+		// The order with a map would be unspecified while the go-toml lib guarantees the same order as the struct fields
+		hostConfigSize := len(registryURLs) + len(hf.HostConfigs)
+		hostConfigFields := make([]reflect.StructField, 0, hostConfigSize)
+		hostConfigValues := make([]hostConfig, 0, hostConfigSize)
+		addHost := func(host string, config hostConfig) {
+			hostConfigFields = append(hostConfigFields, reflect.StructField{
+				Name: fmt.Sprintf("F%d", len(hostConfigFields)),
+				Type: hostConfigType,
+				Tag:  reflect.StructTag(fmt.Sprintf("toml:%q", host)),
+			})
+			hostConfigValues = append(hostConfigValues, config)
 		}
-		b, err := toml.Marshal(&hf)
+		for _, u := range mirrorURLs {
+			addHost(u.String(), hostConfig{Capabilities: capabilities})
+		}
+		for _, h := range hf.orderedHosts {
+			addHost(h, hf.HostConfigs[h])
+		}
+
+		// Instantiate struct and assign values
+		hostsConfigs := reflect.New(reflect.StructOf(hostConfigFields))
+		for i, v := range hostConfigValues {
+			f := hostsConfigs.Elem().Field(i)
+			f.Set(reflect.ValueOf(v))
+		}
+
+		out := &hostFileOut{
+			Server: hf.Server,
+		}
+		reflect.ValueOf(&out.HostConfigs).Elem().Set(hostsConfigs)
+
+		b, err := toml.Marshal(out)
 		if err != nil {
 			return err
 		}
@@ -462,6 +504,7 @@ func getHostFile(fs afero.Fs, configPath string, appendToBackup bool, registryUR
 			if err != nil {
 				return hostFile{}, false, err
 			}
+			hf.orderedHosts = getOrderedHosts(b)
 			return hf, true, nil
 		}
 	}
@@ -474,4 +517,25 @@ func getHostFile(fs afero.Fs, configPath string, appendToBackup bool, registryUR
 		HostConfigs: map[string]hostConfig{},
 	}
 	return hf, false, nil
+}
+
+// getOrderedHosts parses the given byte slice as TOML data and returns a slice of
+// strings containing the ordered hosts found in the TOML data.
+func getOrderedHosts(b []byte) []string {
+	p := tomlu.Parser{}
+	p.Reset(b)
+	orderedHosts := []string{}
+	for p.NextExpression() {
+		e := p.Expression()
+		if e.Kind != tomlu.Table {
+			continue
+		}
+		ki := e.Key()
+		// check if the expression is a host ("[host.'xxx']")
+		if ki.Next() && string(ki.Node().Data) == "host" &&
+			ki.Next() && ki.IsLast() {
+			orderedHosts = append(orderedHosts, string(ki.Node().Data))
+		}
+	}
+	return orderedHosts
 }
