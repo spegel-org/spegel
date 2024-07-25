@@ -7,12 +7,59 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"testing"
+	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spegel-org/spegel/internal/mux"
+	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
+
+func TestRegistry(t *testing.T) {
+	t.Parallel()
+
+	ociClient := oci.NewMockClient(nil)
+	router := routing.NewMemoryRouter(nil, netip.AddrPort{})
+
+	reg := NewRegistry(ociClient, router)
+	require.Equal(t, logr.Discard(), reg.log)
+	require.Nil(t, reg.throttler)
+	require.Equal(t, ociClient, reg.ociClient)
+	require.Equal(t, router, reg.router)
+	require.Nil(t, reg.transport)
+	require.Empty(t, reg.localAddr)
+	require.Equal(t, 3, reg.resolveRetries)
+	require.Equal(t, 20*time.Millisecond, reg.resolveTimeout)
+	require.True(t, reg.resolveLatestTag)
+
+	srv, err := reg.Server(":443")
+	require.NoError(t, err)
+	require.Equal(t, ":443", srv.Addr)
+
+	log := funcr.New(func(prefix, args string) {}, funcr.Options{})
+	trans := &http.Transport{}
+	opts := []Option{
+		WithLogger(log),
+		WithTransport(trans),
+		WithLocalAddress("foobar"),
+		WithResolveRetries(5),
+		WithResolveTimeout(1 * time.Second),
+		WithResolveLatestTag(false),
+	}
+	reg = NewRegistry(ociClient, router, opts...)
+	require.Equal(t, log, reg.log)
+	require.Nil(t, reg.throttler)
+	require.Equal(t, ociClient, reg.ociClient)
+	require.Equal(t, router, reg.router)
+	require.Equal(t, trans, reg.transport)
+	require.Equal(t, "foobar", reg.localAddr)
+	require.Equal(t, 5, reg.resolveRetries)
+	require.Equal(t, 1*time.Second, reg.resolveTimeout)
+	require.False(t, reg.resolveLatestTag)
+}
 
 func TestMirrorHandler(t *testing.T) {
 	t.Parallel()
@@ -128,6 +175,18 @@ func TestMirrorHandler(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestRegistryHandler(t *testing.T) {
+	t.Parallel()
+
+	reg := NewRegistry(nil, nil)
+	rw := httptest.NewRecorder()
+	req := httptest.NewRequest("", "", nil)
+	m, err := mux.NewServeMux(reg.handle)
+	require.NoError(t, err)
+	m.ServeHTTP(rw, req)
+
 }
 
 func TestGetClientIP(t *testing.T) {
