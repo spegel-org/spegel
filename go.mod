@@ -26,7 +26,7 @@ require (
 	golang.org/x/sync v0.8.0
 	golang.org/x/time v0.6.0
 	k8s.io/client-go v0.30.2
-	k8s.io/cri-api v0.30.2
+	k8s.io/cri-api v0.30.3
 	k8s.io/klog/v2 v2.130.1
 )
 
