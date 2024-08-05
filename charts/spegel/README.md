@@ -105,3 +105,11 @@ spec:
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |
 | tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
 | updateStrategy | object | `{}` | An update strategy to replace existing pods with new pods. |
+| verticalPodAutoscaler.controlledResources | list | `[]` | List of resources that the vertical pod autoscaler can control. Defaults to cpu and memory |
+| verticalPodAutoscaler.controlledValues | string | `"RequestsAndLimits"` | Specifies which resource values should be controlled: RequestsOnly or RequestsAndLimits. |
+| verticalPodAutoscaler.enabled | bool | `false` | If true creates a Vertical Pod Autoscaler. |
+| verticalPodAutoscaler.maxAllowed | object | `{}` | Define the max allowed resources for the pod |
+| verticalPodAutoscaler.minAllowed | object | `{}` | Define the min allowed resources for the pod |
+| verticalPodAutoscaler.recommenders | list | `[]` | Recommender responsible for generating recommendation for the object. List should be empty (then the default recommender will generate the recommendation) or contain exactly one recommender. |
+| verticalPodAutoscaler.updatePolicy.minReplicas | int | `2` | Specifies minimal number of replicas which need to be alive for VPA Updater to attempt pod eviction |
+| verticalPodAutoscaler.updatePolicy.updateMode | string | `"Auto"` | Specifies whether recommended updates are applied when a Pod is started and whether recommended updates are applied during the life of a Pod. Possible values are "Off", "Initial", "Recreate", and "Auto". |
