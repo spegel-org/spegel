@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 
 
 - [#538](https://github.com/spegel-org/spegel/pull/538) Replace mock OCI client with in memory client.
+- [#552](https://github.com/spegel-org/spegel/pull/552) Add support for VerticalPodAutoscaler in the Helm chart.
 
 ### Changed
 
