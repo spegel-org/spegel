@@ -73,6 +73,7 @@ spec:
 | podSecurityContext | object | `{}` | Security context for the pod. |
 | priorityClassName | string | `"system-node-critical"` | Priority class name to use for the pod. |
 | resources | object | `{}` | Resource requests and limits for the Spegel container. |
+| revisionHistoryLimit | int | `10` | The number of old history to retain to allow rollback. |
 | securityContext | object | `{}` | Security context for the Spegel container. |
 | service.metrics.port | int | `9090` | Port to expose the metrics via the service. |
 | service.registry.hostPort | int | `30020` | Local host port to expose the registry. |

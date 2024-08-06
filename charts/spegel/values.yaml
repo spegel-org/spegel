@@ -32,6 +32,9 @@ podAnnotations: {}
 podSecurityContext: {}
   # fsGroup: 2000
 
+# -- The number of old history to retain to allow rollback.
+revisionHistoryLimit: 10
+
 # -- Security context for the Spegel container.
 securityContext: {}
   # capabilities:
