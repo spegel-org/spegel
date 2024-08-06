@@ -6,6 +6,7 @@ metadata:
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
 spec:
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   updateStrategy:
     {{- toYaml .Values.updateStrategy | nindent 4 }}
   selector:
