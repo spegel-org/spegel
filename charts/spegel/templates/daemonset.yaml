@@ -60,6 +60,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.hostIP
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
         volumeMounts:
           - name: containerd-config
             mountPath: {{ .Values.spegel.containerdRegistryConfigPath }}

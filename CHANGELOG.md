@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#520](https://github.com/spegel-org/spegel/pull/520) Add tests for metrics.
 - [#536](https://github.com/spegel-org/spegel/pull/536) Update Go version to 1.22.5.
 - [#547](https://github.com/spegel-org/spegel/pull/547) Set blob content type to disable detection.
+- [#553](https://github.com/spegel-org/spegel/pull/553) Re-use resources value for initContainer in the Helm Chart.
 
 ### Deprecated
 
