@@ -1,0 +1,9 @@
+{{ if .Server -}}
+server = '{{ .Server }}'
+
+{{ end -}}
+[host]
+{{- range $host := .OrderedHosts }}
+[host.'{{ $host }}']
+{{ index $.HostConfigs $host | toToml }}
+{{ end -}}
