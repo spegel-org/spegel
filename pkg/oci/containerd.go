@@ -126,14 +126,39 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 	if cfg.Registry.ConfigPath == "" {
 		return errors.New("Containerd registry config path needs to be set for mirror configuration to take effect")
 	}
+	linkPaths, err := walkSymbolicLinks(configPath)
+	if err != nil {
+		return err
+	}
 	paths := filepath.SplitList(cfg.Registry.ConfigPath)
 	for _, path := range paths {
-		if path != configPath {
-			continue
+		for _, linkedPath := range linkPaths {
+			if linkedPath == path {
+				return nil
+			}
 		}
-		return nil
 	}
 	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", cfg.Registry.ConfigPath, configPath)
+}
+
+func walkSymbolicLinks(path string) ([]string, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if fi.Mode()&os.ModeSymlink != os.ModeSymlink {
+		return []string{path}, nil
+	}
+	linkPath, err := os.Readlink(path)
+	if err != nil {
+		return nil, err
+	}
+	paths, err := walkSymbolicLinks(linkPath)
+	if err != nil {
+		return nil, err
+	}
+	paths = append(paths, path)
+	return paths, nil
 }
 
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error) {

@@ -5,6 +5,9 @@ import (
 	"fmt"
 	iofs "io/fs"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	eventtypes "github.com/containerd/containerd/api/events"
@@ -31,40 +34,54 @@ func TestNewContainerd(t *testing.T) {
 func TestVerifyStatusResponse(t *testing.T) {
 	t.Parallel()
 
+	tmpDir := t.TempDir()
+
+	err := os.MkdirAll(filepath.Join(tmpDir, "etc", "target", "certs.d"), 0o777)
+	require.NoError(t, err)
+	err = os.MkdirAll(filepath.Join(tmpDir, "etc", "symlink"), 0o777)
+	require.NoError(t, err)
+	err = os.Symlink(filepath.Join(tmpDir, "etc", "target", "certs.d"), filepath.Join(tmpDir, "etc", "symlink", "certs.d"))
+	require.NoError(t, err)
+
 	tests := []struct {
 		name                  string
-		configPath            string
 		requiredConfigPath    string
 		expectedErrMsg        string
+		configPaths           []string
 		discardUnpackedLayers bool
 	}{
 		{
+			name:               "single config path",
+			configPaths:        []string{"/etc/containerd/certs.d"},
+			requiredConfigPath: "/etc/containerd/certs.d",
+		},
+		{
+			name:               "multiple config paths",
+			configPaths:        []string{"/etc/containerd/certs.d", "/etc/docker/certs.d"},
+			requiredConfigPath: "/etc/containerd/certs.d",
+		},
+		{
+			name:               "symlinked config path",
+			configPaths:        []string{"/etc/target/certs.d"},
+			requiredConfigPath: "/etc/symlink/certs.d",
+		},
+		{
 			name:               "empty config path",
-			configPath:         "",
+			configPaths:        nil,
 			requiredConfigPath: "/etc/containerd/certs.d",
 			expectedErrMsg:     "Containerd registry config path needs to be set for mirror configuration to take effect",
 		},
 		{
-			name:               "single config path",
-			configPath:         "/etc/containerd/certs.d",
-			requiredConfigPath: "/etc/containerd/certs.d",
-		},
-		{
 			name:               "missing single config path",
-			configPath:         "/etc/containerd/certs.d",
+			configPaths:        []string{"/etc/containerd/certs.d"},
 			requiredConfigPath: "/var/lib/containerd/certs.d",
-			expectedErrMsg:     "Containerd registry config path is /etc/containerd/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
-		},
-		{
-			name:               "multiple config paths",
-			configPath:         "/etc/containerd/certs.d:/etc/docker/certs.d",
-			requiredConfigPath: "/etc/containerd/certs.d",
+			expectedErrMsg:     fmt.Sprintf("Containerd registry config path is %[1]s/etc/containerd/certs.d but needs to contain path %[1]s/var/lib/containerd/certs.d for mirror configuration to take effect", tmpDir),
 		},
 		{
 			name:               "missing multiple config paths",
-			configPath:         "/etc/containerd/certs.d:/etc/docker/certs.d",
+			configPaths:        []string{"/etc/containerd/certs.d", "/etc/docker/certs.d"},
 			requiredConfigPath: "/var/lib/containerd/certs.d",
-			expectedErrMsg:     "Containerd registry config path is /etc/containerd/certs.d:/etc/docker/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
+			expectedErrMsg:     fmt.Sprintf("Containerd registry config path is %[1]s/etc/containerd/certs.d:%[1]s/etc/docker/certs.d but needs to contain path %[1]s/var/lib/containerd/certs.d for mirror configuration to take effect", tmpDir),
 		},
 		{
 			name:                  "discard unpacked layers enabled",
@@ -76,12 +93,21 @@ func TestVerifyStatusResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
+			tmpConfigPaths := []string{}
+			for _, configPath := range tt.configPaths {
+				tmpConfigPaths = append(tmpConfigPaths, filepath.Join(tmpDir, configPath))
+			}
+			tmpConfigPath := strings.Join(tmpConfigPaths, string(os.PathListSeparator))
+			tmpRequiredPath := filepath.Join(tmpDir, tt.requiredConfigPath)
+			err := os.MkdirAll(tmpRequiredPath, 0o777)
+			require.NoError(t, err)
+
 			resp := &runtimeapi.StatusResponse{
 				Info: map[string]string{
-					"config": fmt.Sprintf(`{"registry": {"configPath": %q}, "containerd": {"runtimes":{"discardUnpackedLayers": %v}}}`, tt.configPath, tt.discardUnpackedLayers),
+					"config": fmt.Sprintf(`{"registry": {"configPath": %q}, "containerd": {"runtimes":{"discardUnpackedLayers": %v}}}`, tmpConfigPath, tt.discardUnpackedLayers),
 				},
 			}
-			err := verifyStatusResponse(resp, tt.requiredConfigPath)
+			err = verifyStatusResponse(resp, tmpRequiredPath)
 			if tt.expectedErrMsg != "" {
 				require.EqualError(t, err, tt.expectedErrMsg)
 				return
@@ -89,6 +115,36 @@ func TestVerifyStatusResponse(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestWalkSymbolicLinks(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	targetPath := filepath.Join(tmpDir, "data.txt")
+	err := os.WriteFile(targetPath, []byte("hello world"), 0o777)
+	require.NoError(t, err)
+	firstOrderPath := filepath.Join(tmpDir, "first.txt")
+	err = os.Symlink(targetPath, firstOrderPath)
+	require.NoError(t, err)
+	secondOrderPath := filepath.Join(tmpDir, "second.txt")
+	err = os.Symlink(firstOrderPath, secondOrderPath)
+	require.NoError(t, err)
+
+	// Second order symlink
+	paths, err := walkSymbolicLinks(secondOrderPath)
+	require.NoError(t, err)
+	require.Equal(t, []string{targetPath, firstOrderPath, secondOrderPath}, paths)
+
+	// First order symlink
+	paths, err = walkSymbolicLinks(firstOrderPath)
+	require.NoError(t, err)
+	require.Equal(t, []string{targetPath, firstOrderPath}, paths)
+
+	// No symnlink
+	paths, err = walkSymbolicLinks(targetPath)
+	require.NoError(t, err)
+	require.Equal(t, []string{targetPath}, paths)
 }
 
 func TestCreateFilter(t *testing.T) {

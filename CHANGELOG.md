@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#535](https://github.com/spegel-org/spegel/pull/535) Fix Docker build casing checks.
+- [#571](https://github.com/spegel-org/spegel/pull/571) Walk config path symlinks when verifying Containerd configuration.
 
 ### Security
 
