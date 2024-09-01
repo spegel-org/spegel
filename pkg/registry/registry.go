@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/spegel-org/spegel/internal/buffer"
 	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -28,6 +29,7 @@ const (
 )
 
 type Registry struct {
+	bufferPool       *buffer.BufferPool
 	log              logr.Logger
 	throttler        *throttle.Throttler
 	ociClient        oci.Client
@@ -90,6 +92,7 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *R
 		resolveRetries:   3,
 		resolveTimeout:   20 * time.Millisecond,
 		resolveLatestTag: true,
+		bufferPool:       buffer.NewBufferPool(),
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -280,6 +283,7 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 				Host:   ipAddr.String(),
 			}
 			proxy := httputil.NewSingleHostReverseProxy(u)
+			proxy.BufferPool = r.bufferPool
 			proxy.Transport = r.transport
 			proxy.ErrorHandler = func(_ http.ResponseWriter, _ *http.Request, err error) {
 				log.Error(err, "request to mirror failed", "attempt", mirrorAttempts)
