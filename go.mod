@@ -1,8 +1,9 @@
 module github.com/spegel-org/spegel
 
-go 1.22.5
+go 1.23.2
 
 require (
+	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/alexflint/go-arg v1.5.1
 	github.com/containerd/containerd v1.7.22
 	github.com/containerd/containerd/api v1.7.19
@@ -34,7 +35,6 @@ require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Microsoft/hcsshim v0.11.7 // indirect

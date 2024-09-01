@@ -1,4 +1,4 @@
-FROM golang:1.22.5@sha256:fcae9e0e7313c6467a7c6632ebb5e5fab99bd39bd5eb6ee34a211353e647827a AS builder
+FROM golang:1.23.2@sha256:adee809c2d0009a4199a11a1b2618990b244c6515149fe609e2788ddf164bd10 AS builder
 RUN mkdir /build
 WORKDIR /build
 COPY go.mod go.mod
