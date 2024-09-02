@@ -271,7 +271,7 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	return b, mt, nil
 }
 
-func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
 	if c.contentPath != "" {
 		path := filepath.Join(c.contentPath, "blobs", dgst.Algorithm().String(), dgst.Encoded())
 		file, err := os.Open(path)
@@ -294,13 +294,11 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCl
 	if err != nil {
 		return nil, err
 	}
-	return struct {
-		io.Reader
-		io.Closer
-	}{
-		Reader: content.NewReader(ra),
-		Closer: ra,
-	}, nil
+	rs, err := newHTTPReadSeeker(logr.FromContextOrDiscard(ctx), ra)
+	if err != nil {
+		return nil, err
+	}
+	return rs, nil
 }
 
 func getEventImage(e typeurl.Any) (string, EventType, error) {
