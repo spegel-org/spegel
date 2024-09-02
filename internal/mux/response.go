@@ -15,6 +15,12 @@ type ResponseWriter interface {
 	Size() int64
 }
 
+func NewResponseWriter(w http.ResponseWriter) ResponseWriter { //nolint:ireturn // Return a pointer
+	return &response{
+		ResponseWriter: w,
+	}
+}
+
 var (
 	_ http.ResponseWriter = &response{}
 	_ http.Flusher        = &response{}
