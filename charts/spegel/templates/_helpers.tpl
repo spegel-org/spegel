@@ -80,3 +80,16 @@ Image reference
 {{- .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
 {{- end }}
 {{- end }}
+
+{{/*
+Host networking
+*/}}
+{{- define "networking.nodeIp" -}}
+{{- if .Values.service.registry.nodeIp -}}
+value: {{ .Values.service.registry.nodeIp }}
+{{- else -}}
+valueFrom:
+  fieldRef:
+    fieldPath: status.hostIP
+{{- end -}}
+{{- end -}}

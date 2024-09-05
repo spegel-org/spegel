@@ -46,6 +46,8 @@ securityContext: {}
 
 service:
   registry:
+    # -- Override the NODE_ID environment variable. It defaults to the field status.hostIP
+    nodeIp: ""
     # -- Port to expose the registry via the service.
     port: 5000
     # -- Node port to expose the registry via the service.
