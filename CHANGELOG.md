@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#581](https://github.com/spegel-org/spegel/pull/581) Skip status response verification for containerd v2
+
 ### Security
 
 ## v0.0.24

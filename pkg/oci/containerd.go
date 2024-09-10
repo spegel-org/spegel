@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	semver "github.com/Masterminds/semver/v3"
 	"github.com/containerd/containerd"
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/content"
@@ -79,6 +80,7 @@ func (c *Containerd) Name() string {
 }
 
 func (c *Containerd) Verify(ctx context.Context) error {
+	log := logr.FromContextOrDiscard(ctx)
 	client, err := c.Client()
 	if err != nil {
 		return err
@@ -90,11 +92,30 @@ func (c *Containerd) Verify(ctx context.Context) error {
 	if !ok {
 		return errors.New("could not reach Containerd service")
 	}
-	resp, err := runtimeapi.NewRuntimeServiceClient(client.Conn()).Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
+	srv := runtimeapi.NewRuntimeServiceClient(client.Conn())
+
+	versionResp, err := srv.Version(ctx, &runtimeapi.VersionRequest{})
 	if err != nil {
 		return err
 	}
-	err = verifyStatusResponse(resp, c.registryConfigPath)
+	version, err := semver.NewVersion(versionResp.GetRuntimeVersion())
+	if err != nil {
+		return err
+	}
+	constraint, err := semver.NewConstraint(">1-0")
+	if err != nil {
+		return err
+	}
+	if constraint.Check(version) {
+		log.Info("unable to verify status response", "runtime_version", version.String())
+		return nil
+	}
+
+	statusResp, err := srv.Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
+	if err != nil {
+		return err
+	}
+	err = verifyStatusResponse(statusResp, c.registryConfigPath)
 	if err != nil {
 		return err
 	}
