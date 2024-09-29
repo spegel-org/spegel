@@ -18,7 +18,7 @@ require (
 	github.com/norwoodj/helm-docs v1.14.2
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
-	github.com/pelletier/go-toml/v2 v2.2.2
+	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/prometheus/client_golang v1.20.4
 	github.com/spf13/afero v1.11.0
 	github.com/stretchr/testify v1.9.0
