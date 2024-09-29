@@ -22,7 +22,7 @@ require (
 	github.com/prometheus/client_golang v1.20.4
 	github.com/spf13/afero v1.11.0
 	github.com/stretchr/testify v1.9.0
-	go.etcd.io/bbolt v1.3.10
+	go.etcd.io/bbolt v1.3.11
 	golang.org/x/sync v0.8.0
 	golang.org/x/time v0.6.0
 	k8s.io/client-go v0.31.1
