@@ -77,6 +77,7 @@ spec:
 | securityContext | object | `{}` | Security context for the Spegel container. |
 | service.metrics.port | int | `9090` | Port to expose the metrics via the service. |
 | service.registry.hostPort | int | `30020` | Local host port to expose the registry. |
+| service.registry.nodeIp | string | `""` | Override the NODE_ID environment variable. It defaults to the field status.hostIP |
 | service.registry.nodePort | int | `30021` | Node port to expose the registry via the service. |
 | service.registry.port | int | `5000` | Port to expose the registry via the service. |
 | service.registry.topologyAwareHintsEnabled | bool | `true` | If true adds topology aware hints annotation to node port service. |

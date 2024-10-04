@@ -58,9 +58,7 @@ spec:
           - --append-mirrors={{ .Values.spegel.appendMirrors }}
         env:
         - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
+        {{- include "networking.nodeIp" . | nindent 10 }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
         volumeMounts:
@@ -106,9 +104,7 @@ spec:
           {{- end }}
         env:
         - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
+        {{- include "networking.nodeIp" . | nindent 10 }}
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
