@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#575](https://github.com/spegel-org/spegel/pull/575) Update to Go v1.23.2.
+
 ### Deprecated
 
 ### Removed
