@@ -7,7 +7,7 @@ require (
 	github.com/alexflint/go-arg v1.5.1
 	github.com/containerd/containerd v1.7.22
 	github.com/containerd/containerd/api v1.7.19
-	github.com/containerd/errdefs v0.1.0
+	github.com/containerd/errdefs v0.2.0
 	github.com/containerd/typeurl/v2 v2.2.0
 	github.com/go-logr/logr v1.4.2
 	github.com/ipfs/go-cid v0.4.1
