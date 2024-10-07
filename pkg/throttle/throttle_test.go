@@ -1,10 +1,11 @@
 package throttle
 
 import (
-	"bytes"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,7 +14,7 @@ func TestThrottler(t *testing.T) {
 
 	br := 500 * Bps
 	throttler := NewThrottler(br)
-	w := throttler.Writer(bytes.NewBuffer([]byte{}))
+	w := throttler.Writer(mux.NewResponseWriter(httptest.NewRecorder()))
 	chunkSize := 100
 	start := time.Now()
 	for i := 0; i < 10; i++ {
