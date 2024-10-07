@@ -96,9 +96,6 @@ spec:
           - --leader-election-name={{ .Release.Name }}-leader-election
           - --resolve-latest-tag={{ .Values.spegel.resolveLatestTag }}
           - --local-addr=$(NODE_IP):{{ .Values.service.registry.hostPort }}
-          {{- with .Values.spegel.blobSpeed }}
-          - --blob-speed={{ . }}
-          {{- end }}
           {{- with .Values.spegel.containerdContentPath }}
           - --containerd-content-path={{ . }}
           {{- end }}

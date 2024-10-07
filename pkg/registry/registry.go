@@ -21,7 +21,6 @@ import (
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
-	"github.com/spegel-org/spegel/pkg/throttle"
 )
 
 const (
@@ -31,7 +30,6 @@ const (
 type Registry struct {
 	bufferPool       *buffer.BufferPool
 	log              logr.Logger
-	throttler        *throttle.Throttler
 	ociClient        oci.Client
 	router           routing.Router
 	transport        http.RoundTripper
@@ -70,12 +68,6 @@ func WithTransport(transport http.RoundTripper) Option {
 func WithLocalAddress(localAddr string) Option {
 	return func(r *Registry) {
 		r.localAddr = localAddr
-	}
-}
-
-func WithBlobSpeed(blobSpeed throttle.Byterate) Option {
-	return func(r *Registry) {
-		r.throttler = throttle.NewThrottler(blobSpeed)
 	}
 }
 
@@ -345,9 +337,6 @@ func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, ref refe
 		return
 	}
 	var w io.Writer = rw
-	if r.throttler != nil {
-		w = r.throttler.Writer(rw)
-	}
 	rc, err := r.ociClient.GetBlob(req.Context(), ref.dgst)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not get reader for blob with digest %s: %w", ref.dgst.String(), err))
