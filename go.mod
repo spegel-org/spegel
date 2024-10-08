@@ -7,7 +7,7 @@ require (
 	github.com/alexflint/go-arg v1.5.1
 	github.com/containerd/containerd v1.7.22
 	github.com/containerd/containerd/api v1.7.19
-	github.com/containerd/errdefs v0.1.0
+	github.com/containerd/errdefs v0.3.0
 	github.com/containerd/typeurl/v2 v2.2.0
 	github.com/go-logr/logr v1.4.2
 	github.com/ipfs/go-cid v0.4.1
@@ -25,7 +25,6 @@ require (
 	github.com/stretchr/testify v1.9.0
 	go.etcd.io/bbolt v1.3.11
 	golang.org/x/sync v0.8.0
-	golang.org/x/time v0.7.0
 	k8s.io/client-go v0.31.1
 	k8s.io/cri-api v0.31.1
 	k8s.io/klog/v2 v2.130.1
@@ -199,6 +198,7 @@ require (
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/term v0.22.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/time v0.7.0 // indirect
 	golang.org/x/tools v0.23.0 // indirect
 	gonum.org/v1/gonum v0.15.0 // indirect
 	google.golang.org/genproto v0.0.0-20231211222908-989df2bf70f3 // indirect
