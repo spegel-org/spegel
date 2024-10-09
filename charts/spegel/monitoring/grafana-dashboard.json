@@ -407,7 +407,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(rate(http_request_duration_seconds_bucket{job=\"spegel\"})) [$__interval]",
+          "expr": "max(rate(http_request_duration_seconds_bucket{job=\"spegel\"}[$__interval]))",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
