@@ -15,13 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+### Fixed
+
+### Security
+
+## v0.0.26
+
+### Removed
+
 - [#596](https://github.com/spegel-org/spegel/pull/596) Remove throttling from blobs.
 
 ### Fixed
 
 - [#601](https://github.com/spegel-org/spegel/pull/601) Fix Containerd host mirror ordering.
-
-### Security
 
 ## v0.0.25
 
