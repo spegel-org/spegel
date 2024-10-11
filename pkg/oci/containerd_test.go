@@ -5,6 +5,7 @@ import (
 	"fmt"
 	iofs "io/fs"
 	"net/url"
+	"path/filepath"
 	"testing"
 
 	eventtypes "github.com/containerd/containerd/api/events"
@@ -211,17 +212,18 @@ func TestMirrorConfiguration(t *testing.T) {
 			name:        "multiple mirros",
 			resolveTags: true,
 			registries:  stringListToUrlList(t, []string{"http://foo.bar:5000"}),
-			mirrors:     stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"}),
+			mirrors:     stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.2:5000", "http://127.0.0.1:5001"}),
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host]
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
 
-[host.'http://127.0.0.1:5001']
+[host.'http://127.0.0.2:5000']
 capabilities = ['pull', 'resolve']
-`,
+
+[host.'http://127.0.0.1:5001']
+capabilities = ['pull', 'resolve']`,
 			},
 		},
 		{
@@ -232,16 +234,12 @@ capabilities = ['pull', 'resolve']
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull']
-`,
+capabilities = ['pull']`,
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull']
-`,
+capabilities = ['pull']`,
 			},
 		},
 		{
@@ -253,16 +251,12 @@ capabilities = ['pull']
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 			},
 		},
 		{
@@ -274,16 +268,12 @@ capabilities = ['pull', 'resolve']
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 			},
 		},
 		{
@@ -293,24 +283,20 @@ capabilities = ['pull', 'resolve']
 			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: true,
 			existingFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": "Hello World",
-				"/etc/containerd/certs.d/ghcr.io/hosts.toml":   "Foo Bar",
+				"/etc/containerd/certs.d/docker.io/hosts.toml": "hello = 'world'",
+				"/etc/containerd/certs.d/ghcr.io/hosts.toml":   "foo = 'bar'",
 			},
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
-				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "Foo Bar",
+				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "hello = 'world'",
+				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 			},
 		},
 		{
@@ -320,26 +306,22 @@ capabilities = ['pull', 'resolve']
 			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: true,
 			existingFiles: map[string]string{
-				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
-				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "Foo Bar",
+				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "hello = 'world'",
+				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
 				"/etc/containerd/certs.d/test.txt":                     "test",
 				"/etc/containerd/certs.d/foo":                          "bar",
 			},
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "Hello World",
-				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "Foo Bar",
+				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "hello = 'world'",
+				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 			},
 		},
 		{
@@ -352,48 +334,52 @@ capabilities = ['pull', 'resolve']
 			existingFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host]
 [host.'http://example.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 
 [host.'http://example.com:30021']
-capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
-`,
+capabilities = ['pull', 'resolve']
+
+[host.'http://bar.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
 			},
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host]
 [host.'http://example.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 
 [host.'http://example.com:30021']
-capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
-`,
+capabilities = ['pull', 'resolve']
+
+[host.'http://bar.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
-[host]
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
 
 [host.'http://example.com:30020']
-client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 
 [host.'http://example.com:30021']
-client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 capabilities = ['pull', 'resolve']
-`,
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+
+[host.'http://bar.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
-[host]
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']
-`,
+capabilities = ['pull', 'resolve']`,
 			},
 		},
 	}
@@ -454,6 +440,92 @@ func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
 	registries = stringListToUrlList(t, []string{"https://foo@docker.io"})
 	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false)
 	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
+}
+
+func TestExistingHosts(t *testing.T) {
+	t.Parallel()
+
+	fs := afero.NewMemMapFs()
+	u, err := url.Parse("https://ghcr.io")
+	require.NoError(t, err)
+
+	eh, err := existingHosts(fs, "", *u)
+	require.NoError(t, err)
+	require.Empty(t, eh)
+
+	tomlHosts := `server = "https://registry-1.docker.io"
+[host."https://mirror.registry"]
+  capabilities = ["pull"]
+  ca = "/etc/certs/mirror.pem"
+  skip_verify = false
+  [host."https://mirror.registry".header]
+    x-custom-2 = ["value1", "value2"]
+
+[host]
+
+[host."https://mirror-bak.registry/us"]
+  capabilities = ["pull"]
+  skip_verify = true
+
+[host."http://mirror.registry"]
+  capabilities = ["pull"]
+
+[host."https://test-3.registry"]
+  client = ["/etc/certs/client-1.pem", "/etc/certs/client-2.pem"]
+
+[host."https://test-2.registry".header]
+  x-custom-2 = ["foo"]
+
+[host."https://test-1.registry"]
+  capabilities = ["pull", "resolve", "push"]
+  ca = ["/etc/certs/test-1-ca.pem", "/etc/certs/special.pem"]
+  client = [["/etc/certs/client.cert", "/etc/certs/client.key"],["/etc/certs/client.pem", ""]]
+
+[host."https://test-2.registry"]
+  client = "/etc/certs/client.pem"
+
+[host."https://non-compliant-mirror.registry/v2/upstream"]
+  capabilities = ["pull"]
+  override_path = true`
+
+	err = afero.WriteFile(fs, filepath.Join(backupDir, u.Host, "hosts.toml"), []byte(tomlHosts), 0o644)
+	require.NoError(t, err)
+	eh, err = existingHosts(fs, "", *u)
+	require.NoError(t, err)
+	expected := `[host.'https://mirror.registry']
+ca = '/etc/certs/mirror.pem'
+capabilities = ['pull']
+skip_verify = false
+
+[host.'https://mirror.registry'.header]
+x-custom-2 = ['value1', 'value2']
+
+[host.'https://mirror-bak.registry/us']
+capabilities = ['pull']
+skip_verify = true
+
+[host.'http://mirror.registry']
+capabilities = ['pull']
+
+[host.'https://test-3.registry']
+client = ['/etc/certs/client-1.pem', '/etc/certs/client-2.pem']
+
+[host.'https://test-1.registry']
+ca = ['/etc/certs/test-1-ca.pem', '/etc/certs/special.pem']
+capabilities = ['pull', 'resolve', 'push']
+client = [['/etc/certs/client.cert', '/etc/certs/client.key'], ['/etc/certs/client.pem', '']]
+
+[host.'https://test-2.registry']
+client = '/etc/certs/client.pem'
+
+[host.'https://test-2.registry'.header]
+x-custom-2 = ['foo']
+
+[host.'https://non-compliant-mirror.registry/v2/upstream']
+capabilities = ['pull']
+override_path = true`
+	require.Equal(t, expected, eh)
+
 }
 
 func stringListToUrlList(t *testing.T, list []string) []url.URL {

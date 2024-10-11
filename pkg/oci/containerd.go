@@ -1,6 +1,7 @@
 package oci
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/containerd/containerd"
@@ -22,6 +24,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
+	tomlu "github.com/pelletier/go-toml/v2/unstable"
 	"github.com/spf13/afero"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 
@@ -330,20 +333,6 @@ func createFilters(registries []url.URL) (string, string) {
 	return listFilter, eventFilter
 }
 
-type hostFile struct {
-	HostConfigs map[string]hostConfig `toml:"host"`
-	Server      string                `toml:"server"`
-}
-
-type hostConfig struct {
-	CACert       interface{}            `toml:"ca"`
-	Client       interface{}            `toml:"client"`
-	OverridePath *bool                  `toml:"override_path"`
-	SkipVerify   *bool                  `toml:"skip_verify"`
-	Header       map[string]interface{} `toml:"header"`
-	Capabilities []string               `toml:"capabilities"`
-}
-
 // Refer to containerd registry configuration documentation for more information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
@@ -372,14 +361,11 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		capabilities = append(capabilities, "resolve")
 	}
 	for _, registryURL := range registryURLs {
-		hf, appending, err := getHostFile(fs, configPath, appendToBackup, registryURL)
+		existingHosts, err := existingHosts(fs, configPath, registryURL)
 		if err != nil {
 			return err
 		}
-		for _, u := range mirrorURLs {
-			hf.HostConfigs[u.String()] = hostConfig{Capabilities: capabilities}
-		}
-		b, err := toml.Marshal(&hf)
+		templatedHosts, err := templateHosts(registryURL, mirrorURLs, capabilities, existingHosts)
 		if err != nil {
 			return err
 		}
@@ -388,11 +374,11 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		if err != nil {
 			return err
 		}
-		err = afero.WriteFile(fs, fp, b, 0o644)
+		err = afero.WriteFile(fs, fp, []byte(templatedHosts), 0o644)
 		if err != nil {
 			return err
 		}
-		if appending {
+		if existingHosts != "" {
 			log.Info("appending to existing Containerd mirror configuration", "registry", registryURL.String(), "path", fp)
 		} else {
 			log.Info("added Containerd mirror configuration", "registry", registryURL.String(), "path", fp)
@@ -470,29 +456,96 @@ func clearConfig(fs afero.Fs, configPath string) error {
 	return nil
 }
 
-func getHostFile(fs afero.Fs, configPath string, appendToBackup bool, registryURL url.URL) (hostFile, bool, error) {
-	if appendToBackup {
-		fp := path.Join(configPath, backupDir, registryURL.Host, "hosts.toml")
-		b, err := afero.ReadFile(fs, fp)
-		if err != nil && !errors.Is(err, afero.ErrFileNotFound) {
-			return hostFile{}, false, err
-		}
-		if err == nil {
-			hf := hostFile{}
-			err := toml.Unmarshal(b, &hf)
-			if err != nil {
-				return hostFile{}, false, err
-			}
-			return hf, true, nil
-		}
-	}
+func templateHosts(registryURL url.URL, mirrorURLs []url.URL, capabilities []string, existingHosts string) (string, error) {
 	server := registryURL.String()
 	if registryURL.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
 	}
-	hf := hostFile{
-		Server:      server,
-		HostConfigs: map[string]hostConfig{},
+	capabilitiesStr := strings.Join(capabilities, "', '")
+	capabilitiesStr = fmt.Sprintf("['%s']", capabilitiesStr)
+	hc := struct {
+		Server       string
+		Capabilities string
+		MirrorURLs   []url.URL
+	}{
+		Server:       server,
+		Capabilities: capabilitiesStr,
+		MirrorURLs:   mirrorURLs,
 	}
-	return hf, false, nil
+	tmpl, err := template.New("").Parse(`server = '{{ .Server }}'
+{{ range .MirrorURLs }}
+[host.'{{ .String }}']
+capabilities = {{ $.Capabilities }}
+{{ end }}`)
+	if err != nil {
+		return "", err
+	}
+	buf := bytes.NewBuffer(nil)
+	err = tmpl.Execute(buf, hc)
+	if err != nil {
+		return "", err
+	}
+	output := strings.TrimSpace(buf.String())
+	if existingHosts != "" {
+		output = output + "\n\n" + existingHosts
+	}
+	return output, nil
+}
+
+type hostFile struct {
+	Hosts map[string]interface{} `toml:"host"`
+}
+
+func existingHosts(fs afero.Fs, configPath string, registryURL url.URL) (string, error) {
+	fp := path.Join(configPath, backupDir, registryURL.Host, "hosts.toml")
+	b, err := afero.ReadFile(fs, fp)
+	if errors.Is(err, afero.ErrFileNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+
+	var hf hostFile
+	err = toml.Unmarshal(b, &hf)
+	if err != nil {
+		return "", err
+	}
+	if len(hf.Hosts) == 0 {
+		return "", nil
+	}
+
+	hosts := []string{}
+	parser := tomlu.Parser{}
+	parser.Reset(b)
+	for parser.NextExpression() {
+		err := parser.Error()
+		if err != nil {
+			return "", err
+		}
+		e := parser.Expression()
+		if e.Kind != tomlu.Table {
+			continue
+		}
+		ki := e.Key()
+		if ki.Next() && string(ki.Node().Data) == "host" && ki.Next() && ki.IsLast() {
+			hosts = append(hosts, string(ki.Node().Data))
+		}
+	}
+
+	ehs := []string{}
+	for _, h := range hosts {
+		data := hostFile{
+			Hosts: map[string]interface{}{
+				h: hf.Hosts[h],
+			},
+		}
+		b, err := toml.Marshal(data)
+		if err != nil {
+			return "", err
+		}
+		eh := strings.TrimPrefix(string(b), "[host]\n")
+		ehs = append(ehs, eh)
+	}
+	return strings.TrimSpace(strings.Join(ehs, "\n")), nil
 }
