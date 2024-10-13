@@ -4,7 +4,7 @@ Spegel performance is measured using the [Benchmark tool](https://github.com/spe
 
 ## Method
 
-The benchmarks were run on AKS v1.29 with 50 `Standard_D4ds_v5` nodes. The environment was setup using the provided [Terraform configuration](https://github.com/spegel-org/benchmark/tree/main/terraform). Spegel v0.0.23 is installed in the cluster using the default configuration.
+The benchmarks were run on AKS v1.29 with 50 `Standard_D4ds_v5` nodes. The environment was setup using the provided [Terraform configuration](https://github.com/spegel-org/benchmark/tree/main/terraform). Spegel v0.0.27 is installed in the cluster using the default configuration.
 
 The measurements are done using the generated [benchmark images](https://github.com/spegel-org/benchmark/pkgs/container/benchmark). These images are provided as a v1 and v2 to simulate a rolling upgrade.
 
@@ -33,12 +33,12 @@ The results are compared to the [baseline results](https://github.com/spegel-org
 
 | Image | Baseline | Spegel |
 | --- | :---: | :---: | 
-| 10 MB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/10MB-1.png) | ![](../benchmark/v0.0.23/10MB-1.png) |
-| 10 MB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/10MB-4.png) | ![](../benchmark/v0.0.23/10MB-4.png) |
-| 100 MB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/100MB-1.png) | ![](../benchmark/v0.0.23/100MB-1.png) |
-| 100 MB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/100MB-4.png) | ![](../benchmark/v0.0.23/100MB-4.png) |
-| 1 GB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/1GB-1.png) | ![](../benchmark/v0.0.23/1GB-1.png) |
-| 1 GB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/1GB-4.png) | ![](../benchmark/v0.0.23/1GB-4.png) |
+| 10 MB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/10MB-1.png) | ![](../benchmark/v0.0.27/10MB-1.png) |
+| 10 MB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/10MB-4.png) | ![](../benchmark/v0.0.27/10MB-4.png) |
+| 100 MB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/100MB-1.png) | ![](../benchmark/v0.0.27/100MB-1.png) |
+| 100 MB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/100MB-4.png) | ![](../benchmark/v0.0.27/100MB-4.png) |
+| 1 GB 1 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/1GB-1.png) | ![](../benchmark/v0.0.27/1GB-1.png) |
+| 1 GB 4 layer | ![](https://github.com/spegel-org/benchmark/blob/main/results/1GB-4.png) | ![](../benchmark/v0.0.27/1GB-4.png) |
 
 ## Analysis
 
