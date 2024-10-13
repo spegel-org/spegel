@@ -410,19 +410,16 @@ func validateRegistries(urls []url.URL) error {
 
 func backupConfig(log logr.Logger, fs afero.Fs, configPath string) error {
 	backupDirPath := path.Join(configPath, backupDir)
-	_, err := fs.Stat(backupDirPath)
-	if err != nil && !os.IsNotExist(err) {
+	ok, err := afero.DirExists(fs, backupDirPath)
+	if err != nil {
 		return err
 	}
-	if err == nil {
+	if ok {
 		return nil
 	}
 	files, err := afero.ReadDir(fs, configPath)
 	if err != nil {
 		return err
-	}
-	if len(files) == 0 {
-		return nil
 	}
 	err = fs.MkdirAll(backupDirPath, 0o755)
 	if err != nil {
