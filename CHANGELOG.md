@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#603](https://github.com/spegel-org/spegel/pull/603) Fix append to backup always happening.
+- [#604](https://github.com/spegel-org/spegel/pull/604) Create empty backup directory when mirror directory is empty.
 
 ### Security
 

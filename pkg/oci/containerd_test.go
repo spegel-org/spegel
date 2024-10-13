@@ -10,6 +10,7 @@ import (
 
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/typeurl/v2"
+	"github.com/go-logr/logr"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -90,6 +91,38 @@ func TestVerifyStatusResponse(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestBackupConfig(t *testing.T) {
+	t.Parallel()
+
+	log := logr.Discard()
+
+	fs := afero.NewMemMapFs()
+	err := fs.MkdirAll("/config", 0o755)
+	require.NoError(t, err)
+	err = backupConfig(log, fs, "/config")
+	require.NoError(t, err)
+	ok, err := afero.DirExists(fs, "/config/_backup/")
+	require.NoError(t, err)
+	require.True(t, ok)
+	files, err := afero.ReadDir(fs, "/config/_backup")
+	require.NoError(t, err)
+	require.Empty(t, files)
+
+	fs = afero.NewMemMapFs()
+	err = fs.MkdirAll("/config", 0o755)
+	require.NoError(t, err)
+	err = afero.WriteFile(fs, "/config/test.txt", []byte("Hello World"), 0o644)
+	require.NoError(t, err)
+	err = backupConfig(log, fs, "/config/")
+	require.NoError(t, err)
+	ok, err = afero.DirExists(fs, "/config/_backup/")
+	require.NoError(t, err)
+	require.True(t, ok)
+	files, err = afero.ReadDir(fs, "/config/_backup/")
+	require.NoError(t, err)
+	require.Len(t, files, 1)
 }
 
 func TestCreateFilter(t *testing.T) {
@@ -450,11 +483,9 @@ capabilities = ['pull', 'resolve']`,
 			}
 			err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags, tt.appendToBackup)
 			require.NoError(t, err)
-			if len(tt.existingFiles) == 0 {
-				ok, err := afero.DirExists(fs, "/etc/containerd/certs.d/_backup")
-				require.NoError(t, err)
-				require.False(t, ok)
-			}
+			ok, err := afero.DirExists(fs, "/etc/containerd/certs.d/_backup")
+			require.NoError(t, err)
+			require.True(t, ok)
 			err = afero.Walk(fs, registryConfigPath, func(path string, fi iofs.FileInfo, _ error) error {
 				if fi.IsDir() {
 					return nil
