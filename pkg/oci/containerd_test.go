@@ -209,10 +209,11 @@ func TestMirrorConfiguration(t *testing.T) {
 		appendToBackup      bool
 	}{
 		{
-			name:        "multiple mirros",
-			resolveTags: true,
-			registries:  stringListToUrlList(t, []string{"http://foo.bar:5000"}),
-			mirrors:     stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.2:5000", "http://127.0.0.1:5001"}),
+			name:           "multiple mirros",
+			resolveTags:    true,
+			registries:     stringListToUrlList(t, []string{"http://foo.bar:5000"}),
+			mirrors:        stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.2:5000", "http://127.0.0.1:5001"}),
+			appendToBackup: false,
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
@@ -227,10 +228,11 @@ capabilities = ['pull', 'resolve']`,
 			},
 		},
 		{
-			name:        "resolve tags disabled",
-			resolveTags: false,
-			registries:  stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
-			mirrors:     stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			name:           "resolve tags disabled",
+			resolveTags:    false,
+			registries:     stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
+			mirrors:        stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			appendToBackup: false,
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
@@ -248,6 +250,7 @@ capabilities = ['pull']`,
 			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
 			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: false,
+			appendToBackup:      false,
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
@@ -265,6 +268,7 @@ capabilities = ['pull', 'resolve']`,
 			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
 			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: true,
+			appendToBackup:      false,
 			expectedFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
@@ -282,6 +286,7 @@ capabilities = ['pull', 'resolve']`,
 			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
 			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: true,
+			appendToBackup:      false,
 			existingFiles: map[string]string{
 				"/etc/containerd/certs.d/docker.io/hosts.toml": "hello = 'world'",
 				"/etc/containerd/certs.d/ghcr.io/hosts.toml":   "foo = 'bar'",
@@ -305,6 +310,7 @@ capabilities = ['pull', 'resolve']`,
 			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
 			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			createConfigPathDir: true,
+			appendToBackup:      false,
 			existingFiles: map[string]string{
 				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "hello = 'world'",
 				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
@@ -376,6 +382,52 @@ client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 [host.'http://bar.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
+				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']`,
+			},
+		},
+		{
+			name:                "append to backup disabled",
+			resolveTags:         true,
+			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
+			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			createConfigPathDir: true,
+			appendToBackup:      false,
+			existingFiles: map[string]string{
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host.'http://example.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+
+[host.'http://example.com:30021']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+capabilities = ['pull', 'resolve']
+
+[host.'http://bar.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
+			},
+			expectedFiles: map[string]string{
+				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host.'http://example.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+
+[host.'http://example.com:30021']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
+capabilities = ['pull', 'resolve']
+
+[host.'http://bar.com:30020']
+capabilities = ['pull', 'resolve']
+client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
+				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']`,
 				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
