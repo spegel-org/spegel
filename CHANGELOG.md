@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#608](https://github.com/spegel-org/spegel/pull/608) Use custom proxy transport and increase idle connections per host.
+
 ### Deprecated
 
 ### Removed

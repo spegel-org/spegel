@@ -89,6 +89,11 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *R
 	for _, opt := range opts {
 		opt(r)
 	}
+	if r.transport == nil {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.MaxIdleConnsPerHost = 100
+		r.transport = transport
+	}
 	return r
 }
 
