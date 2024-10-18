@@ -81,7 +81,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(spegel_mirror_requests_total{instance=~\"$instance\"}[30s])) by (cache, source)",
+          "expr": "sum(rate(spegel_mirror_requests_total{instance=~\"$instance\"}[5m])) by (cache, source)",
           "legendFormat": "{{cache}} - {{source}}",
           "refId": "A",
           "datasource": {
@@ -138,7 +138,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(spegel_resolve_duration_seconds_bucket{instance=~\"$instance\"}[30s])) by (le, router, instance))",
+          "expr": "histogram_quantile(0.95, sum(rate(spegel_resolve_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le, router, instance))",
           "legendFormat": "{{router}} - {{instance}}",
           "refId": "A",
           "datasource": {
@@ -506,7 +506,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_response_size_bytes_bucket{instance=~\"$instance\"}[30s])) by (le, handler, method, code))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_response_size_bytes_bucket{instance=~\"$instance\"}[5m])) by (le, handler, method, code))",
           "legendFormat": "{{handler}} - {{method}} - {{code}}",
           "refId": "A",
           "datasource": {
@@ -563,7 +563,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{instance=~\"$instance\"}[30s])) by (le, handler, method, code))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le, handler, method, code))",
           "legendFormat": "{{handler}} - {{method}} - {{code}}",
           "refId": "A",
           "datasource": {
