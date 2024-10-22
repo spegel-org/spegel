@@ -1175,6 +1175,13 @@
   "templating": {
     "list": [
       {
+        "hide": 2,
+        "name": "DS_PROMETHEUS",
+        "query": "Prometheus",
+        "skipUrlSync": false,
+        "type": "constant"
+      },
+      {
         "current": {
           "selected": false,
           "text": "Prometheus",
