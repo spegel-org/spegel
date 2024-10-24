@@ -26,7 +26,7 @@ require (
 	go.etcd.io/bbolt v1.3.11
 	golang.org/x/sync v0.8.0
 	k8s.io/client-go v0.31.2
-	k8s.io/cri-api v0.31.1
+	k8s.io/cri-api v0.31.2
 	k8s.io/klog/v2 v2.130.1
 )
 
