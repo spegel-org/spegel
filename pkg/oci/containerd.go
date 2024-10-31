@@ -294,11 +294,13 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSe
 	if err != nil {
 		return nil, err
 	}
-	rs, err := newHTTPReadSeeker(logr.FromContextOrDiscard(ctx), ra)
-	if err != nil {
-		return nil, err
-	}
-	return rs, nil
+	return struct {
+		io.ReadSeeker
+		io.Closer
+	}{
+		ReadSeeker: io.NewSectionReader(ra, 0, ra.Size()),
+		Closer:     ra,
+	}, nil
 }
 
 func getEventImage(e typeurl.Any) (string, EventType, error) {

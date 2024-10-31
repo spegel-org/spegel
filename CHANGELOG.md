@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- [#576](https://github.com/spegel-org/spegel/pull/576) Add support for range requests for blobs.
+
 ### Changed
 
 - [#608](https://github.com/spegel-org/spegel/pull/608) Use custom proxy transport and increase idle connections per host.
@@ -31,8 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## v0.0.26
 
 ### Added
-
-- [#576](https://github.com/spegel-org/spegel/pull/576) Add support for range requests for blobs.
 
 ### Removed
 

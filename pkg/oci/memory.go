@@ -92,13 +92,13 @@ func (m *Memory) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCl
 	if !ok {
 		return nil, errors.Join(ErrNotFound, fmt.Errorf("blob with digest %s not found", dgst))
 	}
-	rc := bytes.NewReader(b)
+	rc := io.NewSectionReader(bytes.NewReader(b), 0, int64(len(b)))
 	return struct {
 		io.ReadSeeker
 		io.Closer
 	}{
 		ReadSeeker: rc,
-		Closer:     io.NopCloser(rc),
+		Closer:     io.NopCloser(nil),
 	}, nil
 }
 

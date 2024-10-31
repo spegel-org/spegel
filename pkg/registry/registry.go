@@ -340,7 +340,7 @@ func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, ref refe
 	if req.Method == http.MethodHead {
 		return
 	}
-	var w mux.ResponseWriter = rw
+
 	rc, err := r.ociClient.GetBlob(req.Context(), ref.dgst)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not get reader for blob with digest %s: %w", ref.dgst.String(), err))
@@ -348,7 +348,7 @@ func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, ref refe
 	}
 	defer rc.Close()
 
-	http.ServeContent(w, req, ref.dgst.String(), time.Time{}, rc)
+	http.ServeContent(rw, req, "", time.Time{}, rc)
 }
 
 func (r *Registry) isExternalRequest(req *http.Request) bool {
