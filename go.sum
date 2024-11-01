@@ -62,8 +62,8 @@ github.com/containerd/platforms v0.2.1 h1:zvwtM3rz2YHPQsF2CHYM8+KtB5dvhISiXh5ZpS
 github.com/containerd/platforms v0.2.1/go.mod h1:XHCb+2/hzowdiut9rkudds9bE5yJ7npe7dG/wG+uFPw=
 github.com/containerd/ttrpc v1.2.5 h1:IFckT1EFQoFBMG4c3sMdT8EP3/aKfumK1msY+Ze4oLU=
 github.com/containerd/ttrpc v1.2.5/go.mod h1:YCXHsb32f+Sq5/72xHubdiJRQY9inL4a4ZQrAbN1q9o=
-github.com/containerd/typeurl/v2 v2.2.0 h1:6NBDbQzr7I5LHgp34xAXYF5DOTQDn05X58lsPEmzLso=
-github.com/containerd/typeurl/v2 v2.2.0/go.mod h1:8XOOxnyatxSWuG8OfsZXVnAF4iZfedjS/8UHSPJnX4g=
+github.com/containerd/typeurl/v2 v2.2.1 h1:/X1Kgcz4sKS/NTKQvvRS0pEVpUYqmPTwGQontm9pl0w=
+github.com/containerd/typeurl/v2 v2.2.1/go.mod h1:95ljDnPfD3bAbDJRugOiShd/DlAAsxGtUBhJxIn7SCk=
 github.com/coreos/go-systemd v0.0.0-20181012123002-c6f51f82210d/go.mod h1:F5haX7vjVVG0kc13fIWeqUViNPyEJxv/OmvnBo0Yme4=
 github.com/coreos/go-systemd/v22 v22.1.0/go.mod h1:xO0FLkIi5MaZafQlIrOotqXZ90ih+1atmu1JpKERPPk=
 github.com/coreos/go-systemd/v22 v22.5.0 h1:RrqgGjYQKalulkV8NGVIfkXQf6YYmOyiJKk8iXXhfZs=
