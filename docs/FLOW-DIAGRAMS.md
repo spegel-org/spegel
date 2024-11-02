@@ -4,27 +4,34 @@ This document provides a comprehensive set of diagrams explaining Spegel's archi
 
 ## 1. High-Level Cluster Architecture
 
-Shows how Spegel pods form a P2P network within the cluster. Each node runs a Spegel pod that interacts with the local containerd instance.
+Shows how Spegel pods form a P2P network within the cluster. Containerd interacts with Spegel for image pulls and handles fallback to external registry when needed.
 
 ```mermaid
 graph TB
+    subgraph "External"
+        ER["External Registry"]
+    end
+
     subgraph "Kubernetes Cluster"
         subgraph "Node 1"
             SP1["Spegel Pod"]
             CD1["Containerd"]
             SP1 <-->|interacts| CD1
+            CD1 -->|fallback| ER
         end
         
         subgraph "Node 2"
             SP2["Spegel Pod"]
             CD2["Containerd"]
             SP2 <-->|interacts| CD2
+            CD2 -->|fallback| ER
         end
         
         subgraph "Node 3"
             SP3["Spegel Pod"]
             CD3["Containerd"]
             SP3 <-->|interacts| CD3
+            CD3 -->|fallback| ER
         end
 
         SP1 <-->|P2P Network| SP2
