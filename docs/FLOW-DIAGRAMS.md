@@ -4,7 +4,7 @@ This document provides a comprehensive set of diagrams explaining Spegel's archi
 
 ## 1. High-Level Cluster Architecture
 
-Shows how Spegel pods form a P2P network within the cluster, with fallback to external registry. Each node runs a Spegel pod that interacts with the local containerd instance.
+Shows how Spegel pods form a P2P network within the cluster. Each node runs a Spegel pod that interacts with the local containerd instance.
 
 ```mermaid
 graph TB
