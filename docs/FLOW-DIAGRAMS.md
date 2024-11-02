@@ -8,10 +8,6 @@ Shows how Spegel pods form a P2P network within the cluster, with fallback to ex
 
 ```mermaid
 graph TB
-    subgraph "External"
-        ER["External Registry"]
-    end
-
     subgraph "Kubernetes Cluster"
         subgraph "Node 1"
             SP1["Spegel Pod"]
@@ -35,10 +31,6 @@ graph TB
         SP2 <-->|P2P Network| SP3
         SP3 <-->|P2P Network| SP1
     end
-
-    SP1 -->|fallback| ER
-    SP2 -->|fallback| ER
-    SP3 -->|fallback| ER
 ```
 
 ## 2. Pod Component Architecture
