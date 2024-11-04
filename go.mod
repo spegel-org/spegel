@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/alexflint/go-arg v1.5.1
 	github.com/containerd/containerd v1.7.23
-	github.com/containerd/containerd/api v1.7.19
+	github.com/containerd/containerd/api v1.8.0
 	github.com/containerd/errdefs v0.3.0
 	github.com/containerd/typeurl/v2 v2.2.1
 	github.com/go-logr/logr v1.4.2
