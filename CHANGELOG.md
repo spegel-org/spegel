@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 
 
 - [#576](https://github.com/spegel-org/spegel/pull/576) Add support for range requests for blobs.
+- [#621](https://github.com/spegel-org/spegel/pull/621) Added Mermaid diagrams documentation to help explain Spegel's inner workings.
 
 ### Changed
 
@@ -31,8 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#604](https://github.com/spegel-org/spegel/pull/604) Create empty backup directory when mirror directory is empty.
 
 ## v0.0.26
-
-### Added
 
 ### Removed
 
