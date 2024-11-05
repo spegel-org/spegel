@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#576](https://github.com/spegel-org/spegel/pull/576) Add support for range requests for blobs.
 - [#621](https://github.com/spegel-org/spegel/pull/621) Added Mermaid diagrams documentation to help explain Spegel's inner workings.
+- [#629](https://github.com/spegel-org/spegel/pull/629) Document how to use multiple Spegel deployments in the same cluster.
 
 ### Changed
 
