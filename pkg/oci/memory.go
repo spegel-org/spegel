@@ -84,7 +84,7 @@ func (m *Memory) GetManifest(ctx context.Context, dgst digest.Digest) ([]byte, s
 	return b, mt, nil
 }
 
-func (m *Memory) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+func (m *Memory) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
@@ -92,8 +92,14 @@ func (m *Memory) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser
 	if !ok {
 		return nil, errors.Join(ErrNotFound, fmt.Errorf("blob with digest %s not found", dgst))
 	}
-	rc := io.NopCloser(bytes.NewBuffer(b))
-	return rc, nil
+	rc := io.NewSectionReader(bytes.NewReader(b), 0, int64(len(b)))
+	return struct {
+		io.ReadSeeker
+		io.Closer
+	}{
+		ReadSeeker: rc,
+		Closer:     io.NopCloser(nil),
+	}, nil
 }
 
 func (m *Memory) AddImage(img Image) {

@@ -271,7 +271,7 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	return b, mt, nil
 }
 
-func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
+func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
 	if c.contentPath != "" {
 		path := filepath.Join(c.contentPath, "blobs", dgst.Algorithm().String(), dgst.Encoded())
 		file, err := os.Open(path)
@@ -295,11 +295,11 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCl
 		return nil, err
 	}
 	return struct {
-		io.Reader
+		io.ReadSeeker
 		io.Closer
 	}{
-		Reader: content.NewReader(ra),
-		Closer: ra,
+		ReadSeeker: io.NewSectionReader(ra, 0, ra.Size()),
+		Closer:     ra,
 	}, nil
 }
 
