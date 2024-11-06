@@ -33,7 +33,10 @@ Spegel has been tested on the following Kubernetes distributions for compatibili
 Discard unpacked layers is enabled by default, meaning that layers that are not required for the container runtime will be removed after consumed.
 This needs to be disabled as otherwise all of the required layers of an image would not be present on the node.
 
-The best way to change Containerd settings in EKS is to add the configuration to the import directory using a custom node bootstrap script.
+### Amazon Linux 2
+
+If your EKS AMI is based on AL2, the included containerd config [imports overrides](https://github.com/awslabs/amazon-eks-ami/blob/main/templates/al2/runtime/containerd-config.toml) 
+from `/etc/containerd/config.d/*.toml` by default, so the best way to change containerd settings is to add a file to the import directory using a custom node bootstrap script in your launch template:
 
 ```shell
 #!/bin/bash
@@ -48,6 +51,31 @@ cat > /etc/containerd/config.d/spegel.toml << EOL
 EOL
 
 /etc/eks/bootstrap.sh
+```
+
+### Amazon Linux 2023
+
+If you are using an AL2023-based EKS AMI, bootstrap involves [nodeadm configuration](https://awslabs.github.io/amazon-eks-ami/nodeadm/). To change containerd settings, you should add a 
+nodeadm configuration section like the following:
+
+```yaml
+...
+--MIMEBOUNDARY
+Content-Transfer-Encoding: 7bit
+Content-Type: application/node.eks.aws
+Mime-Version: 1.0
+
+---
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  containerd:
+    config: |
+      [plugins."io.containerd.grpc.v1.cri".containerd]
+      discard_unpacked_layers = false
+
+--MIMEBOUNDARY
+...
 ```
 
 ## Kind
