@@ -108,10 +108,16 @@ K3S embeds Spegel, refer to their [documentation](https://docs.k3s.io/installati
 
 ## Talos
 
-Talos comes with Pod Security Admission [pre-configured](https://www.talos.dev/latest/kubernetes-guides/configuration/pod-security/). The default profile is too restrictive and needs to be changed to privileged.
+Talos will by default discard unpacked layers, which has to be disabled with a machine configuration.
 
-```shell
-kubectl label namespace spegel pod-security.kubernetes.io/enforce=privileged
+```yaml
+machine:
+  files:
+    - path: /etc/cri/conf.d/20-customization.part
+      op: create
+      content: |
+        [plugins."io.containerd.cri.v1.images"]
+          discard_unpacked_layers = false
 ```
 
 Talos also uses a different path as its Containerd registry config path.
@@ -119,6 +125,12 @@ Talos also uses a different path as its Containerd registry config path.
 ```yaml
 spegel:
   containerdRegistryConfigPath: /etc/cri/conf.d/hosts
+```
+
+Talos comes with Pod Security Admission [pre-configured](https://www.talos.dev/latest/kubernetes-guides/configuration/pod-security/). The default profile is too restrictive and needs to be changed to privileged.
+
+```shell
+kubectl label namespace spegel pod-security.kubernetes.io/enforce=privileged
 ```
 
 ## GKE
