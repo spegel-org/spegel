@@ -22,7 +22,7 @@ Spegel has been tested on the following Kubernetes distributions for compatibili
 | :green_circle: | AKS |
 | :green_circle: | Minikube |
 | :yellow_circle: | EKS |
-| :yellow_circle: | K3S |
+| :yellow_circle: | K3S and RKE2 |
 | :yellow_circle: | Kind |
 | :yellow_circle: | Talos |
 | :red_circle: | GKE |
@@ -36,7 +36,7 @@ This needs to be disabled as otherwise all of the required layers of an image wo
 ### Amazon Linux 2
 
 If your EKS AMI is based on AL2, the included containerd config [imports overrides](https://github.com/awslabs/amazon-eks-ami/blob/main/templates/al2/runtime/containerd-config.toml) 
-from `/etc/containerd/config.d/*.toml` by default, so the best way to change containerd settings is to add a file to the import directory using a custom node bootstrap script in your launch template:
+from `/etc/containerd/config.d/*.toml` by default. The best way to change containerd settings is to add a file to the import directory using a custom node bootstrap script in your launch template.
 
 ```shell
 #!/bin/bash
@@ -56,7 +56,7 @@ EOL
 ### Amazon Linux 2023
 
 If you are using an AL2023-based EKS AMI, bootstrap involves [nodeadm configuration](https://awslabs.github.io/amazon-eks-ami/nodeadm/). To change containerd settings, you should add a 
-nodeadm configuration section like the following:
+nodeadm configuration section.
 
 ```yaml
 ...
@@ -102,9 +102,9 @@ containerdConfigPatches:
 
 For a full example, see the end-to-end tests' [Kind configuration](../test/e2e/kind-config-iptables.yaml) for a full example.
 
-## K3S
+## K3S and RKE2
 
-K3S embeds Spegel, refer to their [documentation](https://docs.k3s.io/installation/registry-mirror?_highlight=spegel) for deployment information.
+K3S and RKE2 embeds Spegel, refer to their [documentation](https://docs.k3s.io/installation/registry-mirror?_highlight=spegel) for deployment information.
 
 ## Talos
 
