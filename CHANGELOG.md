@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#651](https://github.com/spegel-org/spegel/pull/651) Fix Containerd CRI config verification.
+
 ### Security
 
 ## v0.0.27

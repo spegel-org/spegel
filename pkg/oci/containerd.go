@@ -132,32 +132,36 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 	}
 	cfg := &struct {
 		Registry struct {
-			ConfigPath string `json:"configPath"`
+			ConfigPath *string `json:"configPath"`
 		} `json:"registry"`
 		Containerd struct {
-			Runtimes struct {
-				DiscardUnpackedLayers bool `json:"discardUnpackedLayers"`
-			} `json:"runtimes"`
+			DiscardUnpackedLayers *bool `json:"discardUnpackedLayers"`
 		} `json:"containerd"`
 	}{}
 	err := json.Unmarshal([]byte(str), cfg)
 	if err != nil {
 		return err
 	}
-	if cfg.Containerd.Runtimes.DiscardUnpackedLayers {
+	if cfg.Containerd.DiscardUnpackedLayers == nil {
+		return errors.New("field containerd.discardUnpackedLayers missing from config")
+	}
+	if *cfg.Containerd.DiscardUnpackedLayers {
 		return errors.New("Containerd discard unpacked layers cannot be enabled")
 	}
-	if cfg.Registry.ConfigPath == "" {
+	if cfg.Registry.ConfigPath == nil {
+		return errors.New("field registry.configPath missing from config")
+	}
+	if *cfg.Registry.ConfigPath == "" {
 		return errors.New("Containerd registry config path needs to be set for mirror configuration to take effect")
 	}
-	paths := filepath.SplitList(cfg.Registry.ConfigPath)
+	paths := filepath.SplitList(*cfg.Registry.ConfigPath)
 	for _, path := range paths {
 		if path != configPath {
 			continue
 		}
 		return nil
 	}
-	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", cfg.Registry.ConfigPath, configPath)
+	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", *cfg.Registry.ConfigPath, configPath)
 }
 
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error) {

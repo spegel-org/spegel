@@ -80,7 +80,7 @@ func TestVerifyStatusResponse(t *testing.T) {
 
 			resp := &runtimeapi.StatusResponse{
 				Info: map[string]string{
-					"config": fmt.Sprintf(`{"registry": {"configPath": %q}, "containerd": {"runtimes":{"discardUnpackedLayers": %v}}}`, tt.configPath, tt.discardUnpackedLayers),
+					"config": fmt.Sprintf(`{"registry": {"configPath": %q}, "containerd": {"discardUnpackedLayers": %v}}`, tt.configPath, tt.discardUnpackedLayers),
 				},
 			}
 			err := verifyStatusResponse(resp, tt.requiredConfigPath)
@@ -89,6 +89,50 @@ func TestVerifyStatusResponse(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestVerifyStatusResponseMissingRequired(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		config         string
+		expectedErrMsg string
+	}{
+		{
+			name:           "missing discard upacked layers false",
+			config:         `{"registry": {"configPath": "foo"}, "containerd": {"runtimes":{"discardUnpackedLayers": false}}}`,
+			expectedErrMsg: "field containerd.discardUnpackedLayers missing from config",
+		},
+		{
+			name:           "missing discard upacked layers true",
+			config:         `{"registry": {"configPath": "foo"}, "containerd": {"runtimes":{"discardUnpackedLayers": true}}}`,
+			expectedErrMsg: "field containerd.discardUnpackedLayers missing from config",
+		},
+		{
+			name:           "missing containerd field",
+			config:         `{"registry": {"configPath": "foo"}}`,
+			expectedErrMsg: "field containerd.discardUnpackedLayers missing from config",
+		},
+		{
+			name:           "missing registry field",
+			config:         `{"containerd": {"discardUnpackedLayers": false}}`,
+			expectedErrMsg: "field registry.configPath missing from config",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			resp := &runtimeapi.StatusResponse{
+				Info: map[string]string{
+					"config": tt.config,
+				},
+			}
+			err := verifyStatusResponse(resp, "foo")
+			require.EqualError(t, err, tt.expectedErrMsg)
 		})
 	}
 }
