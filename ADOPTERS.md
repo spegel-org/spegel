@@ -8,3 +8,4 @@ This list shows adopters of Spegel. If you are using Spegel in your organization
 | National Research Platform | https://nationalresearchplatform.org |
 | K3S | https://k3s.io/ |
 | RKE2 | https://docs.rke2.io/ |
+| Nemlig | https://nemlig.com |
