@@ -24,7 +24,7 @@ require (
 	github.com/spf13/afero v1.11.0
 	github.com/stretchr/testify v1.10.0
 	go.etcd.io/bbolt v1.3.11
-	golang.org/x/sync v0.9.0
+	golang.org/x/sync v0.10.0
 	k8s.io/client-go v0.31.3
 	k8s.io/cri-api v0.31.3
 	k8s.io/klog/v2 v2.130.1
