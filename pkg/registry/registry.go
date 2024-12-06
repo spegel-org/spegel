@@ -335,6 +335,7 @@ func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, ref refe
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine size of blob with digest %s: %w", ref.dgst.String(), err))
 		return
 	}
+	rw.Header().Set("Accept-Ranges", "bytes")
 	rw.Header().Set("Content-Type", "application/octet-stream")
 	rw.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 	rw.Header().Set("Docker-Content-Digest", ref.dgst.String())
