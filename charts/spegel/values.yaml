@@ -143,6 +143,8 @@ spegel:
     - https://registry.k8s.io
     - https://k8s.gcr.io
     - https://lscr.io
+    - https://tccr.io
+    - https://factory.talos.dev
   # -- Additional target mirror registries other than Spegel.
   additionalMirrorRegistries: []
   # -- Max ammount of mirrors to attempt.
