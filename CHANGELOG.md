@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.28
+
+### Added 
+
 - [#576](https://github.com/spegel-org/spegel/pull/576) Add support for range requests for blobs.
 - [#621](https://github.com/spegel-org/spegel/pull/621) Added Mermaid diagrams documentation to help explain Spegel's inner workings.
 - [#629](https://github.com/spegel-org/spegel/pull/629) Document how to use multiple Spegel deployments in the same cluster.
@@ -18,16 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#608](https://github.com/spegel-org/spegel/pull/608) Use custom proxy transport and increase idle connections per host.
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - [#651](https://github.com/spegel-org/spegel/pull/651) Fix Containerd CRI config verification.
 - [#660](https://github.com/spegel-org/spegel/pull/660) Add accept ranges header to blob HEAD request.
-
-### Security
 
 ## v0.0.27
 
