@@ -140,6 +140,6 @@ The best solution to address this problem currently is to use [nidhogg](https://
 In certain situations deploying multiple separate Spegel clusters is beneficial. For example when a Kubernetes cluster spans multiple regions, it may be beneficial to limit nodes too only pull images from within the same region. Spegel can be deployed multiple times by simply using different names for each Helm deployment and setting a unique node selector. It is important to note that the node port service needs a unique port per deployment. Spegel will then only deploy on nodes with the matching labels and elect a unique leader for each deployment of Spegel. As the two Spegel clusters will never communicate they will not be able to discover layers outside of their own region, limiting requests to their specific region.
 
 ```bash
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.27 spegel-one oci://ghcr.io/spegel-org/helm-charts/spegel --set "nodeSelector.group=one" --set "service.registry.nodePort=30021"
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.27 spegel-two oci://ghcr.io/spegel-org/helm-charts/spegel --set "nodeSelector.group=two" --set "service.registry.nodePort=30022"
+helm upgrade --create-namespace --namespace spegel --install --version ${SPEGEL_VERSION} spegel-one oci://ghcr.io/spegel-org/helm-charts/spegel --set "nodeSelector.group=one" --set "service.registry.nodePort=30021"
+helm upgrade --create-namespace --namespace spegel --install --version ${SPEGEL_VERSION} spegel-two oci://ghcr.io/spegel-org/helm-charts/spegel --set "nodeSelector.group=two" --set "service.registry.nodePort=30022"
 ```
