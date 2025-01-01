@@ -69,7 +69,7 @@ helm upgrade --wait --install --namespace=spegel spegel ./charts/spegel \
 kubectl --namespace spegel rollout status daemonset spegel --timeout 60s
 ```
 
-If all goes well, you will see see something like `daemon set "spegel" successfully rolled out`. See [How do I know that Spegel is working?](./docs/FAQ.md#how-do-i-know-that-spegel-is-working) on how to verify.
+If all goes well, you will see see something like `daemon set "spegel" successfully rolled out`. See [How do I know that Spegel is working?](https://spegel.dev/docs/faq/#how-do-i-know-that-spegel-is-working) on how to verify.
 
 ## Generating documentation
 
