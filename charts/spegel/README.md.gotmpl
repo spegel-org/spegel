@@ -2,54 +2,6 @@
 
 {{ template "chart.description" . }}
 
-## Installation
-
-Make sure that you have read the [compatibility guide](../../docs/COMPATIBILITY.md) before proceeding the with the installation.
-
-
-### CLI
-
-Delpoy Spegel with the Helm CLI.
-
-```sh
-helm upgrade --create-namespace --namespace spegel --install --version v0.0.28 spegel oci://ghcr.io/spegel-org/helm-charts/spegel
-```
-
-### Flux
-
-Deploy Spegel with Flux.
-
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: spegel
----
-apiVersion: source.toolkit.fluxcd.io/v1beta2
-kind: HelmRepository
-metadata:
-  name: spegel
-  namespace: spegel
-spec:
-  type: "oci"
-  interval: 5m0s
-  url: oci://ghcr.io/spegel-org/helm-charts
----
-apiVersion: helm.toolkit.fluxcd.io/v2beta1
-kind: HelmRelease
-metadata:
-  name: spegel
-  namespace: spegel
-spec:
-  interval: 1m
-  chart:
-    spec:
-      chart: spegel
-      version: "v0.0.28"
-      interval: 5m
-      sourceRef:
-        kind: HelmRepository
-        name: spegel
-```
+Read the [getting started](https://spegel.dev/docs/getting-started/) guide to deploy Spegel.
 
 {{ template "chart.valuesSection" . }}

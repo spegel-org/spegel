@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for taking the time to fill ot this bug report! Please read the [FAQ](../../docs/FAQ.md) and check existing issues before submitting.
+        Thank you for taking the time to fill ot this bug report! Please read the [FAQ](https://spegel.dev/docs/faq/) and check existing issues before submitting a new issue.
   - type: input
     attributes:
       label: Spegel version
