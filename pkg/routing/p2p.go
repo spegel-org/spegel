@@ -129,10 +129,8 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	for _, addrInfo := range addrInfos {
-		if addrInfo.ID == r.host.ID() {
-			return true, nil
-		}
+	if len(addrInfos) == 0 {
+		return true, nil
 	}
 	if r.kdht.RoutingTable().Size() == 0 {
 		err := r.kdht.Bootstrap(ctx)

@@ -8,7 +8,6 @@ image:
   # -- Image digest.
   digest: ""
 
-
 # -- Image Pull Secrets
 imagePullSecrets: []
 # -- Overrides the name of the chart.
@@ -162,8 +161,6 @@ spegel:
   containerdContentPath: "/var/lib/containerd/io.containerd.content.v1.content"
   # -- If true Spegel will add mirror configuration to the node.
   containerdMirrorAdd: true
-  # -- Path to Kubeconfig credentials, should only be set if Spegel is run in an environment without RBAC.
-  kubeconfigPath: ""
   # -- When true Spegel will resolve tags to digests.
   resolveTags: true
   # -- When true latest tags will be resolved to digests.

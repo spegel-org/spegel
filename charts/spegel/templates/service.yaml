@@ -36,3 +36,21 @@ spec:
       targetPort: registry
       nodePort: {{ .Values.service.registry.nodePort }}
       protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "spegel.fullname" . }}-bootstrap
+  namespace: {{ include "spegel.namespace" . }}
+  labels:
+    app.kubernetes.io/component: metrics
+    {{- include "spegel.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "spegel.selectorLabels" . | nindent 4 }}
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: router
+      port: {{ .Values.service.router.port }}
+      protocol: TCP

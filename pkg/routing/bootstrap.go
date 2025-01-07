@@ -4,13 +4,18 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/libp2p/go-libp2p/core/peer"
+	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
@@ -118,7 +123,7 @@ func (bs *KubernetesBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, err
 	bs.mx.RLock()
 	defer bs.mx.RUnlock()
 
-	addr, err := multiaddr.NewMultiaddr(bs.id)
+	addr, err := ma.NewMultiaddr(bs.id)
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +132,54 @@ func (bs *KubernetesBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, err
 		return nil, err
 	}
 	return []peer.AddrInfo{*addrInfo}, err
+}
+
+var _ Bootstrapper = &DNSBootstrapper{}
+
+type DNSBootstrapper struct {
+	resolver *net.Resolver
+	host     string
+}
+
+func NewDNSBootstrapper(host string) *DNSBootstrapper {
+	return &DNSBootstrapper{
+		resolver: &net.Resolver{},
+		host:     host,
+	}
+}
+
+func (b *DNSBootstrapper) Run(ctx context.Context, id string) error {
+	<-ctx.Done()
+	return nil
+}
+
+func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
+	ips, err := b.resolver.LookupIPAddr(ctx, b.host)
+	if err != nil {
+		return nil, err
+	}
+	if len(ips) == 0 {
+		return nil, err
+	}
+	slices.SortFunc(ips, func(a, b net.IPAddr) int {
+		return strings.Compare(a.String(), b.String())
+	})
+	addrInfos := []peer.AddrInfo{}
+	for _, ip := range ips {
+		addr, err := manet.FromIPAndZone(ip.IP, ip.Zone)
+		if err != nil {
+			return nil, err
+		}
+		addrInfos = append(addrInfos, peer.AddrInfo{
+			ID:    "",
+			Addrs: []ma.Multiaddr{addr},
+		})
+	}
+	limit := 10
+	if len(addrInfos) < limit {
+		limit = len(addrInfos)
+	}
+	return addrInfos[:limit-1], nil
 }
 
 var _ Bootstrapper = &HTTPBootstrapper{}
@@ -180,7 +233,7 @@ func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr, err := multiaddr.NewMultiaddr(string(b))
+	addr, err := ma.NewMultiaddr(string(b))
 	if err != nil {
 		return nil, err
 	}
@@ -188,5 +241,5 @@ func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []peer.AddrInfo{*addrInfo}, err
+	return []peer.AddrInfo{*addrInfo}, nil
 }
