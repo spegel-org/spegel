@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Added 
+### Added
+
+- Added support for setting `commonLabels` in Helm chart.
 
 ### Changed
 
@@ -21,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.28
 
-### Added 
+### Added
 
 - [#576](https://github.com/spegel-org/spegel/pull/576) Add support for range requests for blobs.
 - [#621](https://github.com/spegel-org/spegel/pull/621) Added Mermaid diagrams documentation to help explain Spegel's inner workings.
@@ -56,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.25
 
-### Added 
+### Added
 
 - [#578](https://github.com/spegel-org/spegel/pull/578) Add possibility to override environment variable NODE_IP.
 
@@ -70,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.24
 
-### Added 
+### Added
 
 - [#538](https://github.com/spegel-org/spegel/pull/538) Replace mock OCI client with in memory client.
 - [#552](https://github.com/spegel-org/spegel/pull/552) Add support for VerticalPodAutoscaler in the Helm chart.
@@ -131,7 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.22
 
-### Added 
+### Added
 
 - [#435](https://github.com/spegel-org/spegel/pull/435) Add pprof endpoints to enable profiling.
 - [#434](https://github.com/spegel-org/spegel/pull/434) Add optional Containerd local content store to increase serve performance.
@@ -152,7 +154,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.21
 
-### Added 
+### Added
 
 - [#421](https://github.com/spegel-org/spegel/pull/421) Add conformance tests to e2e test.
 - [#424](https://github.com/spegel-org/spegel/pull/424) Add option to append mirror configuration instead of overwriting.
@@ -168,8 +170,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#431](https://github.com/spegel-org/spegel/pull/431) Fix import error caused by invalid file name.
 
 ## v0.0.20
- 
-### Added 
+
+### Added
 
 - [#416](https://github.com/spegel-org/spegel/pull/416) Add image and Helm chart signing with Cosign.
 
@@ -188,11 +190,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.19
 
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > The Spegel repository has been moved from XenitAB to a new GitHub organization.
 > Make sure to update the organization in the image and chart references.
 
-### Added 
+### Added
 
 - [#335](https://github.com/spegel-org/spegel/pull/335) Add k3s to compatibility guide.
 - [#359](https://github.com/spegel-org/spegel/pull/359) Extend OCI client tests.
@@ -230,7 +232,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.18
 
-### Added 
+### Added
 
 - [#331](https://github.com/spegel-org/spegel/pull/331) Document possible modifications required for k8s-digester.
 - [#337](https://github.com/spegel-org/spegel/pull/337) Add HTTP bootstrapper.
@@ -257,7 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.17
 
-### Added 
+### Added
 
 - [#299](https://github.com/spegel-org/spegel/pull/299) Add update strategy configuration to Helm chart.
 
@@ -280,7 +282,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.15
 
-### Added 
+### Added
 
 - [#270](https://github.com/spegel-org/spegel/pull/270) Add tests for local and external service port.
 - [#262](https://github.com/spegel-org/spegel/pull/262) Enable misspell linter and fix spelling mistakes.
@@ -297,7 +299,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.14
 
-### Added 
+### Added
 
 - [#237](https://github.com/spegel-org/spegel/pull/237) Verify discard unpacked layers setting.
 
@@ -312,7 +314,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.13
 
-### Added 
+### Added
 
 - [#195](https://github.com/spegel-org/spegel/pull/195) Fix daemonset argument namespace to use helper-defined namespace value.
 
@@ -333,7 +335,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.12
 
-### Added 
+### Added
 
 - [#182](https://github.com/spegel-org/spegel/pull/182) Add lscr.io as default registry.
 
@@ -348,7 +350,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.11
 
-### Added 
+### Added
 
 - [#170](https://github.com/spegel-org/spegel/pull/170) Backup existing Containerd mirror configuration.
 - [#171](https://github.com/spegel-org/spegel/pull/171) Add option to disable resolve.
@@ -359,7 +361,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.10
 
-### Added 
+### Added
 
 - [#145](https://github.com/spegel-org/spegel/pull/145) Add new field to override Helm chart namespace.
 - [#153](https://github.com/spegel-org/spegel/pull/153) Add option to disable resolving latest tags.
@@ -393,7 +395,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.8
 
-### Added 
+### Added
 
 - [#125](https://github.com/spegel-org/spegel/pull/125) Add retry mirroring to new peer if current peer fails.
 - [#127](https://github.com/spegel-org/spegel/pull/127) Add configuration for resolve retry and timeout.
@@ -425,21 +427,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#42](https://github.com/spegel-org/spegel/pull/42) Only use bootstrap function for initial peer discovery.
 - [#66](https://github.com/spegel-org/spegel/pull/66) Move mirror configuration logic to run as an init container.
- 
+
 ### Fixed
 
 - [#71](https://github.com/spegel-org/spegel/pull/71) Fix priority class name.
 
 ## v0.0.5
 
-### Added 
+### Added
 
 - [#29](https://github.com/spegel-org/spegel/pull/29) Make priority class name configurable and set a default value.
 - [#49](https://github.com/spegel-org/spegel/pull/49) Add registry.k8s.io to registry mirror list.
 - [#56](https://github.com/spegel-org/spegel/pull/56) Add gcr.io and k8s.gcr.io registries to default list.
 
 ### Changed
- 
+
 - [#32](https://github.com/spegel-org/spegel/pull/32) Update Go to 1.20.
 - [#33](https://github.com/spegel-org/spegel/pull/33) Remove containerd info call when handling manifest request.
 - [#48](https://github.com/spegel-org/spegel/pull/48) Replace multierr with stdlib errors join.
@@ -460,7 +462,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.0.3
 
-### Added 
+### Added
 
 - [#18](https://github.com/spegel-org/spegel/pull/18) Add support to use Spegel instance on another node.
 

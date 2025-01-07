@@ -24,7 +24,7 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
-Creates the namespace for the chart. 
+Creates the namespace for the chart.
 Defaults to the Release namespace unless the namespaceOverride is defined.
 */}}
 {{- define "spegel.namespace" -}}
@@ -53,6 +53,13 @@ helm.sh/chart: {{ include "spegel.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Values.commonLabels }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}
+
+{{/*
+{{- end }}
 {{- end }}
 
 {{/*
