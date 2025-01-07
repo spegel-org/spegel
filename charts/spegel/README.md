@@ -9,6 +9,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | affinity | object | `{}` | Affinity settings for pod assignment. |
+| commonLabels | object | `{}` | Common labels to apply to all rendered resources. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
 | grafanaDashboard.annotations | object | `{}` | Annotations that ConfigMaps can have to get configured in Grafana, See: sidecar.dashboards.folderAnnotation for specifying the dashboard folder. https://github.com/grafana/helm-charts/tree/main/charts/grafana |
 | grafanaDashboard.enabled | bool | `false` | If true creates a Grafana dashboard. |

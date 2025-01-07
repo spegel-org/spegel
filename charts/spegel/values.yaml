@@ -99,6 +99,9 @@ tolerations:
 # -- Affinity settings for pod assignment.
 affinity: {}
 
+# -- Common labels to apply to all rendered resources.
+commonLabels: {}
+
 serviceMonitor:
   # -- If true creates a Prometheus Service Monitor.
   enabled: false
