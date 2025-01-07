@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added support for setting `commonLabels` in Helm chart.
+- [#678](https://github.com/spegel-org/spegel/pull/678) Add support for setting common labels in Helm chart.
 
 ### Changed
 
