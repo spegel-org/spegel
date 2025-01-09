@@ -16,10 +16,15 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
+// Bootstrapper resolves peers to bootstrap with.
 type Bootstrapper interface {
+	// Run starts the bootstrap process. Should be blocking even if not needed.
 	Run(ctx context.Context, id string) error
-	Get() (*peer.AddrInfo, error)
+	// Get returns a list of peers that should be used as bootstrap nodes.
+	Get(ctx context.Context) ([]peer.AddrInfo, error)
 }
+
+var _ Bootstrapper = &KubernetesBootstrapper{}
 
 type KubernetesBootstrapper struct {
 	cs                      kubernetes.Interface
@@ -39,16 +44,16 @@ func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) 
 	}
 }
 
-func (k *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
+func (bs *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
 	lockCfg := resourcelock.ResourceLockConfig{
 		Identity: id,
 	}
 	rl, err := resourcelock.New(
 		resourcelock.LeasesResourceLock,
-		k.leaderElectionNamespace,
-		k.leaderElectioName,
-		k.cs.CoreV1(),
-		k.cs.CoordinationV1(),
+		bs.leaderElectionNamespace,
+		bs.leaderElectioName,
+		bs.cs.CoreV1(),
+		bs.cs.CoordinationV1(),
 		lockCfg,
 	)
 	if err != nil {
@@ -69,15 +74,15 @@ func (k *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
 				}
 				// Close channel if not already closed
 				select {
-				case <-k.initCh:
+				case <-bs.initCh:
 					break
 				default:
-					close(k.initCh)
+					close(bs.initCh)
 				}
 
-				k.mx.Lock()
-				defer k.mx.Unlock()
-				k.id = identity
+				bs.mx.Lock()
+				defer bs.mx.Unlock()
+				bs.id = identity
 			},
 		},
 	}
@@ -85,12 +90,12 @@ func (k *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
 	return nil
 }
 
-func (k *KubernetesBootstrapper) Get() (*peer.AddrInfo, error) {
-	<-k.initCh
-	k.mx.RLock()
-	defer k.mx.RUnlock()
+func (bs *KubernetesBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
+	<-bs.initCh
+	bs.mx.RLock()
+	defer bs.mx.RUnlock()
 
-	addr, err := multiaddr.NewMultiaddr(k.id)
+	addr, err := multiaddr.NewMultiaddr(bs.id)
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +103,10 @@ func (k *KubernetesBootstrapper) Get() (*peer.AddrInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return addrInfo, err
+	return []peer.AddrInfo{*addrInfo}, err
 }
+
+var _ Bootstrapper = &HTTPBootstrapper{}
 
 type HTTPBootstrapper struct {
 	addr string
@@ -113,7 +120,7 @@ func NewHTTPBootstrapper(addr, peer string) *HTTPBootstrapper {
 	}
 }
 
-func (h *HTTPBootstrapper) Run(ctx context.Context, id string) error {
+func (bs *HTTPBootstrapper) Run(ctx context.Context, id string) error {
 	g, ctx := errgroup.WithContext(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/id", func(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +129,7 @@ func (h *HTTPBootstrapper) Run(ctx context.Context, id string) error {
 		w.Write([]byte(id))
 	})
 	srv := http.Server{
-		Addr:    h.addr,
+		Addr:    bs.addr,
 		Handler: mux,
 	}
 	g.Go(func() error {
@@ -140,8 +147,8 @@ func (h *HTTPBootstrapper) Run(ctx context.Context, id string) error {
 	return g.Wait()
 }
 
-func (h *HTTPBootstrapper) Get() (*peer.AddrInfo, error) {
-	resp, err := http.DefaultClient.Get(h.peer)
+func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
+	resp, err := http.DefaultClient.Get(bs.peer)
 	if err != nil {
 		return nil, err
 	}
@@ -158,5 +165,5 @@ func (h *HTTPBootstrapper) Get() (*peer.AddrInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return addrInfo, err
+	return []peer.AddrInfo{*addrInfo}, err
 }
