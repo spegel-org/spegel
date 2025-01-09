@@ -6,10 +6,44 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/libp2p/go-libp2p/core/peer"
+	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
+	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/kubernetes/fake"
 )
+
+func TestStaticBootstrap(t *testing.T) {
+	t.Parallel()
+
+	peers := []peer.AddrInfo{
+		{
+			ID:    "foo",
+			Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
+		},
+		{
+			ID:    "bar",
+			Addrs: []ma.Multiaddr{manet.IP6Loopback},
+		},
+	}
+	bs := NewStaticBootstrapper(peers)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return bs.Run(gCtx, "")
+	})
+
+	bsPeers, err := bs.Get(context.TODO())
+	require.NoError(t, err)
+	require.ElementsMatch(t, peers, bsPeers)
+
+	cancel()
+	err = g.Wait()
+	require.NoError(t, err)
+}
 
 func TestKubernetesBootstra(t *testing.T) {
 	t.Parallel()
