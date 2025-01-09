@@ -27,11 +27,13 @@ func TestKubernetesBootstra(t *testing.T) {
 		return bs.Run(gCtx, id)
 	})
 
-	peerInfo, err := bs.Get()
+	addrInfos, err := bs.Get(context.TODO())
 	require.NoError(t, err)
-	require.Len(t, peerInfo.Addrs, 1)
-	require.Equal(t, addr, peerInfo.Addrs[0].String())
-	require.Equal(t, peerID, peerInfo.ID.String())
+	require.Len(t, addrInfos, 1)
+	addrInfo := addrInfos[0]
+	require.Len(t, addrInfo.Addrs, 1)
+	require.Equal(t, addr, addrInfo.Addrs[0].String())
+	require.Equal(t, peerID, addrInfo.ID.String())
 
 	cancel()
 	err = g.Wait()
@@ -54,8 +56,10 @@ func TestHTTPBootstrap(t *testing.T) {
 	bootstrapper := NewHTTPBootstrapper(":", svr.URL)
 	//nolint:errcheck // ignore
 	go bootstrapper.Run(ctx, id)
-	addrInfo, err := bootstrapper.Get()
+	addrInfos, err := bootstrapper.Get(context.TODO())
 	require.NoError(t, err)
+	require.Len(t, addrInfos, 1)
+	addrInfo := addrInfos[0]
 	require.Len(t, addrInfo.Addrs, 1)
 	require.Equal(t, "/ip4/104.131.131.82/tcp/4001", addrInfo.Addrs[0].String())
 	require.Equal(t, "QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ", addrInfo.ID.String())

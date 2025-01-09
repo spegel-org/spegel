@@ -85,16 +85,23 @@ func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, r
 
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 	bootstrapPeerOpt := dht.BootstrapPeersFunc(func() []peer.AddrInfo {
-		addrInfo, err := bootstrapper.Get()
+		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer bootstrapCancel()
+
+		addrInfos, err := bootstrapper.Get(bootstrapCtx)
 		if err != nil {
 			log.Error(err, "could not get bootstrap addresses")
 			return nil
 		}
-		if addrInfo.ID == host.ID() {
-			log.Info("leader is self skipping connection to bootstrap node")
-			return nil
+		filteredAddrInfos := []peer.AddrInfo{}
+		for _, addrInfo := range addrInfos {
+			if addrInfo.ID == host.ID() {
+				log.Info("filtering self from bootstrap peer list")
+				continue
+			}
+			filteredAddrInfos = append(filteredAddrInfos, addrInfo)
 		}
-		return []peer.AddrInfo{*addrInfo}
+		return filteredAddrInfos
 	})
 	dhtOpts := []dht.Option{
 		dht.Mode(dht.ModeServer),
@@ -136,12 +143,14 @@ func (r *P2PRouter) Close() error {
 }
 
 func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
-	addrInfo, err := r.bootstrapper.Get()
+	addrInfos, err := r.bootstrapper.Get(ctx)
 	if err != nil {
 		return false, err
 	}
-	if addrInfo.ID == r.host.ID() {
-		return true, nil
+	for _, addrInfo := range addrInfos {
+		if addrInfo.ID == r.host.ID() {
+			return true, nil
+		}
 	}
 	if r.kdht.RoutingTable().Size() == 0 {
 		err := r.kdht.Bootstrap(ctx)
