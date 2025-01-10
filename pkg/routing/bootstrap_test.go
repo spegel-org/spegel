@@ -45,7 +45,7 @@ func TestStaticBootstrap(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestKubernetesBootstra(t *testing.T) {
+func TestKubernetesBootstrap(t *testing.T) {
 	t.Parallel()
 
 	addr := "/ip4/10.244.1.2/tcp/5001"
