@@ -16,7 +16,9 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/sec"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
@@ -36,7 +38,7 @@ type P2PRouter struct {
 	registryPort uint16
 }
 
-func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, registryPortStr string, opts ...libp2p.Option) (*P2PRouter, error) {
+func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...libp2p.Option) (*P2PRouter, error) {
 	registryPort, err := strconv.ParseUint(registryPortStr, 10, 16)
 	if err != nil {
 		return nil, err
@@ -83,32 +85,12 @@ func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, r
 		return nil, fmt.Errorf("expected single host address but got %d %s", len(addrs), strings.Join(addrs, ", "))
 	}
 
-	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
-	bootstrapPeerOpt := dht.BootstrapPeersFunc(func() []peer.AddrInfo {
-		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer bootstrapCancel()
-
-		addrInfos, err := bootstrapper.Get(bootstrapCtx)
-		if err != nil {
-			log.Error(err, "could not get bootstrap addresses")
-			return nil
-		}
-		filteredAddrInfos := []peer.AddrInfo{}
-		for _, addrInfo := range addrInfos {
-			if addrInfo.ID == host.ID() {
-				log.Info("filtering self from bootstrap peer list")
-				continue
-			}
-			filteredAddrInfos = append(filteredAddrInfos, addrInfo)
-		}
-		return filteredAddrInfos
-	})
 	dhtOpts := []dht.Option{
 		dht.Mode(dht.ModeServer),
 		dht.ProtocolPrefix("/spegel"),
 		dht.DisableValues(),
 		dht.MaxRecordAge(KeyTTL),
-		bootstrapPeerOpt,
+		dht.BootstrapPeersFunc(bootstrapFunc(ctx, bs, host)),
 	}
 	kdht, err := dht.New(ctx, host, dhtOpts...)
 	if err != nil {
@@ -117,7 +99,7 @@ func NewP2PRouter(ctx context.Context, addr string, bootstrapper Bootstrapper, r
 	rd := routing.NewRoutingDiscovery(kdht)
 
 	return &P2PRouter{
-		bootstrapper: bootstrapper,
+		bootstrapper: bs,
 		host:         host,
 		kdht:         kdht,
 		rd:           rd,
@@ -224,6 +206,73 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 	return nil
 }
 
+func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, host host.Host) func() []peer.AddrInfo {
+	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
+	return func() []peer.AddrInfo {
+		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer bootstrapCancel()
+
+		addrInfos, err := bootstrapper.Get(bootstrapCtx)
+		if err != nil {
+			log.Error(err, "could not get bootstrap addresses")
+			return nil
+		}
+		filteredAddrInfos := []peer.AddrInfo{}
+		for _, addrInfo := range addrInfos {
+			modifiedAddrs := []ma.Multiaddr{}
+			for _, addr := range addrInfo.Addrs {
+				hasPort := false
+				ma.ForEach(addr, func(c ma.Component) bool {
+					if c.Protocol().Code == ma.P_TCP {
+						hasPort = true
+						return false
+					}
+					return true
+				})
+				if hasPort {
+					modifiedAddrs = append(modifiedAddrs, addr)
+					continue
+				}
+				var portComp ma.Component
+				ma.ForEach(host.Addrs()[0], func(c ma.Component) bool {
+					if c.Protocol().Code == ma.P_TCP {
+						portComp = c
+						return false
+					}
+					return true
+				})
+				modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &portComp))
+			}
+			addrInfo.Addrs = modifiedAddrs
+
+			if addrInfo.ID == host.ID() {
+				log.Info("removing self from bootstrap list")
+				continue
+			}
+
+			if addrInfo.ID != "" {
+				filteredAddrInfos = append(filteredAddrInfos, addrInfo)
+				continue
+			}
+
+			addrInfo.ID = "id"
+			err = host.Connect(bootstrapCtx, addrInfo)
+			secerr := asErrPeerIDMismatch(err)
+			if secerr == nil {
+				log.Error(err, "could not get peer id")
+				continue
+			}
+			addrInfo.ID = secerr.Actual
+			filteredAddrInfos = append(filteredAddrInfos, addrInfo)
+		}
+		if len(filteredAddrInfos) == 0 {
+			log.Info("no bootstrap nodes found")
+			return nil
+		}
+		return filteredAddrInfos
+	}
+}
+
 func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
 	h, p, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -296,4 +345,18 @@ func createCid(key string) (cid.Cid, error) {
 		return cid.Cid{}, err
 	}
 	return c, nil
+}
+
+func asErrPeerIDMismatch(err error) *sec.ErrPeerIDMismatch {
+	var dialErr *swarm.DialError
+	if !errors.As(err, &dialErr) {
+		return nil
+	}
+	var mismatchErr sec.ErrPeerIDMismatch
+	for _, te := range dialErr.DialErrors {
+		if errors.As(te.Cause, &mismatchErr) {
+			return &mismatchErr
+		}
+	}
+	return nil
 }

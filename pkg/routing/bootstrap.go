@@ -16,12 +16,35 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
-// Bootstrapper resolves peers to bootstrap with.
+// Bootstrapper resolves peers to bootstrap with for the P2P router.
 type Bootstrapper interface {
 	// Run starts the bootstrap process. Should be blocking even if not needed.
 	Run(ctx context.Context, id string) error
 	// Get returns a list of peers that should be used as bootstrap nodes.
+	// If the peer ID is empty it will be resolved.
+	// If the address is missing a port the P2P router port will be used.
 	Get(ctx context.Context) ([]peer.AddrInfo, error)
+}
+
+var _ Bootstrapper = &StaticBootstrapper{}
+
+type StaticBootstrapper struct {
+	peers []peer.AddrInfo
+}
+
+func NewStaticBootstrapper(peers []peer.AddrInfo) *StaticBootstrapper {
+	return &StaticBootstrapper{
+		peers: peers,
+	}
+}
+
+func (b *StaticBootstrapper) Run(ctx context.Context, id string) error {
+	<-ctx.Done()
+	return nil
+}
+
+func (b *StaticBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
+	return b.peers, nil
 }
 
 var _ Bootstrapper = &KubernetesBootstrapper{}
