@@ -101,6 +101,9 @@ affinity: {}
 # -- Common labels to apply to all rendered resources.
 commonLabels: {}
 
+# -- Domain configured for service domain names.
+clusterDomain: cluster.local.
+
 serviceMonitor:
   # -- If true creates a Prometheus Service Monitor.
   enabled: false
