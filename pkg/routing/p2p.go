@@ -209,11 +209,20 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 	return nil
 }
 
-func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, host host.Host) func() []peer.AddrInfo {
+func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) func() []peer.AddrInfo {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 	return func() []peer.AddrInfo {
 		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer bootstrapCancel()
+
+		var hostPort ma.Component
+		ma.ForEach(h.Addrs()[0], func(c ma.Component) bool {
+			if c.Protocol().Code == ma.P_TCP {
+				hostPort = c
+				return false
+			}
+			return true
+		})
 
 		addrInfos, err := bootstrapper.Get(bootstrapCtx)
 		if err != nil {
@@ -222,6 +231,18 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, host host.Hos
 		}
 		filteredAddrInfos := []peer.AddrInfo{}
 		for _, addrInfo := range addrInfos {
+			// Skip addresses that match host.
+			matches, err := hostMatches(*host.InfoFromHost(h), addrInfo)
+			if err != nil {
+				log.Error(err, "could not compare host with address")
+				continue
+			}
+			if matches {
+				log.Info("skipping bootstrap peer that is same as host")
+				continue
+			}
+
+			// Add port to address if it is missing.
 			modifiedAddrs := []ma.Multiaddr{}
 			for _, addr := range addrInfo.Addrs {
 				hasPort := false
@@ -236,30 +257,17 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, host host.Hos
 					modifiedAddrs = append(modifiedAddrs, addr)
 					continue
 				}
-				var portComp ma.Component
-				ma.ForEach(host.Addrs()[0], func(c ma.Component) bool {
-					if c.Protocol().Code == ma.P_TCP {
-						portComp = c
-						return false
-					}
-					return true
-				})
-				modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &portComp))
+				modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &hostPort))
 			}
 			addrInfo.Addrs = modifiedAddrs
 
-			if addrInfo.ID == host.ID() {
-				log.Info("removing self from bootstrap list")
-				continue
-			}
-
+			// Resolve ID if it is missing.
 			if addrInfo.ID != "" {
 				filteredAddrInfos = append(filteredAddrInfos, addrInfo)
 				continue
 			}
-
 			addrInfo.ID = "id"
-			err = host.Connect(bootstrapCtx, addrInfo)
+			err = h.Connect(bootstrapCtx, addrInfo)
 			secerr := asErrPeerIDMismatch(err)
 			if secerr == nil {
 				log.Error(err, "could not get peer id")
@@ -344,4 +352,28 @@ func asErrPeerIDMismatch(err error) *sec.ErrPeerIDMismatch {
 		}
 	}
 	return nil
+}
+
+func hostMatches(host, addrInfo peer.AddrInfo) (bool, error) {
+	// Skip self when address ID matches host ID.
+	if host.ID != "" && addrInfo.ID != "" {
+		return host.ID == addrInfo.ID, nil
+	}
+
+	// Skip self when IP matches
+	hostIP, err := manet.ToIP(host.Addrs[0])
+	if err != nil {
+		return false, err
+	}
+	for _, addr := range addrInfo.Addrs {
+		addrIP, err := manet.ToIP(addr)
+		if err != nil {
+			return false, err
+		}
+		if hostIP.Equal(addrIP) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
