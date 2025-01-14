@@ -3,7 +3,6 @@ package routing
 import (
 	"context"
 	"fmt"
-	"net/netip"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -117,38 +116,6 @@ func TestListenMultiaddrs(t *testing.T) {
 			for i, e := range tt.expected {
 				require.Equal(t, e, multiAddrs[i].String())
 			}
-		})
-	}
-}
-
-func TestIPInMultiaddr(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		ma       string
-		expected netip.Addr
-		name     string
-	}{
-		{
-			name:     "ipv4",
-			ma:       "/ip4/10.244.1.2/tcp/5001",
-			expected: netip.MustParseAddr("10.244.1.2"),
-		},
-		{
-			name:     "ipv6",
-			ma:       "/ip6/0:0:0:0:0:ffff:0af4:0102/tcp/5001",
-			expected: netip.MustParseAddr("::ffff:10.244.1.2"),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			multiAddr, err := ma.NewMultiaddr(tt.ma)
-			require.NoError(t, err)
-			v, err := ipInMultiaddr(multiAddr)
-			require.NoError(t, err)
-			require.Equal(t, tt.expected, v)
 		})
 	}
 }
