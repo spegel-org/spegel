@@ -171,9 +171,14 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
 				continue
 			}
-			ipAddr, err := ipInMultiaddr(info.Addrs[0])
+			ip, err := manet.ToIP(info.Addrs[0])
 			if err != nil {
 				log.Error(err, "could not get IP address")
+				continue
+			}
+			ipAddr, ok := netip.AddrFromSlice(ip)
+			if !ok {
+				log.Error(errors.New("IP is not IPV4 or IPV6"), "could not convert IP")
 				continue
 			}
 			peer := netip.AddrPortFrom(ipAddr, r.registryPort)
@@ -303,24 +308,6 @@ func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
 		multiAddrs = append(multiAddrs, ipComp.Encapsulate(tcpComp))
 	}
 	return multiAddrs, nil
-}
-
-func ipInMultiaddr(multiAddr ma.Multiaddr) (netip.Addr, error) {
-	for _, p := range []int{ma.P_IP6, ma.P_IP4} {
-		v, err := multiAddr.ValueForProtocol(p)
-		if errors.Is(err, ma.ErrProtocolNotFound) {
-			continue
-		}
-		if err != nil {
-			return netip.Addr{}, err
-		}
-		ipAddr, err := netip.ParseAddr(v)
-		if err != nil {
-			return netip.Addr{}, err
-		}
-		return ipAddr, nil
-	}
-	return netip.Addr{}, errors.New("IP not found in address")
 }
 
 func isIp6(m ma.Multiaddr) bool {
