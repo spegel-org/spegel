@@ -18,7 +18,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/sec"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
-	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
@@ -268,12 +267,12 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) 
 			}
 			addrInfo.ID = "id"
 			err = h.Connect(bootstrapCtx, addrInfo)
-			secerr := asErrPeerIDMismatch(err)
-			if secerr == nil {
+			var mismatchErr sec.ErrPeerIDMismatch
+			if !errors.As(err, &mismatchErr) {
 				log.Error(err, "could not get peer id")
 				continue
 			}
-			addrInfo.ID = secerr.Actual
+			addrInfo.ID = mismatchErr.Actual
 			filteredAddrInfos = append(filteredAddrInfos, addrInfo)
 		}
 		if len(filteredAddrInfos) == 0 {
@@ -338,20 +337,6 @@ func createCid(key string) (cid.Cid, error) {
 		return cid.Cid{}, err
 	}
 	return c, nil
-}
-
-func asErrPeerIDMismatch(err error) *sec.ErrPeerIDMismatch {
-	var dialErr *swarm.DialError
-	if !errors.As(err, &dialErr) {
-		return nil
-	}
-	var mismatchErr sec.ErrPeerIDMismatch
-	for _, te := range dialErr.DialErrors {
-		if errors.As(te.Cause, &mismatchErr) {
-			return &mismatchErr
-		}
-	}
-	return nil
 }
 
 func hostMatches(host, addrInfo peer.AddrInfo) (bool, error) {
