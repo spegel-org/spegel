@@ -138,3 +138,84 @@ func TestCreateCid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "bafkreigdvoh7cnza5cwzar65hfdgwpejotszfqx2ha6uuolaofgk54ge6i", c.String())
 }
+
+func TestHostMatches(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		host     peer.AddrInfo
+		addrInfo peer.AddrInfo
+		expected bool
+	}{
+		{
+			name: "ID match",
+			host: peer.AddrInfo{
+				ID:    "foo",
+				Addrs: []ma.Multiaddr{},
+			},
+			addrInfo: peer.AddrInfo{
+				ID:    "foo",
+				Addrs: []ma.Multiaddr{},
+			},
+			expected: true,
+		},
+		{
+			name: "ID do not match",
+			host: peer.AddrInfo{
+				ID:    "foo",
+				Addrs: []ma.Multiaddr{},
+			},
+			addrInfo: peer.AddrInfo{
+				ID:    "bar",
+				Addrs: []ma.Multiaddr{},
+			},
+			expected: false,
+		},
+		{
+			name: "IP4 match",
+			host: peer.AddrInfo{
+				ID:    "",
+				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
+			},
+			addrInfo: peer.AddrInfo{
+				ID:    "",
+				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
+			},
+			expected: true,
+		},
+		{
+			name: "IP4 do not match",
+			host: peer.AddrInfo{
+				ID:    "",
+				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
+			},
+			addrInfo: peer.AddrInfo{
+				ID:    "",
+				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.2")},
+			},
+			expected: false,
+		},
+		{
+			name: "IP6 match",
+			host: peer.AddrInfo{
+				ID:    "",
+				Addrs: []ma.Multiaddr{ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba")},
+			},
+			addrInfo: peer.AddrInfo{
+				ID:    "",
+				Addrs: []ma.Multiaddr{ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba")},
+			},
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			matches, err := hostMatches(tt.host, tt.addrInfo)
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, matches)
+		})
+	}
+}
