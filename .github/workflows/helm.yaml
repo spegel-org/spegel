@@ -1,6 +1,9 @@
 name: helm
 on:
   pull_request:
+defaults:
+  run:
+    shell: bash   
 jobs:
   docs:
     runs-on: ubuntu-latest
