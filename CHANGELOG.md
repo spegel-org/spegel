@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#694](https://github.com/spegel-org/spegel/pull/694) Replace IP in multi address with manet.
 - [#693](https://github.com/spegel-org/spegel/pull/693) Add commonLabels for pods.
+- [#699](https://github.com/spegel-org/spegel/pull/699) Remove as mismatch error and replace with errors as.
 
 ### Deprecated
 
