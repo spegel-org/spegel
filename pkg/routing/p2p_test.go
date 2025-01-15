@@ -7,11 +7,48 @@ import (
 
 	"github.com/go-logr/logr"
 	tlog "github.com/go-logr/logr/testing"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 )
+
+func TestP2PRouter(t *testing.T) {
+	t.Parallel()
+
+	bs := NewStaticBootstrapper()
+	router, err := NewP2PRouter(context.TODO(), "localhost:0", bs, "9090")
+	require.NoError(t, err)
+
+	// Should not be ready if no peers are found.
+	isReady, err := router.Ready(context.TODO())
+	require.NoError(t, err)
+	require.False(t, isReady)
+
+	// Should be ready if only peer is host.
+	bs.SetPeers([]peer.AddrInfo{*host.InfoFromHost(router.host)})
+	isReady, err = router.Ready(context.TODO())
+	require.NoError(t, err)
+	require.True(t, isReady)
+
+	// Shouldd be not ready with multiple peers but empty routing table.
+	bs.SetPeers([]peer.AddrInfo{{}, {}})
+	isReady, err = router.Ready(context.TODO())
+	require.NoError(t, err)
+	require.False(t, isReady)
+
+	// Should be ready with multiple peers and populated routing table.
+	newPeer, err := router.kdht.RoutingTable().GenRandPeerID(0)
+	require.NoError(t, err)
+	ok, err := router.kdht.RoutingTable().TryAddPeer(newPeer, false, false)
+	require.NoError(t, err)
+	require.True(t, ok)
+	bs.SetPeers([]peer.AddrInfo{{}, {}})
+	isReady, err = router.Ready(context.TODO())
+	require.NoError(t, err)
+	require.True(t, isReady)
+}
 
 func TestBootstrapFunc(t *testing.T) {
 	t.Parallel()
@@ -67,8 +104,9 @@ func TestBootstrapFunc(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			b := NewStaticBootstrapper(tt.peers)
-			f := bootstrapFunc(ctx, b, mn.Hosts()[0])
+			bs := NewStaticBootstrapper()
+			bs.SetPeers(tt.peers)
+			f := bootstrapFunc(ctx, bs, mn.Hosts()[0])
 			peers := f()
 
 			peerStrs := []string{}

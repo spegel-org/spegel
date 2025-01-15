@@ -35,12 +35,11 @@ var _ Bootstrapper = &StaticBootstrapper{}
 
 type StaticBootstrapper struct {
 	peers []peer.AddrInfo
+	mx    sync.RWMutex
 }
 
-func NewStaticBootstrapper(peers []peer.AddrInfo) *StaticBootstrapper {
-	return &StaticBootstrapper{
-		peers: peers,
-	}
+func NewStaticBootstrapper() *StaticBootstrapper {
+	return &StaticBootstrapper{}
 }
 
 func (b *StaticBootstrapper) Run(ctx context.Context, id string) error {
@@ -49,7 +48,15 @@ func (b *StaticBootstrapper) Run(ctx context.Context, id string) error {
 }
 
 func (b *StaticBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
+	b.mx.RLock()
+	defer b.mx.RUnlock()
 	return b.peers, nil
+}
+
+func (b *StaticBootstrapper) SetPeers(peers []peer.AddrInfo) {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+	b.peers = peers
 }
 
 var _ Bootstrapper = &KubernetesBootstrapper{}
@@ -139,12 +146,14 @@ var _ Bootstrapper = &DNSBootstrapper{}
 type DNSBootstrapper struct {
 	resolver *net.Resolver
 	host     string
+	limit    int
 }
 
-func NewDNSBootstrapper(host string) *DNSBootstrapper {
+func NewDNSBootstrapper(host string, limit int) *DNSBootstrapper {
 	return &DNSBootstrapper{
 		resolver: &net.Resolver{},
 		host:     host,
+		limit:    limit,
 	}
 }
 
@@ -175,11 +184,11 @@ func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 			Addrs: []ma.Multiaddr{addr},
 		})
 	}
-	limit := 10
+	limit := b.limit
 	if len(addrInfos) < limit {
 		limit = len(addrInfos)
 	}
-	return addrInfos[:limit-1], nil
+	return addrInfos[:limit], nil
 }
 
 var _ Bootstrapper = &HTTPBootstrapper{}
