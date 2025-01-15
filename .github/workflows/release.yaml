@@ -6,6 +6,9 @@ permissions:
   contents: read
   packages: write
   id-token: write
+defaults:
+  run:
+    shell: bash
 jobs:
   release:
     runs-on: ubuntu-latest

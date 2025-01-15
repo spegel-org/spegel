@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
   packages: write
+defaults:
+  run:
+    shell: bash
 jobs:
   release:
     runs-on: ubuntu-latest
