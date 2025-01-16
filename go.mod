@@ -25,8 +25,8 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.etcd.io/bbolt v1.3.11
 	golang.org/x/sync v0.10.0
-	k8s.io/client-go v0.32.0
-	k8s.io/cri-api v0.32.0
+	k8s.io/client-go v0.32.1
+	k8s.io/cri-api v0.32.1
 	k8s.io/klog/v2 v2.130.1
 )
 
@@ -211,8 +211,8 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v3 v3.15.2 // indirect
-	k8s.io/api v0.32.0 // indirect
-	k8s.io/apimachinery v0.32.0 // indirect
+	k8s.io/api v0.32.1 // indirect
+	k8s.io/apimachinery v0.32.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
