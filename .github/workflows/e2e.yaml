@@ -1,6 +1,9 @@
 name: e2e
 on:
   pull_request:
+defaults:
+  run:
+    shell: bash
 jobs:
   test:
     runs-on: ubuntu-latest

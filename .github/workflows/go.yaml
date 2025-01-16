@@ -1,6 +1,9 @@
 name: go
 on:
   pull_request:
+defaults:
+  run:
+    shell: bash   
 jobs:
   lint:
     runs-on: ubuntu-latest
