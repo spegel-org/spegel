@@ -6,7 +6,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        cni: [iptables, iptables-ipv6, ipvs]
+        include:
+          - proxy-mode: iptables
+            ip-family: ipv4
+          - proxy-mode: iptables
+            ip-family: ipv6
+          - proxy-mode: ipvs
+            ip-family: ipv4
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -15,4 +21,4 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run e2e
-        run: make e2e CNI=${{ matrix.cni }}
+        run: make test-e2e E2E_PROXY_MODE=${{ matrix.proxy-mode }} E2E_IP_FAMILY=${{ matrix.ip-family }}

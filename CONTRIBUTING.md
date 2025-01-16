@@ -19,13 +19,13 @@ make lint test
 Run the e2e tests which take a bit more time.
 
 ```shell
-make e2e
+make test-e2e
 ```
 
 There are e2e tests for the different CNIs iptables, iptables-v6, and ipvs.
 
 ```shell
-make e2e CNI=ipvs
+make test-e2e E2E_CNI=ipvs
 ```
 
 ## Building

@@ -1,21 +1,23 @@
 TAG = $$(git rev-parse --short HEAD)
-IMG ?= ghcr.io/spegel-org/spegel
-REF = $(IMG):$(TAG)
-CNI ?= iptables
-DELETE_E2E_CLUSTER ?= true
+IMG_NAME ?= ghcr.io/spegel-org/spegel
+IMG_REF = $(IMG_NAME):$(TAG)
+E2E_PROXY_MODE ?= iptables
+E2E_IP_FAMILY ?= ipv4
 
 lint:
 	golangci-lint run ./...
 
-.PHONY: test
-test:
+docker-build:
+	docker build -t ${IMG_REF} .
+
+test-unit:
 	go test ./...
 
-docker-build:
-	docker build -t ${REF} .
-
-e2e: docker-build
-	./test/e2e/e2e.sh ${REF} ${CNI} ${DELETE_E2E_CLUSTER}
+test-e2e: docker-build
+	IMG_REF=${IMG_REF} \
+	E2E_PROXY_MODE=${E2E_PROXY_MODE} \
+	E2E_IP_FAMILY=${E2E_IP_FAMILY} \
+	go test ./test/e2e -v -timeout 200s -tags e2e
 
 tools:
 	GO111MODULE=on go install github.com/norwoodj/helm-docs/cmd/helm-docs
