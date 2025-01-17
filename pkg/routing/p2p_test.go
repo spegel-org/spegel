@@ -12,9 +12,43 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestP2PRouter(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	bs := NewStaticBootstrapper()
+	router, err := NewP2PRouter(context.TODO(), "localhost:0", bs, "9090")
+	require.NoError(t, err)
+
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return router.Run(gCtx)
+	})
+
+	err = router.Advertise(ctx, nil)
+	require.NoError(t, err)
+	peerCh, err := router.Resolve(ctx, "foo", true, 1)
+	require.NoError(t, err)
+	peer := <-peerCh
+	require.False(t, peer.IsValid())
+
+	err = router.Advertise(ctx, []string{"foo"})
+	require.NoError(t, err)
+	peerCh, err = router.Resolve(ctx, "foo", true, 1)
+	require.NoError(t, err)
+	peer = <-peerCh
+	require.True(t, peer.IsValid())
+
+	cancel()
+	err = g.Wait()
+	require.NoError(t, err)
+}
+
+func TestReady(t *testing.T) {
 	t.Parallel()
 
 	bs := NewStaticBootstrapper()

@@ -116,11 +116,11 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	err = r.host.Close()
+	if err != nil {
+		return err
+	}
 	return nil
-}
-
-func (r *P2PRouter) Close() error {
-	return r.host.Close()
 }
 
 func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
@@ -223,8 +223,13 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) 
 		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer bootstrapCancel()
 
+		// TODO (phillebaba): Consider if we should do a best effor bootstrap without host address.
+		hostAddrs := h.Addrs()
+		if len(hostAddrs) == 0 {
+			return nil
+		}
 		var hostPort ma.Component
-		ma.ForEach(h.Addrs()[0], func(c ma.Component) bool {
+		ma.ForEach(hostAddrs[0], func(c ma.Component) bool {
 			if c.Protocol().Code == ma.P_TCP {
 				hostPort = c
 				return false

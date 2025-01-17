@@ -173,10 +173,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	g.Go(func() error {
 		return router.Run(ctx)
 	})
-	g.Go(func() error {
-		<-ctx.Done()
-		return router.Close()
-	})
 
 	// State tracking
 	g.Go(func() error {
