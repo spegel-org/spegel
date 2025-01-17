@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#689](https://github.com/spegel-org/spegel/pull/689) Make cluster domain configurable.
 - [#696](https://github.com/spegel-org/spegel/pull/696) Fix DNS bootstrap self check.
 - [#702](https://github.com/spegel-org/spegel/pull/702) Refactor and add tests for p2p ready.
+- [#703](https://github.com/spegel-org/spegel/pull/703) Fix p2p router close panic and add tests.
 
 ### Security
 
