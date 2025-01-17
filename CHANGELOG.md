@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#693](https://github.com/spegel-org/spegel/pull/693) Add commonLabels for pods.
 - [#699](https://github.com/spegel-org/spegel/pull/699) Remove as mismatch error and replace with errors as.
 - [#701](https://github.com/spegel-org/spegel/pull/701) Rewrite e2e tests in Go.
+- [#704](https://github.com/spegel-org/spegel/pull/704) Update Containerd client to v2.
 
 ### Deprecated
 
