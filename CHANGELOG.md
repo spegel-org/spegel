@@ -11,15 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.0.30
+
+### Changed
+
 - [#694](https://github.com/spegel-org/spegel/pull/694) Replace IP in multi address with manet.
 - [#693](https://github.com/spegel-org/spegel/pull/693) Add commonLabels for pods.
 - [#699](https://github.com/spegel-org/spegel/pull/699) Remove as mismatch error and replace with errors as.
 - [#701](https://github.com/spegel-org/spegel/pull/701) Rewrite e2e tests in Go.
 - [#704](https://github.com/spegel-org/spegel/pull/704) Update Containerd client to v2.
-
-### Deprecated
-
-### Removed
 
 ### Fixed
 
@@ -27,8 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#696](https://github.com/spegel-org/spegel/pull/696) Fix DNS bootstrap self check.
 - [#702](https://github.com/spegel-org/spegel/pull/702) Refactor and add tests for p2p ready.
 - [#703](https://github.com/spegel-org/spegel/pull/703) Fix p2p router close panic and add tests.
-
-### Security
 
 ## v0.0.29
 
