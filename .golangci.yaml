@@ -54,8 +54,6 @@ linters-settings:
         alias: tlog
       - pkg: github.com/pelletier/go-toml/v2/unstable
         alias: tomlu
-      - pkg: github.com/Masterminds/semver/v3
-        alias: semver
       - pkg: github.com/multiformats/go-multiaddr/net
         alias: manet
       - pkg: github.com/multiformats/go-multiaddr
