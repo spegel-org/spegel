@@ -230,7 +230,7 @@ func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //noli
 		}
 		return routing.NewKubernetesBootstrapper(cs, cfg.LeaderElectionNamespace, cfg.LeaderElectionName), nil
 	case "dns":
-		return routing.NewDNSBootstrapper(cfg.DNSBootstrapDomain), nil
+		return routing.NewDNSBootstrapper(cfg.DNSBootstrapDomain, 10), nil
 	case "http":
 		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer), nil
 	default:

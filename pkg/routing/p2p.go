@@ -129,16 +129,25 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	if len(addrInfos) == 0 {
-		return true, nil
+		return false, nil
 	}
-	if r.kdht.RoutingTable().Size() == 0 {
-		err := r.kdht.Bootstrap(ctx)
+	if len(addrInfos) == 1 {
+		matches, err := hostMatches(*host.InfoFromHost(r.host), addrInfos[0])
 		if err != nil {
 			return false, err
 		}
-		return false, nil
+		if matches {
+			return true, nil
+		}
 	}
-	return true, nil
+	if r.kdht.RoutingTable().Size() > 0 {
+		return true, nil
+	}
+	err = r.kdht.Bootstrap(ctx)
+	if err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {

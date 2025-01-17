@@ -28,7 +28,8 @@ func TestStaticBootstrap(t *testing.T) {
 			Addrs: []ma.Multiaddr{manet.IP6Loopback},
 		},
 	}
-	bs := NewStaticBootstrapper(peers)
+	bs := NewStaticBootstrapper()
+	bs.SetPeers(peers)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	g, gCtx := errgroup.WithContext(ctx)
