@@ -98,7 +98,13 @@ spec:
           {{- with .Values.spegel.containerdContentPath }}
           - --containerd-content-path={{ . }}
           {{- end }}
+          - --not-ready-taint-remove={{ .Values.spegel.notReadyTaint.removeWhenReady }}
+          - --not-ready-taint-key={{ .Values.spegel.notReadyTaint.key }}
         env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         - name: NODE_IP
         {{- include "networking.nodeIp" . | nindent 10 }}
         ports:

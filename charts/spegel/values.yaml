@@ -171,6 +171,12 @@ spegel:
   # -- When true existing mirror configuration will be appended to instead of replaced.
   appendMirrors: false
 
+  notReadyTaint:
+    # -- If true remove the taint of the node when the registry is ready.
+    removeWhenReady: false
+    # -- Key of the taint to remove when spegel is ready.
+    key: spegel/not-ready
+
 verticalPodAutoscaler:
   # -- If true creates a Vertical Pod Autoscaler.
   enabled: false

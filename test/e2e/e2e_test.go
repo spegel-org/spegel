@@ -71,6 +71,10 @@ func TestE2E(t *testing.T) {
   capabilities = [push]`
 	command(ctx, t, fmt.Sprintf("docker exec %s-worker2 bash -c \"mkdir -p /etc/containerd/certs.d/docker.io; echo -e '%s' > /etc/containerd/certs.d/docker.io/hosts.toml\"", kindName, hostsToml))
 
+	// Taint nodes
+	t.Log("Tainting nodes")
+	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s taint nodes --all spegel/not-ready=true:NoSchedule", kcPath))
+
 	// Deploy Spegel.
 	t.Log("Deploying Spegel")
 	command(ctx, t, fmt.Sprintf("kind load docker-image --name %s %s", kindName, imageRef))
@@ -86,13 +90,18 @@ func TestE2E(t *testing.T) {
 	for _, node := range nodes {
 		command(ctx, t, fmt.Sprintf("docker exec %s-%s ctr -n k8s.io image tag %s ghcr.io/spegel-org/spegel@%s", kindName, node, imageRef, imageDigest))
 	}
-	command(ctx, t, fmt.Sprintf("helm --kubeconfig %s upgrade --timeout 60s --create-namespace --wait --install --namespace=\"spegel\" spegel ../../charts/spegel --set \"image.pullPolicy=Never\" --set \"image.digest=%s\" --set \"nodeSelector.spegel=schedule\"", kcPath, imageDigest))
+	command(ctx, t, fmt.Sprintf("helm --kubeconfig %s upgrade --timeout 60s --create-namespace --wait --install --namespace=\"spegel\" spegel ../../charts/spegel --set \"image.pullPolicy=Never\" --set \"image.digest=%s\" --set \"nodeSelector.spegel=schedule\" --set \"spegel.notReadyTaint.removeWhenReady=true\"", kcPath, imageDigest))
 	podOutput := command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
 	require.Len(t, strings.Split(podOutput, "\n"), 5)
 
 	// Verify that configuration has been backed up.
 	backupHostToml := command(ctx, t, fmt.Sprintf("docker exec %s-worker2 cat /etc/containerd/certs.d/_backup/docker.io/hosts.toml", kindName))
 	require.Equal(t, hostsToml, backupHostToml)
+
+	// Verify that spegel has removed the not-ready taint from nodes.
+	taintsTpl := `{{range .items}}{{$hasTaint := false}}{{range .spec.taints}}{{if eq .key "spegel/not-ready"}}{{$hasTaint = true}}{{end}}{{end}}{{if $hasTaint}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}`
+	nodeOutput := command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s get nodes -o go-template='%s'", kcPath, taintsTpl))
+	require.Empty(t, nodeOutput)
 
 	// Run conformance tests.
 	t.Log("Running conformance tests")
