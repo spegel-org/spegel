@@ -160,8 +160,12 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		Addr:    args.MetricsAddr,
 		Handler: mux,
 	}
+	metricsLn, err := net.Listen("tcp", metricsSrv.Addr)
+	if err != nil {
+		return err
+	}
 	g.Go(func() error {
-		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := metricsSrv.Serve(metricsLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
@@ -212,8 +216,12 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	if err != nil {
 		return err
 	}
+	regLn, err := net.Listen("tcp", regSrv.Addr)
+	if err != nil {
+		return err
+	}
 	g.Go(func() error {
-		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := regSrv.Serve(regLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
