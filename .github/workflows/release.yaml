@@ -65,10 +65,12 @@ jobs:
       - name: Publish Helm chart to GHCR
         id: helm
         run: |
+          HELM_VERSION=${{ steps.prep.outputs.VERSION }}
+          HELM_VERSION=${HELM_VERSION#v}
           rm charts/spegel/artifacthub-repo.yml
           yq -i '.image.digest = "${{ steps.build.outputs.DIGEST }}"' charts/spegel/values.yaml
-          helm package --app-version ${{ steps.prep.outputs.VERSION }} --version ${{ steps.prep.outputs.VERSION }} charts/spegel
-          helm push spegel-${{ steps.prep.outputs.VERSION }}.tgz oci://ghcr.io/spegel-org/helm-charts 2> .digest
+          helm package --app-version ${{ steps.prep.outputs.VERSION }} --version ${HELM_VERSION} charts/spegel
+          helm push spegel-${HELM_VERSION}.tgz oci://ghcr.io/spegel-org/helm-charts 2> .digest
           DIGEST=$(cat .digest | awk -F "[, ]+" '/Digest/{print $NF}')
           echo "DIGEST=${DIGEST}" >> $GITHUB_OUTPUT
       - name: Sign the Helm chart with Cosign
