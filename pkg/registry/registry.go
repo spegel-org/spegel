@@ -4,18 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
-	"net/http/httputil"
+	"net/netip"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
 
-	"github.com/spegel-org/spegel/internal/buffer"
 	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -27,11 +28,11 @@ const (
 )
 
 type Registry struct {
-	bufferPool       *buffer.BufferPool
+	client           *http.Client
+	bufferPool       *sync.Pool
 	log              logr.Logger
 	ociClient        oci.Client
 	router           routing.Router
-	transport        http.RoundTripper
 	localAddr        string
 	username         string
 	password         string
@@ -62,7 +63,9 @@ func WithResolveTimeout(resolveTimeout time.Duration) Option {
 
 func WithTransport(transport http.RoundTripper) Option {
 	return func(r *Registry) {
-		r.transport = transport
+		r.client = &http.Client{
+			Transport: transport,
+		}
 	}
 }
 
@@ -86,22 +89,30 @@ func WithBasicAuth(username, password string) Option {
 }
 
 func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *Registry {
+	bufferPool := &sync.Pool{
+		New: func() interface{} {
+			buf := make([]byte, 32*1024)
+			return &buf
+		},
+	}
 	r := &Registry{
 		ociClient:        ociClient,
 		router:           router,
 		resolveRetries:   3,
 		resolveTimeout:   20 * time.Millisecond,
 		resolveLatestTag: true,
-		bufferPool:       buffer.NewBufferPool(),
+		bufferPool:       bufferPool,
 	}
 	for _, opt := range opts {
 		opt(r)
 	}
-	if r.transport == nil {
+	if r.client == nil {
 		//nolint: errcheck // Ignore
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 		transport.MaxIdleConnsPerHost = 100
-		r.transport = transport
+		r.client = &http.Client{
+			Transport: transport,
+		}
 	}
 	return r
 }
@@ -279,36 +290,12 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist o
 
 			mirrorAttempts++
 
-			// Modify response returns and error on non 200 status code and NOP error handler skips response writing.
-			// If proxy fails no response is written and it is tried again against a different mirror.
-			// If the response writer has been written to it means that the request was properly proxied.
-			succeeded := false
-			scheme := "http"
-			if req.TLS != nil {
-				scheme = "https"
+			err := forwardRequest(r.client, r.bufferPool, req, rw, ipAddr)
+			if err != nil {
+				log.Error(err, "request to mirror failed", "attempt", mirrorAttempts, "path", req.URL.Path, "mirror", ipAddr)
+				continue
 			}
-			u := &url.URL{
-				Scheme: scheme,
-				Host:   ipAddr.String(),
-			}
-			proxy := httputil.NewSingleHostReverseProxy(u)
-			proxy.BufferPool = r.bufferPool
-			proxy.Transport = r.transport
-			proxy.ErrorHandler = func(_ http.ResponseWriter, _ *http.Request, err error) {
-				log.Error(err, "request to mirror failed", "attempt", mirrorAttempts)
-			}
-			proxy.ModifyResponse = func(resp *http.Response) error {
-				if resp.StatusCode != http.StatusOK {
-					return fmt.Errorf("expected mirror to respond with 200 OK but received: %s", resp.Status)
-				}
-				succeeded = true
-				return nil
-			}
-			proxy.ServeHTTP(rw, req)
-			if !succeeded {
-				break
-			}
-			log.V(4).Info("mirrored request", "url", u.String())
+			log.V(4).Info("mirrored request", "path", req.URL.Path, "mirror", ipAddr)
 			return
 		}
 	}
@@ -367,6 +354,60 @@ func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dist oci
 
 func (r *Registry) isExternalRequest(req *http.Request) bool {
 	return req.Host != r.localAddr
+}
+
+func forwardRequest(client *http.Client, bufferPool *sync.Pool, req *http.Request, rw http.ResponseWriter, addrPort netip.AddrPort) error {
+	// Do request to mirror.
+	forwardScheme := "http"
+	if req.TLS != nil {
+		forwardScheme = "https"
+	}
+	u := &url.URL{
+		Scheme:   forwardScheme,
+		Host:     addrPort.String(),
+		Path:     req.URL.Path,
+		RawQuery: req.URL.RawQuery,
+	}
+	forwardReq, err := http.NewRequestWithContext(req.Context(), req.Method, u.String(), nil)
+	if err != nil {
+		return err
+	}
+	copyHeader(forwardReq.Header, req.Header)
+	forwardResp, err := client.Do(forwardReq)
+	if err != nil {
+		return err
+	}
+	defer forwardResp.Body.Close()
+
+	// Clear body and try next if non 200 response.
+	if forwardResp.StatusCode != http.StatusOK {
+		_, err = io.Copy(io.Discard, forwardResp.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("expected mirror to respond with 200 OK but received: %s", forwardResp.Status)
+	}
+
+	// TODO (phillebaba): Is it possible to retry if copy fails half way through?
+	// Copy forward response to response writer.
+	copyHeader(rw.Header(), forwardResp.Header)
+	rw.WriteHeader(http.StatusOK)
+	//nolint: errcheck // Ignore
+	buf := bufferPool.Get().(*[]byte)
+	defer bufferPool.Put(buf)
+	_, err = io.CopyBuffer(rw, forwardResp.Body, *buf)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
 }
 
 func getClientIP(req *http.Request) string {
