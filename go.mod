@@ -23,7 +23,7 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/afero v1.12.0
 	github.com/stretchr/testify v1.10.0
-	go.etcd.io/bbolt v1.3.11
+	go.etcd.io/bbolt v1.4.0
 	golang.org/x/sync v0.10.0
 	google.golang.org/grpc v1.70.0
 	k8s.io/client-go v0.32.1
@@ -179,7 +179,7 @@ require (
 	github.com/spf13/cast v1.5.1 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/spf13/viper v1.16.0 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
