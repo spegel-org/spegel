@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - [#717](https://github.com/spegel-org/spegel/pull/717) Extend tests for distribution.
+- [#707](https://github.com/spegel-org/spegel/pull/707) Option to remove a taint when spegel is ready.
 
 ### Changed
 

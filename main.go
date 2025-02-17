@@ -47,8 +47,15 @@ type BootstrapConfig struct {
 	HTTPBootstrapPeer       string `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
 }
 
+type NotReadyTaintConfig struct {
+	NodeName            string `arg:"--node-name,env:NODE_NAME" help:"Name of the node."`
+	NotReadyTaintKey    string `arg:"--not-ready-taint-key,env:NOT_READY_TAINT_KEY" default:"spegel/not-ready" help:"Key of the taint to remove when spegel is ready."`
+	NotReadyTaintRemove bool   `arg:"--not-ready-taint-remove,env:NOT_READY_TAINT_REMOVE" help:"Remove the not-ready taint when spegel is ready."`
+}
+
 type RegistryCmd struct {
 	BootstrapConfig
+	NotReadyTaintConfig
 	ContainerdRegistryConfigPath string        `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
 	MetricsAddr                  string        `arg:"--metrics-addr,required,env:METRICS_ADDR" help:"address to serve metrics."`
 	LocalAddr                    string        `arg:"--local-addr,required,env:LOCAL_ADDR" help:"Address that the local Spegel instance will be reached at."`
@@ -116,6 +123,15 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	log := logr.FromContextOrDiscard(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
+	if args.NotReadyTaintRemove {
+		if args.NotReadyTaintKey == "" {
+			return errors.New("not-ready taint key must be set when remove not-ready taint is enabled")
+		}
+		if args.NodeName == "" {
+			return errors.New("node name must be set when remove not-ready taint is enabled")
+		}
+	}
+
 	// OCI Client
 	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.Registries, oci.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
@@ -144,8 +160,12 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		Addr:    args.MetricsAddr,
 		Handler: mux,
 	}
+	metricsLn, err := net.Listen("tcp", metricsSrv.Addr)
+	if err != nil {
+		return err
+	}
 	g.Go(func() error {
-		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := metricsSrv.Serve(metricsLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
@@ -196,8 +216,12 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	if err != nil {
 		return err
 	}
+	regLn, err := net.Listen("tcp", regSrv.Addr)
+	if err != nil {
+		return err
+	}
 	g.Go(func() error {
-		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := regSrv.Serve(regLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
@@ -208,6 +232,17 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		defer cancel()
 		return regSrv.Shutdown(shutdownCtx)
 	})
+
+	if args.NotReadyTaintRemove {
+		log.Info("removing not-ready taint", "key", args.NotReadyTaintKey)
+		cs, err := kubernetes.GetClientset(args.KubeconfigPath)
+		if err != nil {
+			return err
+		}
+		if err := kubernetes.RemoveNodeTaint(ctx, cs, args.NodeName, args.NotReadyTaintKey); err != nil {
+			return err
+		}
+	}
 
 	log.Info("running Spegel", "registry", args.RegistryAddr, "router", args.RouterAddr)
 	err = g.Wait()
