@@ -74,8 +74,10 @@ func TestE2E(t *testing.T) {
 	// Deploy Spegel.
 	t.Log("Deploying Spegel")
 	command(ctx, t, fmt.Sprintf("kind load docker-image --name %s %s", kindName, imageRef))
-	imageDigest := command(ctx, t, fmt.Sprintf("docker exec %s-worker crictl inspecti -o 'go-template' --template '{{ index .status.repoDigests 0 }}' %s", kindName, imageRef))
-	imageDigest = strings.Split(imageDigest, "@")[1]
+	imagesOutput := command(ctx, t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io images ls name==%s", kindName, imageRef))
+	_, imagesOutput, ok := strings.Cut(imagesOutput, "\n")
+	require.True(t, ok)
+	imageDigest := strings.Split(imagesOutput, " ")[2]
 	nodes := []string{
 		"control-plane",
 		"worker",
