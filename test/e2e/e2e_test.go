@@ -46,7 +46,7 @@ func TestE2E(t *testing.T) {
 	// Pull test images.
 	g, gCtx := errgroup.WithContext(ctx)
 	images := []string{
-		"ghcr.io/spegel-org/conformance:75d2816",
+		"ghcr.io/spegel-org/conformance:583e014",
 		"docker.io/library/nginx:1.23.0",
 		"docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b",
 		"mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416",
