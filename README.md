@@ -25,6 +25,13 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 
 Read [contribution guidelines](./CONTRIBUTING.md) for instructions on how to build and test Spegel.
 
+## Community 
+[Slack](https://communityinviter.com/apps/kubernetes/community) - Join us in the Kubernetes slack in
+the #spegel channel
+
+[Community Meeting](https://spegel.dev/project/community/#meeting) - Every Tuesday at 17:00 CET ask
+questions on issues, roadmap, and meet the maintainers. 
+
 ## Acknowledgements
 
 Spegel was initially developed at [Xenit AB](https://xenit.se/).
