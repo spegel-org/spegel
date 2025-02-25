@@ -55,8 +55,8 @@ func WithContentPath(path string) Option {
 	}
 }
 
-func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL, opts ...Option) (*Containerd, error) {
-	listFilter, eventFilter := createFilters(registries)
+func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistries []url.URL, opts ...Option) (*Containerd, error) {
+	listFilter, eventFilter := createFilters(mirroredRegistries)
 	c := &Containerd{
 		clientGetter: func() (*client.Client, error) {
 			return client.New(sock, client.WithDefaultNamespace(namespace))
@@ -332,12 +332,17 @@ func getEventImage(e typeurl.Any) (string, EventType, error) {
 	}
 }
 
-func createFilters(registries []url.URL) (string, string) {
+func createFilters(mirroredRegistries []url.URL) (string, string) {
 	registryHosts := []string{}
-	for _, registry := range registries {
+	for _, registry := range mirroredRegistries {
 		registryHosts = append(registryHosts, strings.ReplaceAll(registry.Host, `.`, `\\.`))
 	}
 	listFilter := fmt.Sprintf(`name~="^(%s)/"`, strings.Join(registryHosts, "|"))
+	if len(registryHosts) == 0 {
+		// Filter images that do not have a registry in it's reference,
+		// as we cant mirror images without registries.
+		listFilter = `name~="^.+/"`
+	}
 	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update|/images/delete",event.%s`, listFilter)
 	return listFilter, eventFilter
 }
@@ -345,9 +350,9 @@ func createFilters(registries []url.URL) (string, string) {
 // Refer to containerd registry configuration documentation for more information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveTags, prependExisting bool) error {
+func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, mirroredRegistries, mirrorTargets []url.URL, resolveTags, prependExisting bool) error {
 	log := logr.FromContextOrDiscard(ctx)
-	err := validateRegistries(registryURLs)
+	err := validateRegistries(mirroredRegistries)
 	if err != nil {
 		return err
 	}
@@ -364,27 +369,35 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		return err
 	}
 
-	// Write mirror configuration
 	capabilities := []string{"pull"}
 	if resolveTags {
 		capabilities = append(capabilities, "resolve")
 	}
-	for _, registryURL := range registryURLs {
-		templatedHosts, err := templateHosts(registryURL, mirrorURLs, capabilities)
+	if len(mirroredRegistries) == 0 {
+		mirroredRegistries = append(mirroredRegistries, url.URL{})
+	}
+
+	// Write mirror configuration
+	for _, mirroredRegistry := range mirroredRegistries {
+		templatedHosts, err := templateHosts(mirroredRegistry, mirrorTargets, capabilities)
 		if err != nil {
 			return err
 		}
 		if prependExisting {
-			existingHosts, err := existingHosts(fs, configPath, registryURL)
+			existingHosts, err := existingHosts(fs, configPath, mirroredRegistry)
 			if err != nil {
 				return err
 			}
 			if existingHosts != "" {
 				templatedHosts = templatedHosts + "\n\n" + existingHosts
 			}
-			log.Info("prepending to existing Containerd mirror configuration", "registry", registryURL.String())
+			log.Info("prepending to existing Containerd mirror configuration", "registry", mirroredRegistry.String())
 		}
-		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
+		hostComp := mirroredRegistry.Host
+		if hostComp == "" {
+			hostComp = "_default"
+		}
+		fp := path.Join(configPath, hostComp, "hosts.toml")
 		err = fs.MkdirAll(path.Dir(fp), 0o755)
 		if err != nil {
 			return err
@@ -393,7 +406,7 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		if err != nil {
 			return err
 		}
-		log.Info("added Containerd mirror configuration", "registry", registryURL.String(), "path", fp)
+		log.Info("added Containerd mirror configuration", "registry", mirroredRegistry.String(), "path", fp)
 	}
 	return nil
 }
@@ -464,24 +477,23 @@ func clearConfig(fs afero.Fs, configPath string) error {
 	return nil
 }
 
-func templateHosts(registryURL url.URL, mirrorURLs []url.URL, capabilities []string) (string, error) {
-	server := registryURL.String()
-	if registryURL.String() == "https://docker.io" {
+func templateHosts(mirroredRegistry url.URL, mirrorTargets []url.URL, capabilities []string) (string, error) {
+	server := mirroredRegistry.String()
+	if mirroredRegistry.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
 	}
-	capabilitiesStr := strings.Join(capabilities, "', '")
-	capabilitiesStr = fmt.Sprintf("['%s']", capabilitiesStr)
+
 	hc := struct {
-		Server       string
-		Capabilities string
-		MirrorURLs   []url.URL
+		Server        string
+		Capabilities  string
+		MirrorTargets []url.URL
 	}{
-		Server:       server,
-		Capabilities: capabilitiesStr,
-		MirrorURLs:   mirrorURLs,
+		Server:        server,
+		Capabilities:  fmt.Sprintf("['%s']", strings.Join(capabilities, "', '")),
+		MirrorTargets: mirrorTargets,
 	}
-	tmpl, err := template.New("").Parse(`server = '{{ .Server }}'
-{{ range .MirrorURLs }}
+	tmpl, err := template.New("").Parse(`{{- with .Server }}server = '{{ . }}'{{ end }}
+{{ range .MirrorTargets }}
 [host.'{{ .String }}']
 capabilities = {{ $.Capabilities }}
 {{ end }}`)
@@ -500,8 +512,8 @@ type hostFile struct {
 	Hosts map[string]interface{} `toml:"host"`
 }
 
-func existingHosts(fs afero.Fs, configPath string, registryURL url.URL) (string, error) {
-	fp := path.Join(configPath, backupDir, registryURL.Host, "hosts.toml")
+func existingHosts(fs afero.Fs, configPath string, mirroredRegistry url.URL) (string, error) {
+	fp := path.Join(configPath, backupDir, mirroredRegistry.Host, "hosts.toml")
 	b, err := afero.ReadFile(fs, fp)
 	if errors.Is(err, afero.ErrFileNotFound) {
 		return "", nil
