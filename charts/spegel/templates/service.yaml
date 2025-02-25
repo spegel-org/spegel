@@ -24,7 +24,7 @@ metadata:
     {{- include "spegel.labels" . | nindent 4 }}
   {{- if .Values.service.registry.topologyAwareHintsEnabled }}
   annotations:
-    service.kubernetes.io/topology-aware-hints: auto
+    service.kubernetes.io/topology-mode: "auto"
   {{- end }}
 spec:
   type: NodePort
