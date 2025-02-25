@@ -345,7 +345,7 @@ func createFilters(registries []url.URL) (string, string) {
 // Refer to containerd registry configuration documentation for more information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveTags, appendToBackup bool) error {
+func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveTags, prependExisting bool) error {
 	log := logr.FromContextOrDiscard(ctx)
 	err := validateRegistries(registryURLs)
 	if err != nil {
@@ -374,7 +374,7 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 		if err != nil {
 			return err
 		}
-		if appendToBackup {
+		if prependExisting {
 			existingHosts, err := existingHosts(fs, configPath, registryURL)
 			if err != nil {
 				return err
@@ -382,7 +382,7 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 			if existingHosts != "" {
 				templatedHosts = templatedHosts + "\n\n" + existingHosts
 			}
-			log.Info("appending to existing Containerd mirror configuration", "registry", registryURL.String())
+			log.Info("prepending to existing Containerd mirror configuration", "registry", registryURL.String())
 		}
 		fp := path.Join(configPath, registryURL.Host, "hosts.toml")
 		err = fs.MkdirAll(path.Dir(fp), 0o755)

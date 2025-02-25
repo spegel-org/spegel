@@ -168,8 +168,8 @@ spegel:
   resolveTags: true
   # -- When true latest tags will be resolved to digests.
   resolveLatestTag: true
-  # -- When true existing mirror configuration will be appended to instead of replaced.
-  appendMirrors: false
+  # -- When true existing mirror configuration will be kept and Spegel will prepend it's configuration.
+  prependExisting: false
 
 verticalPodAutoscaler:
   # -- If true creates a Vertical Pod Autoscaler.

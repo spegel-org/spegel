@@ -46,7 +46,6 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | serviceMonitor.relabelings | list | `[]` | List of relabeling rules to apply the target’s metadata labels. |
 | serviceMonitor.scrapeTimeout | string | `"30s"` | Prometheus scrape interval timeout. |
 | spegel.additionalMirrorRegistries | list | `[]` | Additional target mirror registries other than Spegel. |
-| spegel.appendMirrors | bool | `false` | When true existing mirror configuration will be appended to instead of replaced. |
 | spegel.containerdContentPath | string | `"/var/lib/containerd/io.containerd.content.v1.content"` | Path to Containerd content store.. |
 | spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
@@ -55,6 +54,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | spegel.logLevel | string | `"INFO"` | Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR. |
 | spegel.mirrorResolveRetries | int | `3` | Max ammount of mirrors to attempt. |
 | spegel.mirrorResolveTimeout | string | `"20ms"` | Max duration spent finding a mirror. |
+| spegel.prependExisting | bool | `false` | When true existing mirror configuration will be kept and Spegel will prepend it's configuration. |
 | spegel.registries | list | `["https://cgr.dev","https://docker.io","https://ghcr.io","https://quay.io","https://mcr.microsoft.com","https://public.ecr.aws","https://gcr.io","https://registry.k8s.io","https://k8s.gcr.io","https://lscr.io"]` | Registries for which mirror configuration will be created. |
 | spegel.resolveLatestTag | bool | `true` | When true latest tags will be resolved to digests. |
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |

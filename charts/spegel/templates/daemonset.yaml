@@ -58,7 +58,7 @@ spec:
           {{- end }}
           {{- end }}
           - --resolve-tags={{ .Values.spegel.resolveTags }}
-          - --append-mirrors={{ .Values.spegel.appendMirrors }}
+          - --prepend-existing={{ .Values.spegel.prependExisting }}
         env:
         - name: NODE_IP
         {{- include "networking.nodeIp" . | nindent 10 }}
