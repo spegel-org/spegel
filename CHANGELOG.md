@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#747](https://github.com/spegel-org/spegel/pull/747) Update Go to 1.23.6.
+
 ### Deprecated
 
 ### Removed
