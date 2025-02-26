@@ -99,6 +99,20 @@ spec:
           - --containerd-content-path={{ . }}
           {{- end }}
         env:
+        {{- if ((.Values.resources).limits).cpu }}
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+              divisor: 1
+        {{- end }}
+        {{- if ((.Values.resources).limits).memory }}
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+              divisor: 1
+        {{- end }}
         - name: NODE_IP
         {{- include "networking.nodeIp" . | nindent 10 }}
         ports:
