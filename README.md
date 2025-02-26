@@ -1,3 +1,6 @@
+> [!NOTE]  
+> We’ve started hosting community meetings every Tuesday at 17:00 CET. Find out how to participate at https://spegel.dev/project/community/#meeting.
+
 # Spegel
 
 Spegel, mirror in Swedish, is a stateless cluster local OCI registry mirror.
