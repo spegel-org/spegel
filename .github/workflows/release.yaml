@@ -44,7 +44,7 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       - name: Generate images meta
         id: meta
-        uses: docker/metadata-action@369eb591f429131d6889c46b94e711f089e6ca96 #v5.6.1
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 #v5.7.0
         with:
           images: ghcr.io/spegel-org/spegel
           tags: type=raw,value=${{ steps.prep.outputs.VERSION }}
