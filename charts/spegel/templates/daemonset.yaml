@@ -50,8 +50,8 @@ spec:
           {{- end }}
           {{- end }}
           - --mirror-targets
-          - http://$(NODE_IP):{{ .Values.service.registry.hostPort }}
           - http://$(NODE_IP):{{ .Values.service.registry.nodePort }}
+          - http://$(NODE_IP):{{ .Values.service.registry.hostPort }}
           {{- with .Values.spegel.additionalMirrorRegistries }}
           {{- range . }}
           - {{ . | quote }}
