@@ -1,0 +1,35 @@
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+networking:
+  kubeProxyMode: "ipvs"
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = "/etc/containerd/certs.d"
+  # Discarding unpacked layers causes them to be removed, which defeats the purpose of a local cache.
+  # Additioanlly nodes will report having layers which no long exist.
+  # This is by default false in containerd.
+  [plugins."io.containerd.grpc.v1.cri".containerd]
+    discard_unpacked_layers = false
+  # This is just to make sure that images are not shared between namespaces.
+  [plugins."io.containerd.metadata.v1.bolt"]
+    content_sharing_policy = "isolated"
+nodes:
+  - role: control-plane
+    labels:
+      spegel: schedule
+  - role: worker
+    labels:
+      spegel: schedule
+  - role: worker
+    labels:
+      spegel: schedule
+      test: true
+  - role: worker
+    labels:
+      spegel: schedule
+      test: true
+  - role: worker
+    labels:
+      spegel: schedule
+      test: true

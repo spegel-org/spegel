@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nginx
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-tag
+  namespace: nginx
+  labels:
+    app: nginx-tag
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-tag
+  template:
+    metadata:
+      labels:
+        app: nginx-tag
+    spec:
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx:1.23.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        test: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-digest
+  namespace: nginx
+  labels:
+    app: nginx-digest
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-digest
+  template:
+    metadata:
+      labels:
+        app: nginx-digest
+    spec:
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b # 1.22.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        test: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-tag-and-digest
+  namespace: nginx
+  labels:
+    app: nginx-tag-and-digest
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-tag-and-digest
+  template:
+    metadata:
+      labels:
+        app: nginx-tag-and-digest
+    spec:
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        test: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-not-present
+  namespace: nginx
+  labels:
+    app: nginx-not-present
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-not-present
+  template:
+    metadata:
+      labels:
+        app: nginx-not-present
+    spec:
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx:1.1.0-bullseye-perl
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        test: "true"

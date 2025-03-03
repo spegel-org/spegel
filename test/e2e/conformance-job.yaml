@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: conformance
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: conformance
+        image: ghcr.io/spegel-org/conformance:75d2816
+        env:
+        - name: OCI_TEST_PULL
+          value: "1"
+        - name: "OCI_ROOT_URL"
+          value: "http://spegel-registry.spegel.svc.cluster.local.:5000"
+        - name: "OCI_MIRROR_URL"
+          value: "docker.io"
+        - name: "OCI_NAMESPACE"
+          value: "library/nginx"
+        - name: "OCI_TAG_NAME"
+          value: "1.23.0"
+        - name: "OCI_MANIFEST_DIGEST"
+          value: "sha256:db345982a2f2a4257c6f699a499feb1d79451a1305e8022f16456ddc3ad6b94c"
+        - name: "OCI_BLOB_DIGEST"
+          value: "sha256:461246efe0a75316d99afdbf348f7063b57b0caeee8daab775f1f08152ea36f4"
