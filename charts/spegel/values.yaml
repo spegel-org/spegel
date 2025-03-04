@@ -156,6 +156,9 @@ spegel:
   mirrorResolveTimeout: "20ms"
   # -- Path to Containerd socket.
   containerdSock: "/run/containerd/containerd.sock"
+  # -- Whether to mount the Containerd socket as directory (true) or as a single socket file (false).
+  # Directory mounts are able to survive Containerd restarts, but might raise security concerns depending on your environment.
+  containerdSockDirMount: false
   # -- Containerd namespace where images are stored.
   containerdNamespace: "k8s.io"
   # -- Path to Containerd mirror configuration.
