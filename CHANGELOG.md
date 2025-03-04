@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#747](https://github.com/spegel-org/spegel/pull/747) Update Go to 1.23.6.
 - [#750](https://github.com/spegel-org/spegel/pull/750) Rename append mirrors to prepend existing.
 - [#373](https://github.com/spegel-org/spegel/pull/373) Apply mirror configuration on all registires by default.
+- [#766](https://github.com/spegel-org/spegel/pull/766) Fix mirror order to prioritize NodePort over HostPort
 
 ### Deprecated
 
