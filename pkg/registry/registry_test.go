@@ -14,6 +14,81 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
+func TestBasicAuth(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		username    string
+		password    string
+		reqUsername string
+		reqPassword string
+		expected    int
+	}{
+		{
+			name:     "no registry authentication",
+			expected: http.StatusOK,
+		},
+		{
+			name:        "unnecessary authentication",
+			reqUsername: "foo",
+			reqPassword: "bar",
+			expected:    http.StatusOK,
+		},
+		{
+			name:        "correct authentication",
+			username:    "foo",
+			password:    "bar",
+			reqUsername: "foo",
+			reqPassword: "bar",
+			expected:    http.StatusOK,
+		},
+		{
+			name:        "invalid username",
+			username:    "foo",
+			password:    "bar",
+			reqUsername: "wrong",
+			reqPassword: "bar",
+			expected:    http.StatusUnauthorized,
+		},
+		{
+			name:        "invalid password",
+			username:    "foo",
+			password:    "bar",
+			reqUsername: "foo",
+			reqPassword: "wrong",
+			expected:    http.StatusUnauthorized,
+		},
+		{
+			name:     "missing authentication",
+			username: "foo",
+			password: "bar",
+			expected: http.StatusUnauthorized,
+		},
+		{
+			name:     "missing authentication",
+			username: "foo",
+			password: "bar",
+			expected: http.StatusUnauthorized,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			reg := NewRegistry(nil, nil, WithBasicAuth(tt.username, tt.password))
+			rw := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "http://localhost/v2", nil)
+			req.SetBasicAuth(tt.reqUsername, tt.reqPassword)
+			m, err := mux.NewServeMux(reg.handle)
+			require.NoError(t, err)
+			m.ServeHTTP(rw, req)
+
+			require.Equal(t, tt.expected, rw.Result().StatusCode)
+		})
+	}
+}
+
 func TestMirrorHandler(t *testing.T) {
 	t.Parallel()
 

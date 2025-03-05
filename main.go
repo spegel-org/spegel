@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -104,8 +105,12 @@ func run(ctx context.Context, args *Arguments) error {
 }
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
+	username, password, err := loadBasicAuth()
+	if err != nil {
+		return err
+	}
 	fs := afero.NewOsFs()
-	err := oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.MirroredRegistries, args.MirrorTargets, args.ResolveTags, args.PrependExisting)
+	err = oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.MirroredRegistries, args.MirrorTargets, args.ResolveTags, args.PrependExisting, username, password)
 	if err != nil {
 		return err
 	}
@@ -115,6 +120,11 @@ func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	log := logr.FromContextOrDiscard(ctx)
 	g, ctx := errgroup.WithContext(ctx)
+
+	username, password, err := loadBasicAuth()
+	if err != nil {
+		return err
+	}
 
 	// OCI Client
 	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.MirroredRegistries, oci.WithContentPath(args.ContainerdContentPath))
@@ -190,6 +200,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithLocalAddress(args.LocalAddr),
 		registry.WithLogger(log),
+		registry.WithBasicAuth(username, password),
 	}
 	reg := registry.NewRegistry(ociClient, router, registryOpts...)
 	regSrv, err := reg.Server(args.RegistryAddr)
@@ -232,4 +243,17 @@ func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //noli
 	default:
 		return nil, fmt.Errorf("unknown bootstrap kind %s", cfg.BootstrapKind)
 	}
+}
+
+func loadBasicAuth() (string, string, error) {
+	dirPath := "/etc/secrets/basic-auth"
+	username, err := os.ReadFile(filepath.Join(dirPath, "username"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", "", err
+	}
+	password, err := os.ReadFile(filepath.Join(dirPath, "password"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", "", err
+	}
+	return string(username), string(password), nil
 }

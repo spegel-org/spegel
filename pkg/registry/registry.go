@@ -33,6 +33,8 @@ type Registry struct {
 	router           routing.Router
 	transport        http.RoundTripper
 	localAddr        string
+	username         string
+	password         string
 	resolveRetries   int
 	resolveTimeout   time.Duration
 	resolveLatestTag bool
@@ -73,6 +75,13 @@ func WithLocalAddress(localAddr string) Option {
 func WithLogger(log logr.Logger) Option {
 	return func(r *Registry) {
 		r.log = log
+	}
+}
+
+func WithBasicAuth(username, password string) Option {
+	return func(r *Registry) {
+		r.username = username
+		r.password = password
 	}
 }
 
@@ -170,6 +179,15 @@ func (r *Registry) readyHandler(rw mux.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) string {
+	// Check basic authentication
+	if r.username != "" || r.password != "" {
+		username, password, _ := req.BasicAuth()
+		if r.username != username || r.password != password {
+			rw.WriteError(http.StatusUnauthorized, errors.New("invalid basic authentication"))
+			return "registry"
+		}
+	}
+
 	// Quickly return 200 for /v2 to indicate that registry supports v2.
 	if path.Clean(req.URL.Path) == "/v2" {
 		rw.WriteHeader(http.StatusOK)
