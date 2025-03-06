@@ -133,6 +133,9 @@ grafanaDashboard:
 # -- Priority class name to use for the pod.
 priorityClassName: system-node-critical
 
+# -- Name of secret containing basic authentication credentials for registry.
+basicAuthSecretName: ""
+
 spegel:
   # -- Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR.
   logLevel: "INFO"

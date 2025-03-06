@@ -3,6 +3,7 @@ package oci
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -350,7 +351,7 @@ func createFilters(mirroredRegistries []url.URL) (string, string) {
 // Refer to containerd registry configuration documentation for more information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, mirroredRegistries, mirrorTargets []url.URL, resolveTags, prependExisting bool) error {
+func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, mirroredRegistries, mirrorTargets []url.URL, resolveTags, prependExisting bool, username, password string) error {
 	log := logr.FromContextOrDiscard(ctx)
 	err := validateRegistries(mirroredRegistries)
 	if err != nil {
@@ -379,7 +380,7 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 
 	// Write mirror configuration
 	for _, mirroredRegistry := range mirroredRegistries {
-		templatedHosts, err := templateHosts(mirroredRegistry, mirrorTargets, capabilities)
+		templatedHosts, err := templateHosts(mirroredRegistry, mirrorTargets, capabilities, username, password)
 		if err != nil {
 			return err
 		}
@@ -477,13 +478,21 @@ func clearConfig(fs afero.Fs, configPath string) error {
 	return nil
 }
 
-func templateHosts(mirroredRegistry url.URL, mirrorTargets []url.URL, capabilities []string) (string, error) {
+func templateHosts(mirroredRegistry url.URL, mirrorTargets []url.URL, capabilities []string, username, password string) (string, error) {
 	server := mirroredRegistry.String()
 	if mirroredRegistry.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
 	}
 
+	authorization := ""
+	if username != "" || password != "" {
+		authorization = username + ":" + password
+		authorization = base64.StdEncoding.EncodeToString([]byte(authorization))
+		authorization = "Basic " + authorization
+	}
+
 	hc := struct {
+		Authorization string
 		Server        string
 		Capabilities  string
 		MirrorTargets []url.URL
@@ -491,11 +500,17 @@ func templateHosts(mirroredRegistry url.URL, mirrorTargets []url.URL, capabiliti
 		Server:        server,
 		Capabilities:  fmt.Sprintf("['%s']", strings.Join(capabilities, "', '")),
 		MirrorTargets: mirrorTargets,
+		Authorization: authorization,
 	}
 	tmpl, err := template.New("").Parse(`{{- with .Server }}server = '{{ . }}'{{ end }}
+{{- $authorization := .Authorization }}
 {{ range .MirrorTargets }}
 [host.'{{ .String }}']
 capabilities = {{ $.Capabilities }}
+{{- if $authorization }}
+[host.'{{ .String }}'.header]
+Authorization = '{{ $authorization }}'
+{{- end }}
 {{ end }}`)
 	if err != nil {
 		return "", err

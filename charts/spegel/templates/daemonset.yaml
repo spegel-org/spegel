@@ -67,6 +67,11 @@ spec:
         volumeMounts:
           - name: containerd-config
             mountPath: {{ .Values.spegel.containerdRegistryConfigPath }}
+          {{- if .Values.basicAuthSecretName }}
+          - name: basic-auth
+            mountPath: "/etc/secrets/basic-auth"
+            readOnly: true
+          {{- end }}
       {{- end }}
       containers:
       - name: registry
@@ -139,6 +144,11 @@ spec:
             path: /healthz
             port: registry
         volumeMounts:
+          {{- if .Values.basicAuthSecretName }}
+          - name: basic-auth
+            mountPath: "/etc/secrets/basic-auth"
+            readOnly: true
+          {{- end }}
           - name: containerd-sock
             mountPath: {{ .Values.spegel.containerdSock }}
           {{- with .Values.spegel.containerdContentPath }}
@@ -149,6 +159,11 @@ spec:
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
+        {{- with .Values.basicAuthSecretName }}
+        - name: basic-auth
+          secret:
+            secretName: {{ . }}
+        {{- end }}
         - name: containerd-sock
           hostPath:
             path: {{ .Values.spegel.containerdSock }}
