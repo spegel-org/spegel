@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	tlog "github.com/go-logr/logr/testing"
@@ -28,6 +29,10 @@ func TestP2PRouter(t *testing.T) {
 	g.Go(func() error {
 		return router.Run(gCtx)
 	})
+
+	// TODO (phillebaba): There is a test flake that sometime occurs sometimes if code runs too fast.
+	// Flake results in a peer being returned without an address. Revisit in Go 1.24 to see if this can be solved better.
+	time.Sleep(1 * time.Second)
 
 	err = router.Advertise(ctx, nil)
 	require.NoError(t, err)
