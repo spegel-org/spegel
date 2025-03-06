@@ -100,7 +100,7 @@ func TestE2E(t *testing.T) {
 	t.Log("Running conformance tests")
 	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s create namespace conformance --dry-run=client -o yaml | kubectl --kubeconfig %s apply -f -", kcPath, kcPath))
 	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s apply --namespace conformance -f ./testdata/conformance-job.yaml", kcPath))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --for=condition=complete job/conformance", kcPath))
+	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 60s --for=condition=complete job/conformance", kcPath))
 
 	// Remove Spegel from the last node to test that the mirror fallback is working.
 	workerPod := command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=%s-worker4", kcPath, kindName))
