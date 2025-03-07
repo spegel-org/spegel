@@ -67,7 +67,7 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 	metrics.AdvertisedImageTags.Reset()
 	metrics.AdvertisedImageDigests.Reset()
 	errs := []error{}
-	targets := map[string]interface{}{}
+	targets := map[string]any{}
 	for _, img := range imgs {
 		_, skipDigests := targets[img.Digest.String()]
 		// Handle the list re-sync as update events; this will also prevent the
