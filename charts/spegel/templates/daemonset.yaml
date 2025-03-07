@@ -150,7 +150,7 @@ spec:
             readOnly: true
           {{- end }}
           - name: containerd-sock
-            mountPath: {{ .Values.spegel.containerdSock }}
+            mountPath: {{ .Values.spegel.containerdSockDirMount | ternary (.Values.spegel.containerdSock | dir) .Values.spegel.containerdSock }}
           {{- with .Values.spegel.containerdContentPath }}
           - name: containerd-content
             mountPath: {{ . }}
@@ -166,8 +166,8 @@ spec:
         {{- end }}
         - name: containerd-sock
           hostPath:
-            path: {{ .Values.spegel.containerdSock }}
-            type: Socket
+            path: {{ .Values.spegel.containerdSockDirMount | ternary (.Values.spegel.containerdSock | dir) .Values.spegel.containerdSock }}
+            type: {{ .Values.spegel.containerdSockDirMount | ternary "Directory" "Socket" }}
         {{- with .Values.spegel.containerdContentPath }}
         - name: containerd-content
           hostPath:
