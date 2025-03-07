@@ -524,7 +524,7 @@ Authorization = '{{ $authorization }}'
 }
 
 type hostFile struct {
-	Hosts map[string]interface{} `toml:"host"`
+	Hosts map[string]any `toml:"host"`
 }
 
 func existingHosts(fs afero.Fs, configPath string, mirroredRegistry url.URL) (string, error) {
@@ -567,7 +567,7 @@ func existingHosts(fs afero.Fs, configPath string, mirroredRegistry url.URL) (st
 	ehs := []string{}
 	for _, h := range hosts {
 		data := hostFile{
-			Hosts: map[string]interface{}{
+			Hosts: map[string]any{
 				h: hf.Hosts[h],
 			},
 		}

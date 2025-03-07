@@ -63,7 +63,7 @@ var _ Bootstrapper = &KubernetesBootstrapper{}
 
 type KubernetesBootstrapper struct {
 	cs                      kubernetes.Interface
-	initCh                  chan interface{}
+	initCh                  chan any
 	leaderElectionNamespace string
 	leaderElectioName       string
 	id                      string
@@ -75,7 +75,7 @@ func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) 
 		leaderElectionNamespace: namespace,
 		leaderElectioName:       name,
 		cs:                      cs,
-		initCh:                  make(chan interface{}),
+		initCh:                  make(chan any),
 	}
 }
 

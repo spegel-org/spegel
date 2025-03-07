@@ -208,7 +208,7 @@ func TestGetEventImage(t *testing.T) {
 
 	tests := []struct {
 		name              string
-		data              interface{}
+		data              any
 		expectedErr       string
 		expectedName      string
 		expectedEventType EventType

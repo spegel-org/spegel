@@ -138,7 +138,7 @@ func (r *Registry) handle(rw mux.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		kvs := []interface{}{
+		kvs := []any{
 			"path", req.URL.Path,
 			"status", rw.Status(),
 			"method", req.Method,
