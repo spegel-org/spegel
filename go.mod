@@ -1,6 +1,7 @@
 module github.com/spegel-org/spegel
 
 go 1.23.6
+toolchain go1.24.1
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
@@ -26,8 +27,8 @@ require (
 	go.etcd.io/bbolt v1.4.0
 	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.71.0
-	k8s.io/client-go v0.32.2
-	k8s.io/cri-api v0.32.2
+	k8s.io/client-go v0.32.3
+	k8s.io/cri-api v0.32.3
 	k8s.io/klog/v2 v2.130.1
 )
 
@@ -213,8 +214,8 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v3 v3.15.2 // indirect
-	k8s.io/api v0.32.2 // indirect
-	k8s.io/apimachinery v0.32.2 // indirect
+	k8s.io/api v0.32.3 // indirect
+	k8s.io/apimachinery v0.32.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
 	lukechampine.com/blake3 v1.4.0 // indirect
