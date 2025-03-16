@@ -103,6 +103,7 @@ spec:
           {{- with .Values.spegel.containerdContentPath }}
           - --containerd-content-path={{ . }}
           {{- end }}
+          - --debug-web-enabled={{ .Values.spegel.debugWebEnabled }}
         env:
         {{- if ((.Values.resources).limits).cpu }}
         - name: GOMAXPROCS

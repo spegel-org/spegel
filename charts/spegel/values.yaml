@@ -165,6 +165,8 @@ spegel:
   resolveLatestTag: true
   # -- When true existing mirror configuration will be kept and Spegel will prepend it's configuration.
   prependExisting: false
+  # -- When true enables debug web page.
+  debugWebEnabled: false
 
 verticalPodAutoscaler:
   # -- If true creates a Vertical Pod Autoscaler.

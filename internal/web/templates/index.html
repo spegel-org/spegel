@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Spegel Debug</title>
+	<link rel="icon" href="https://spegel.dev/favicon.svg" type="image/svg+xml">
+	<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			font-family: ui-sans-serif, system-ui, sans-serif, "apple color emoji", "segoe ui emoji", "segoe ui symbol", "noto color emoji";
+			font-size: 16px;
+		}
+
+		.container {
+			max-width: 1366px;
+			width: 100%;
+			margin: 0 auto;
+			padding: 0 20px;
+		}
+
+		.table-container {
+			max-width: 100%;
+			overflow-x: auto;
+		}
+
+		table {
+			width: 100%;
+			border-collapse: collapse;
+		}
+
+		th,
+		td {
+			text-align: left;
+			padding: 8px;
+			border: 1px solid #ddd;
+		}
+
+		th {
+			background-color: #f4f4f4;
+			font-weight: bold;
+		}
+
+		.stat-container {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+			gap: 16px;
+			width: 100%;
+			margin-bottom: 16px;
+		}
+
+		.stat-box {
+			padding: 16px;
+			border-radius: 8px;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+			text-align: center;
+		}
+
+		.stat-title {
+			font-size: 14px;
+			color: #555;
+		}
+
+		.stat-value {
+			font-size: 24px;
+			font-weight: bold;
+			margin-top: 8px;
+		}
+
+		.measure-container {
+			padding: 16px;
+			border-radius: 8px;
+			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+		}
+
+		input[type="text"],
+		button {
+			font-size: 16px;
+			height: 2em;
+			padding: 0 8px;
+			border: 1px solid #ccc;
+		}
+
+		input[type="text"] {
+			width: 100%;
+			max-width: 450px;
+		}
+
+		button {
+			background-color: #1d5a9a;
+			color: white;
+			border: none;
+			cursor: pointer;
+			padding: 0 12px;
+		}
+
+		button:hover {
+			background-color: #164577;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<h1>Spegel</h1>
+
+		<div hx-get="/debug/web/stats" hx-trigger="load, every 2s"></div>
+
+		<div class="measure-container">
+			<h2>Measure Image Pull</h2>
+			<form hx-get="/debug/web/measure" hx-target="#measure-result">
+				<input type="text" name="image" placeholder="ghcr.io/spegel-org/spegel:v0.30.0" />
+				<button>Pull</button>
+			</form>
+			<div id="measure-result"></div>
+		</div>
+	</div>
+</body>
+
+</html>
