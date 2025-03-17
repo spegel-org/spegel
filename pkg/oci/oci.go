@@ -17,6 +17,19 @@ var (
 	ErrNotFound = errors.New("content not found")
 )
 
+type EventType string
+
+const (
+	CreateEvent EventType = "CREATE"
+	UpdateEvent EventType = "UPDATE"
+	DeleteEvent EventType = "DELETE"
+)
+
+type ImageEvent struct {
+	Image Image
+	Type  EventType
+}
+
 type Client interface {
 	// Name returns the name of the Client implementation.
 	Name() string

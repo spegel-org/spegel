@@ -18,19 +18,6 @@ type Image struct {
 	Digest     digest.Digest
 }
 
-type EventType string
-
-const (
-	CreateEvent EventType = "CREATE"
-	UpdateEvent EventType = "UPDATE"
-	DeleteEvent EventType = "DELETE"
-)
-
-type ImageEvent struct {
-	Image Image
-	Type  EventType
-}
-
 func NewImage(name, registry, repository, tag string, dgst digest.Digest) (Image, error) {
 	if name == "" {
 		return Image{}, errors.New("image needs to contain a name")
@@ -39,10 +26,12 @@ func NewImage(name, registry, repository, tag string, dgst digest.Digest) (Image
 		return Image{}, errors.New("image needs to contain a registry")
 	}
 	if repository == "" {
-		return Image{}, errors.New("image needs to repository a digest")
+		return Image{}, errors.New("image needs to contain a repository")
 	}
-	if dgst == "" {
-		return Image{}, errors.New("image needs to contain a digest")
+	if dgst != "" {
+		if err := dgst.Validate(); err != nil {
+			return Image{}, err
+		}
 	}
 	return Image{
 		Name:       name,
@@ -60,9 +49,13 @@ func (i Image) IsLatestTag() bool {
 func (i Image) String() string {
 	tag := ""
 	if i.Tag != "" {
-		tag = fmt.Sprintf(":%s", i.Tag)
+		tag = ":" + i.Tag
 	}
-	return fmt.Sprintf("%s/%s%s@%s", i.Registry, i.Repository, tag, i.Digest.String())
+	digest := ""
+	if i.Digest != "" {
+		digest = "@" + i.Digest.String()
+	}
+	return fmt.Sprintf("%s/%s%s@%s", i.Registry, i.Repository, tag, digest)
 }
 
 func (i Image) TagName() (string, bool) {
@@ -74,7 +67,7 @@ func (i Image) TagName() (string, bool) {
 
 var splitRe = regexp.MustCompile(`[:@]`)
 
-func Parse(s string, extraDgst digest.Digest) (Image, error) {
+func ParseImage(s string) (Image, error) {
 	if strings.Contains(s, "://") {
 		return Image{}, errors.New("invalid reference")
 	}
@@ -102,15 +95,29 @@ func Parse(s string, extraDgst digest.Digest) (Image, error) {
 	tag, _, _ = strings.Cut(tag, "@")
 	repository := strings.TrimPrefix(u.Path, "/")
 
-	if dgst == "" {
-		dgst = extraDgst
-	}
-	if extraDgst != "" && dgst != extraDgst {
-		return Image{}, fmt.Errorf("invalid digest set does not match parsed digest: %v %v", s, dgst)
-	}
 	img, err := NewImage(s, u.Host, repository, tag, dgst)
 	if err != nil {
 		return Image{}, err
+	}
+	return img, nil
+}
+
+func ParseImageRequireDigest(s string, dgst digest.Digest) (Image, error) {
+	img, err := ParseImage(s)
+	if err != nil {
+		return Image{}, err
+	}
+	if img.Digest != "" && dgst == "" {
+		return img, nil
+	}
+	if img.Digest == "" && dgst == "" {
+		return Image{}, errors.New("image needs to contain a digest")
+	}
+	if img.Digest == "" && dgst != "" {
+		return NewImage(img.Name, img.Registry, img.Repository, img.Tag, dgst)
+	}
+	if img.Digest != dgst {
+		return Image{}, fmt.Errorf("invalid digest set does not match parsed digest: %v %v", s, img.Digest)
 	}
 	return img, nil
 }
