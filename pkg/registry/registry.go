@@ -195,8 +195,7 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 	}
 
 	// Parse out path components from request.
-	originalRegistry := req.URL.Query().Get("ns")
-	ref, err := parsePathComponents(originalRegistry, req.URL.Path)
+	dist, err := oci.ParseDistributionPath(req.URL)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not parse path according to OCI distribution spec: %w", err))
 		return "registry"
@@ -206,31 +205,26 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 	if req.Header.Get(MirroredHeaderKey) != "true" {
 		// Set mirrored header in request to stop infinite loops
 		req.Header.Set(MirroredHeaderKey, "true")
-		r.handleMirror(rw, req, ref)
+		r.handleMirror(rw, req, dist)
 		return "mirror"
 	}
 
 	// Serve registry endpoints.
-	switch ref.kind {
-	case referenceKindManifest:
-		r.handleManifest(rw, req, ref)
+	switch dist.Kind {
+	case oci.DistributionKindManifest:
+		r.handleManifest(rw, req, dist)
 		return "manifest"
-	case referenceKindBlob:
-		r.handleBlob(rw, req, ref)
+	case oci.DistributionKindBlob:
+		r.handleBlob(rw, req, dist)
 		return "blob"
 	default:
-		rw.WriteError(http.StatusNotFound, fmt.Errorf("unknown reference kind %s", ref.kind))
+		rw.WriteError(http.StatusNotFound, fmt.Errorf("unknown distribution path kind %s", dist.Kind))
 		return "registry"
 	}
 }
 
-func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref reference) {
-	key := ref.dgst.String()
-	if key == "" {
-		key = ref.name
-	}
-
-	log := r.log.WithValues("key", key, "path", req.URL.Path, "ip", getClientIP(req))
+func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+	log := r.log.WithValues("ref", dist.Reference(), "path", req.URL.Path, "ip", getClientIP(req))
 
 	isExternal := r.isExternalRequest(req)
 	if isExternal {
@@ -246,20 +240,20 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 		if rw.Status() != http.StatusOK {
 			cacheType = "miss"
 		}
-		metrics.MirrorRequestsTotal.WithLabelValues(ref.originalRegistry, cacheType, sourceType).Inc()
+		metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, cacheType, sourceType).Inc()
 	}()
 
-	if !r.resolveLatestTag && ref.hasLatestTag() {
-		r.log.V(4).Info("skipping mirror request for image with latest tag", "image", ref.name)
+	if !r.resolveLatestTag && dist.IsLatestTag() {
+		r.log.V(4).Info("skipping mirror request for image with latest tag", "image", dist.Reference())
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	// Resolve mirror with the requested key
+	// Resolve mirror with the requested reference
 	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
 	defer cancel()
 	resolveCtx = logr.NewContext(resolveCtx, log)
-	peerCh, err := r.router.Resolve(resolveCtx, key, isExternal, r.resolveRetries)
+	peerCh, err := r.router.Resolve(resolveCtx, dist.Reference(), isExternal, r.resolveRetries)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("error occurred when attempting to resolve mirrors: %w", err))
 		return
@@ -270,12 +264,12 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 		select {
 		case <-req.Context().Done():
 			// Request has been closed by server or client. No use continuing.
-			rw.WriteError(http.StatusNotFound, fmt.Errorf("mirroring for image component %s has been cancelled: %w", key, resolveCtx.Err()))
+			rw.WriteError(http.StatusNotFound, fmt.Errorf("mirroring for image component %s has been cancelled: %w", dist.Reference(), resolveCtx.Err()))
 			return
 		case ipAddr, ok := <-peerCh:
 			// Channel closed means no more mirrors will be received and max retries has been reached.
 			if !ok {
-				err = fmt.Errorf("mirror with image component %s could not be found", key)
+				err = fmt.Errorf("mirror with image component %s could not be found", dist.Reference())
 				if mirrorAttempts > 0 {
 					err = errors.Join(err, fmt.Errorf("requests to %d mirrors failed, all attempts have been exhausted or timeout has been reached", mirrorAttempts))
 				}
@@ -320,23 +314,23 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, ref re
 	}
 }
 
-func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, ref reference) {
-	if ref.dgst == "" {
-		var err error
-		ref.dgst, err = r.ociClient.Resolve(req.Context(), ref.name)
+func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+	if dist.Digest == "" {
+		dgst, err := r.ociClient.Resolve(req.Context(), dist.Reference())
 		if err != nil {
-			rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get digest for image tag %s: %w", ref.name, err))
+			rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get digest for image %s: %w", dist.Reference(), err))
 			return
 		}
+		dist.Digest = dgst
 	}
-	b, mediaType, err := r.ociClient.GetManifest(req.Context(), ref.dgst)
+	b, mediaType, err := r.ociClient.GetManifest(req.Context(), dist.Digest)
 	if err != nil {
-		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get manifest content for digest %s: %w", ref.dgst.String(), err))
+		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get manifest content for digest %s: %w", dist.Digest.String(), err))
 		return
 	}
 	rw.Header().Set("Content-Type", mediaType)
 	rw.Header().Set("Content-Length", strconv.FormatInt(int64(len(b)), 10))
-	rw.Header().Set("Docker-Content-Digest", ref.dgst.String())
+	rw.Header().Set("Docker-Content-Digest", dist.Digest.String())
 	if req.Method == http.MethodHead {
 		return
 	}
@@ -347,23 +341,23 @@ func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, ref 
 	}
 }
 
-func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, ref reference) {
-	size, err := r.ociClient.Size(req.Context(), ref.dgst)
+func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+	size, err := r.ociClient.Size(req.Context(), dist.Digest)
 	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine size of blob with digest %s: %w", ref.dgst.String(), err))
+		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine size of blob with digest %s: %w", dist.Digest.String(), err))
 		return
 	}
 	rw.Header().Set("Accept-Ranges", "bytes")
 	rw.Header().Set("Content-Type", "application/octet-stream")
 	rw.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	rw.Header().Set("Docker-Content-Digest", ref.dgst.String())
+	rw.Header().Set("Docker-Content-Digest", dist.Digest.String())
 	if req.Method == http.MethodHead {
 		return
 	}
 
-	rc, err := r.ociClient.GetBlob(req.Context(), ref.dgst)
+	rc, err := r.ociClient.GetBlob(req.Context(), dist.Digest)
 	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not get reader for blob with digest %s: %w", ref.dgst.String(), err))
+		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not get reader for blob with digest %s: %w", dist.Digest.String(), err))
 		return
 	}
 	defer rc.Close()
