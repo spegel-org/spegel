@@ -79,20 +79,28 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 	}
 	comps = manifestRegexDigest.FindStringSubmatch(u.Path)
 	if len(comps) == 6 {
+		dgst, err := digest.Parse(comps[5])
+		if err != nil {
+			return DistributionPath{}, err
+		}
 		dist := DistributionPath{
 			Kind:     DistributionKindManifest,
 			Name:     comps[1],
-			Digest:   digest.Digest(comps[5]),
+			Digest:   dgst,
 			Registry: registry,
 		}
 		return dist, nil
 	}
 	comps = blobsRegexDigest.FindStringSubmatch(u.Path)
 	if len(comps) == 6 {
+		dgst, err := digest.Parse(comps[5])
+		if err != nil {
+			return DistributionPath{}, err
+		}
 		dist := DistributionPath{
 			Kind:     DistributionKindBlob,
 			Name:     comps[1],
-			Digest:   digest.Digest(comps[5]),
+			Digest:   dgst,
 			Registry: registry,
 		}
 		return dist, nil
