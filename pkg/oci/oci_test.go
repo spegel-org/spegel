@@ -89,7 +89,7 @@ func TestOCIClient(t *testing.T) {
 	for _, img := range imgs {
 		dgst, err := digest.Parse(img["digest"])
 		require.NoError(t, err)
-		img, err := Parse(img["name"], dgst)
+		img, err := ParseImageRequireDigest(img["name"], dgst)
 		require.NoError(t, err)
 		memoryClient.AddImage(img)
 	}
@@ -281,7 +281,7 @@ func TestOCIClient(t *testing.T) {
 				t.Run(tt.imageName, func(t *testing.T) {
 					t.Parallel()
 
-					img, err := Parse(tt.imageName, digest.Digest(tt.imageDigest))
+					img, err := ParseImageRequireDigest(tt.imageName, digest.Digest(tt.imageDigest))
 					require.NoError(t, err)
 					keys, err := WalkImage(ctx, ociClient, img)
 					require.NoError(t, err)

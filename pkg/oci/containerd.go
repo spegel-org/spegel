@@ -197,13 +197,13 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan e
 					errCh <- err
 					continue
 				}
-				img, err = Parse(cImg.Name(), cImg.Target().Digest)
+				img, err = ParseImageRequireDigest(cImg.Name(), cImg.Target().Digest)
 				if err != nil {
 					errCh <- err
 					continue
 				}
 			case DeleteEvent:
-				img, err = Parse(imageName, "")
+				img, err = ParseImageRequireDigest(imageName, "")
 				if err != nil {
 					errCh <- err
 					continue
@@ -226,7 +226,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	}
 	imgs := []Image{}
 	for _, cImg := range cImgs {
-		img, err := Parse(cImg.Name(), cImg.Target().Digest)
+		img, err := ParseImageRequireDigest(cImg.Name(), cImg.Target().Digest)
 		if err != nil {
 			return nil, err
 		}

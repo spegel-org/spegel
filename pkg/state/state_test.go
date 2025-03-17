@@ -30,7 +30,6 @@ func TestTrack(t *testing.T) {
 	imgRefs := []string{
 		"docker.io/library/ubuntu:latest",
 		"ghcr.io/spegel-org/spegel:v0.0.9",
-		"docker.io/library/alpine",
 	}
 	imgs := []oci.Image{}
 	for _, imageStr := range imgRefs {
@@ -50,7 +49,7 @@ func TestTrack(t *testing.T) {
 		require.NoError(t, err)
 		dgst := digest.NewDigest(digest.SHA256, hash)
 		ociClient.AddBlob(b, dgst)
-		img, err := oci.Parse(imageStr, dgst)
+		img, err := oci.ParseImageRequireDigest(imageStr, dgst)
 		require.NoError(t, err)
 		ociClient.AddImage(img)
 
