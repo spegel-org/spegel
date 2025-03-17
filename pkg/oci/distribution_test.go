@@ -91,23 +91,59 @@ func TestParseDistributionPath(t *testing.T) {
 	}
 }
 
-func TestParseDistributionPathInvalidPath(t *testing.T) {
+func TestParseDistributionPathErrors(t *testing.T) {
 	t.Parallel()
 
-	u := &url.URL{
-		Path:     "/v2/spegel-org/spegel/v0.0.1",
-		RawQuery: "ns=example.com",
+	tests := []struct {
+		name          string
+		url           *url.URL
+		expectedError string
+	}{
+		{
+			name: "invalid path",
+			url: &url.URL{
+				Path:     "/v2/spegel-org/spegel/v0.0.1",
+				RawQuery: "ns=example.com",
+			},
+			expectedError: "distribution path could not be parsed",
+		},
+		{
+			name: "blob with tag reference",
+			url: &url.URL{
+				Path:     "/v2/spegel-org/spegel/blobs/v0.0.1",
+				RawQuery: "ns=example.com",
+			},
+			expectedError: "invalid checksum digest format",
+		},
+		{
+			name: "blob with invalid digest",
+			url: &url.URL{
+				Path:     "/v2/spegel-org/spegel/blobs/sha256:123",
+				RawQuery: "ns=example.com",
+			},
+			expectedError: "invalid checksum digest length",
+		},
+		{
+			name: "manifest tag with missing registry",
+			url: &url.URL{
+				Path: "/v2/spegel-org/spegel/manifests/v0.0.1",
+			},
+			expectedError: "registry parameter needs to be set for tag references",
+		},
+		{
+			name: "manifest with invalid digest",
+			url: &url.URL{
+				Path: "/v2/spegel-org/spegel/manifests/sha253:foobar",
+			},
+			expectedError: "unsupported digest algorithm",
+		},
 	}
-	_, err := ParseDistributionPath(u)
-	require.EqualError(t, err, "distribution path could not be parsed")
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestParseDistributionPathMissingRegistry(t *testing.T) {
-	t.Parallel()
-
-	u := &url.URL{
-		Path: "/v2/spegel-org/spegel/manifests/v0.0.1",
+			_, err := ParseDistributionPath(tt.url)
+			require.EqualError(t, err, tt.expectedError)
+		})
 	}
-	_, err := ParseDistributionPath(u)
-	require.EqualError(t, err, "registry parameter needs to be set for tag references")
 }

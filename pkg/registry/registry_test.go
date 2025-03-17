@@ -118,10 +118,14 @@ func TestMirrorHandler(t *testing.T) {
 	unreachableAddrPort := netip.MustParseAddrPort("127.0.0.1:0")
 
 	resolver := map[string][]netip.AddrPort{
-		"no-working-peers":  {badAddrPort, unreachableAddrPort, badAddrPort},
-		"first-peer":        {goodAddrPort, badAddrPort, badAddrPort},
-		"first-peer-error":  {unreachableAddrPort, goodAddrPort},
-		"last-peer-working": {badAddrPort, badAddrPort, goodAddrPort},
+		// No working peers
+		"sha256:c3e30fbcf3b231356a1efbd30a8ccec75134a7a8b45217ede97f4ff483540b04": {badAddrPort, unreachableAddrPort, badAddrPort},
+		// First Peer
+		"sha256:3b8a55c543ccc7ae01c47b1d35af5826a6439a9b91ab0ca96de9967759279896": {goodAddrPort, badAddrPort, badAddrPort},
+		// First peer error
+		"sha256:a0daab85ec30e2809a38c32fa676515aba22f481c56fda28637ae964ff398e3d": {unreachableAddrPort, goodAddrPort},
+		// Last peer working
+		"sha256:11242d2a347bf8ab30b9f92d5ca219bbbedf95df5a8b74631194561497c1fae8": {badAddrPort, badAddrPort, goodAddrPort},
 	}
 	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
 	reg := NewRegistry(nil, router)
@@ -142,28 +146,28 @@ func TestMirrorHandler(t *testing.T) {
 		},
 		{
 			name:            "request should not timeout and give 404 if all peers fail",
-			key:             "no-working-peers",
+			key:             "sha256:c3e30fbcf3b231356a1efbd30a8ccec75134a7a8b45217ede97f4ff483540b04",
 			expectedStatus:  http.StatusNotFound,
 			expectedBody:    "",
 			expectedHeaders: nil,
 		},
 		{
 			name:            "request should work when first peer responds",
-			key:             "first-peer",
+			key:             "sha256:3b8a55c543ccc7ae01c47b1d35af5826a6439a9b91ab0ca96de9967759279896",
 			expectedStatus:  http.StatusOK,
 			expectedBody:    "hello world",
 			expectedHeaders: map[string][]string{"foo": {"bar"}},
 		},
 		{
 			name:            "second peer should respond when first gives error",
-			key:             "first-peer-error",
+			key:             "sha256:a0daab85ec30e2809a38c32fa676515aba22f481c56fda28637ae964ff398e3d",
 			expectedStatus:  http.StatusOK,
 			expectedBody:    "hello world",
 			expectedHeaders: map[string][]string{"foo": {"bar"}},
 		},
 		{
 			name:            "last peer should respond when two first fail",
-			key:             "last-peer-working",
+			key:             "sha256:11242d2a347bf8ab30b9f92d5ca219bbbedf95df5a8b74631194561497c1fae8",
 			expectedStatus:  http.StatusOK,
 			expectedBody:    "hello world",
 			expectedHeaders: map[string][]string{"foo": {"bar"}},
