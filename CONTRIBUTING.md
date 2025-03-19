@@ -51,25 +51,13 @@ In order to manually test or debug Spegel, you will need the following tools.
 * helm
 * kubectl
 
-First, create a Kind cluster and a namespace for Spegel. This example uses one of the e2e test configurations. You may want to roll your own if you want to control number of nodes or node tagging.
+First run dev deploy which will create a Kind cluster with the proper configuration and deploy Spegel into it. If you run this command a second time the cluster will be kept but Spegel will be updated.
 
 ```shell
-kind create cluster --config ./test/e2e/kind-config-iptables.yaml
-kubectl create namespace spegel
+make dev-deploy
 ```
 
-You can now build and test spegel. Note that we need to explicitly ask Kind to copy the image into the Kind cluster.
-
-```shell
-kind load docker-image example.com/spegel:feature
-helm upgrade --wait --install --namespace=spegel spegel ./charts/spegel \
-  --set "image.repository=example.com/spegel" \
-  --set "image.tag=feature" \
-  --set "nodeSelector.spegel=schedule"
-kubectl --namespace spegel rollout status daemonset spegel --timeout 60s
-```
-
-If all goes well, you will see see something like `daemon set "spegel" successfully rolled out`. See [How do I know that Spegel is working?](https://spegel.dev/docs/faq/#how-do-i-know-that-spegel-is-working) on how to verify.
+After the command has run a Kind cluster named `spegel-dev` should be created. 
 
 ## Generating documentation
 

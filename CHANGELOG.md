@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#717](https://github.com/spegel-org/spegel/pull/717) Extend tests for distribution.
 - [#753](https://github.com/spegel-org/spegel/pull/753) Set GOMAXPROCS and GOMEMLIMIT when limits are set.
+- [#792](https://github.com/spegel-org/spegel/pull/792) Add dev deploy recipe to simplify local development.
 
 ### Changed
 
