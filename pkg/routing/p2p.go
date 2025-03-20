@@ -110,7 +110,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 	self := fmt.Sprintf("%s/p2p/%s", r.host.Addrs()[0].String(), r.host.ID().String())
 	logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", self)
 	if err := r.kdht.Bootstrap(ctx); err != nil {
-		return fmt.Errorf("could not bootstrap distributed hash table: %w", err)
+		return fmt.Errorf("could not boostrap distributed hash table: %w", err)
 	}
 	err := r.bootstrapper.Run(ctx, self)
 	if err != nil {
@@ -151,7 +151,7 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 }
 
 func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {
-	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
+	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "hostAddr", r.host.Addrs()[0].String(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
@@ -169,6 +169,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 		for info := range addrCh {
 			resolveTimer.ObserveDuration()
 			if !allowSelf && info.ID == r.host.ID() {
+				log.V(4).Info("skipping self")
 				continue
 			}
 			if len(info.Addrs) != 1 {
@@ -190,6 +191,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				continue
 			}
 			peer := netip.AddrPortFrom(ipAddr, r.registryPort)
+			log.Info("found peer", "peer", peer.String(), "peerID", info.ID)
 			// Don't block if the client has disconnected before reading all values from the channel
 			select {
 			case peerCh <- peer:
@@ -203,7 +205,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
-	logr.FromContextOrDiscard(ctx).V(4).Info("advertising keys", "host", r.host.ID().String(), "keys", keys)
+	logr.FromContextOrDiscard(ctx).V(4).Info("advertising keys", "hostAddr", r.host.Addrs()[0].String(), "keys", keys)
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {

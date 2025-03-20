@@ -42,7 +42,7 @@ func NewImage(name, registry, repository, tag string, dgst digest.Digest) (Image
 		return Image{}, errors.New("image needs to repository a digest")
 	}
 	if dgst == "" {
-		return Image{}, errors.New("image needs to contain a digest")
+		return Image{}, fmt.Errorf("image needs to contain a digest, image %s, registry %s, repository %s, tag %s", name, registry, repository, tag)
 	}
 	return Image{
 		Name:       name,
@@ -76,14 +76,14 @@ var splitRe = regexp.MustCompile(`[:@]`)
 
 func Parse(s string, extraDgst digest.Digest) (Image, error) {
 	if strings.Contains(s, "://") {
-		return Image{}, errors.New("invalid reference")
+		return Image{}, fmt.Errorf("invalid reference: %v", s)
 	}
 	u, err := url.Parse("dummy://" + s)
 	if err != nil {
 		return Image{}, err
 	}
 	if u.Scheme != "dummy" {
-		return Image{}, errors.New("invalid reference")
+		return Image{}, fmt.Errorf("invalid reference: %v", u.Scheme)
 	}
 	if u.Host == "" {
 		return Image{}, errors.New("hostname required")

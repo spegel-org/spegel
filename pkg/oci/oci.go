@@ -44,7 +44,7 @@ type Client interface {
 
 	// GetBlob returns a stream of the blob content for the given digest.
 	// Will return ErrNotFound if the digest cannot be found.
-	GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
+	GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error)
 }
 
 type UnknownDocument struct {

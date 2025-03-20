@@ -4,15 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/spf13/afero"
 
 	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
+
+var runtimeRegistryUrls []url.URL
 
 func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
 	log := logr.FromContextOrDiscard(ctx)
@@ -32,6 +38,7 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 			return nil
 		case <-tickerCh:
 			log.Info("running scheduled image state update")
+
 			if err := all(ctx, ociClient, router, resolveLatestTag); err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
@@ -52,6 +59,122 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 			log.Error(err, "event channel error")
 		}
 	}
+}
+
+func TrackConfiguration(ctx context.Context, fs afero.Fs, configPath string, registryURLs, mirrorURLs []url.URL, resolveTags bool, registriesFilePath string, refreshInterval time.Duration) error {
+	log := logr.FromContextOrDiscard(ctx)
+
+	immediateCh := make(chan time.Time, 1)
+	immediateCh <- time.Now()
+	close(immediateCh)
+	expirationTicker := time.NewTicker(refreshInterval)
+	defer expirationTicker.Stop()
+	tickerCh := channel.Merge(immediateCh, expirationTicker.C)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-tickerCh:
+			if registriesFilePath == "" {
+				log.Info("registries file path not set, skip")
+				continue
+			}
+
+			log.Info("running scheduled configuration update")
+			if err := updateConfiguration(ctx, fs, configPath, registryURLs, mirrorURLs, resolveTags, registriesFilePath); err != nil {
+				log.Error(err, "received errors when updating configuration")
+				continue
+			}
+		}
+	}
+}
+
+func updateConfiguration(ctx context.Context, fs afero.Fs, configPath string, configuredRegistryURLs, mirrorURLs []url.URL, resolveTags bool, registriesFilePath string) error {
+	log := logr.FromContextOrDiscard(ctx)
+	if registriesFilePath == "" {
+		log.Info("registries file path not set, skip")
+		return nil
+	}
+	files, err := afero.ReadDir(fs, registriesFilePath)
+	if errors.Is(err, afero.ErrFileNotFound) {
+		log.Info("registries file not found, skip", "path", registriesFilePath)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	var currentRuntimeRegistryUrls []url.URL
+
+	for _, file := range files {
+		// skip hidden files
+		if strings.HasPrefix(file.Name(), "..") {
+			continue
+		}
+		urlRaw := "https://" + file.Name()
+		parsedURL, err := url.Parse(urlRaw)
+		if err != nil {
+			log.Error(err, "failed to parse registry url", "url", urlRaw)
+			continue
+		}
+
+		currentRuntimeRegistryUrls = append(currentRuntimeRegistryUrls, *parsedURL)
+	}
+
+	if isRuntimeURLArrayUpdated(currentRuntimeRegistryUrls, runtimeRegistryUrls) {
+		urlsNeedUpdate := MergeArrays(currentRuntimeRegistryUrls, configuredRegistryURLs)
+		log.Info("Need to update runtime registries")
+
+		err := oci.AddMirrorConfiguration(ctx, fs, configPath, urlsNeedUpdate, mirrorURLs, resolveTags, false)
+		if err != nil {
+			return err
+		}
+
+		runtimeRegistryUrls = currentRuntimeRegistryUrls
+	}
+
+	return nil
+}
+
+func MergeArrays(arr1, arr2 []url.URL) []url.URL {
+	unique := make(map[url.URL]struct{})
+	for _, item := range append(arr1, arr2...) {
+		unique[item] = struct{}{}
+	}
+
+	result := make([]url.URL, 0, len(unique))
+	for key := range unique {
+		result = append(result, key)
+	}
+	return result
+}
+
+func isRuntimeURLArrayUpdated(arr1, arr2 []url.URL) bool {
+	if len(arr1) != len(arr2) {
+		return true
+	}
+
+	sortedArr1 := convertURLArrayToStringArray(arr1)
+	sortedArr2 := convertURLArrayToStringArray(arr2)
+
+	sort.Strings(sortedArr1)
+	sort.Strings(sortedArr2)
+
+	for i := range sortedArr1 {
+		if sortedArr1[i] != sortedArr2[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// convertURLArrayToStringArray converts []url.URL to []string
+func convertURLArrayToStringArray(urls []url.URL) []string {
+	result := make([]string, len(urls))
+	for i, u := range urls {
+		result[i] = u.String()
+	}
+	return result
 }
 
 func all(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {

@@ -55,8 +55,10 @@ func WithContentPath(path string) Option {
 	}
 }
 
-func NewContainerd(sock, namespace, registryConfigPath string, registries []url.URL, opts ...Option) (*Containerd, error) {
+func NewContainerd(ctx context.Context, sock, namespace, registryConfigPath string, registries []url.URL, opts ...Option) (*Containerd, error) {
+	log := logr.FromContextOrDiscard(ctx)
 	listFilter, eventFilter := createFilters(registries)
+	log.Info("created Containerd client", "socket", sock, "namespace", namespace, "listFilter", listFilter, "eventFilter", eventFilter)
 	c := &Containerd{
 		clientGetter: func() (*client.Client, error) {
 			return client.New(sock, client.WithDefaultNamespace(namespace))
@@ -280,7 +282,7 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	return b, mt, nil
 }
 
-func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
+func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadCloser, error) {
 	if c.contentPath != "" {
 		path := filepath.Join(c.contentPath, "blobs", dgst.Algorithm().String(), dgst.Encoded())
 		file, err := os.Open(path)
@@ -304,11 +306,11 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSe
 		return nil, err
 	}
 	return struct {
-		io.ReadSeeker
+		io.Reader
 		io.Closer
 	}{
-		ReadSeeker: io.NewSectionReader(ra, 0, ra.Size()),
-		Closer:     ra,
+		Reader: content.NewReader(ra),
+		Closer: ra,
 	}, nil
 }
 
@@ -503,6 +505,16 @@ capabilities = {{ $.Capabilities }}
 
 type hostFile struct {
 	Hosts map[string]interface{} `toml:"host"`
+}
+
+// return false if file does not exist
+func doHostsExist(fs afero.Fs, fp string) bool {
+	_, err := fs.Open(fp)
+	if errors.Is(err, afero.ErrFileNotFound) {
+		return false
+	} else {
+		return true
+	}
 }
 
 func existingHosts(fs afero.Fs, configPath string, registryURL url.URL) (string, error) {
