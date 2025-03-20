@@ -1,13 +1,14 @@
 module github.com/spegel-org/spegel
 
 go 1.23.6
+
 toolchain go1.24.1
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/alexflint/go-arg v1.5.1
 	github.com/containerd/containerd/api v1.8.0
-	github.com/containerd/containerd/v2 v2.0.3
+	github.com/containerd/containerd/v2 v2.0.4
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/typeurl/v2 v2.2.3
 	github.com/go-logr/logr v1.4.2
