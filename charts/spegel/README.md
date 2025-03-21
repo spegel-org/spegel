@@ -28,7 +28,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | podAnnotations | object | `{}` | Annotations to add to the pod. |
 | podSecurityContext | object | `{}` | Security context for the pod. |
 | priorityClassName | string | `"system-node-critical"` | Priority class name to use for the pod. |
-| resources | object | `{}` | Resource requests and limits for the Spegel container. |
+| resources | object | `{"limits":{"memory":"128Mi"},"requests":{"memory":"128Mi"}}` | Resource requests and limits for the Spegel container. |
 | revisionHistoryLimit | int | `10` | The number of old history to retain to allow rollback. |
 | securityContext | object | `{}` | Security context for the Spegel container. |
 | service.metrics.port | int | `9090` | Port to expose the metrics via the service. |
