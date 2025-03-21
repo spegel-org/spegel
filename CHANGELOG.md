@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- [#796](https://github.com/spegel-org/spegel/pull/796) Remove name from OCI image struct.
+
 ### Fixed
 
 - [#743](https://github.com/spegel-org/spegel/pull/743) Charts - removed metrics label from bootstrap service
