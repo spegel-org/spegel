@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#778](https://github.com/spegel-org/spegel/pull/778) Replace interface{} with any alias.
 - [#784](https://github.com/spegel-org/spegel/pull/784) Refactor distribution and move to OCI package.
 - [#787](https://github.com/spegel-org/spegel/pull/787) Refactor OCI image to allow parsing without digest.
+- [#794](https://github.com/spegel-org/spegel/pull/794) Set default memory request and limit in Helm chart.
 
 ### Deprecated
 
