@@ -1,0 +1,40 @@
+{{ if .PeerResults }}
+<h3>Resolved Peers</h3>
+<div class="table-container">
+  <table>
+    <tr>
+      <th style="width: 50%;">Peer</th>
+      <th style="width: 50%;">Duration</th>
+    </tr>
+
+    {{ range .PeerResults }}
+    <tr>
+      <td>{{ .Peer.Addr }}</td>
+      <td>{{ .Duration }}</td>
+    </tr>
+    {{ end }}
+  </table>
+</div>
+
+<h3>Result</h3>
+<div class="table-container">
+  <table>
+    <tr>
+      <th>Identifier</th>
+      <th>Type</th>
+      <th>Size</th>
+      <th>Duration</th>
+    </tr>
+    {{ range .PullResults }}
+    <tr>
+      <td>{{ .Identifier }}</td>
+      <td>{{ .ContentType }}</td>
+      <td>{{ .ContentLength }}</td>
+      <td>{{ .Duration }}</td>
+    </tr>
+    {{ end }}
+  </table>
+</div>
+{{ else }}
+<p>No peers found for image</p>
+{{ end }}
