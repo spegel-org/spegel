@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -162,6 +163,14 @@ func TestE2E(t *testing.T) {
 	// Verify that Spegel has never restarted
 	restartOutput = command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
 	require.Equal(t, "0", restartOutput)
+
+	// Restart Containerd and verify that Spegel restarts
+	t.Log("Restarting Containerd")
+	command(ctx, t, fmt.Sprintf("docker exec %s-worker3 systemctl restart containerd", kindName))
+	require.Eventually(t, func() bool {
+		restartOutput = command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
+		return restartOutput == "1"
+	}, 5*time.Second, 1*time.Second)
 }
 
 func TestDevDeploy(t *testing.T) {
