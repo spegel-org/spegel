@@ -22,7 +22,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
 
-	"github.com/spegel-org/spegel/internal/kubernetes"
 	"github.com/spegel-org/spegel/internal/web"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -40,13 +39,10 @@ type ConfigurationCmd struct {
 }
 
 type BootstrapConfig struct {
-	BootstrapKind           string `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
-	KubeconfigPath          string `arg:"--kubeconfig-path,env:KUBECONFIG_PATH" help:"Path to the kubeconfig file."`
-	LeaderElectionName      string `arg:"--leader-election-name,env:LEADER_ELECTION_NAME" default:"spegel-leader-election" help:"Name of leader election."`
-	LeaderElectionNamespace string `arg:"--leader-election-namespace,env:LEADER_ELECTION_NAMESPACE" default:"spegel" help:"Kubernetes namespace to write leader election data."`
-	DNSBootstrapDomain      string `arg:"--dns-bootstrap-domain,env:DNS_BOOTSTRAP_DOMAIN" help:"Domain to use when bootstrapping using DNS."`
-	HTTPBootstrapAddr       string `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap."`
-	HTTPBootstrapPeer       string `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
+	BootstrapKind      string `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
+	DNSBootstrapDomain string `arg:"--dns-bootstrap-domain,env:DNS_BOOTSTRAP_DOMAIN" help:"Domain to use when bootstrapping using DNS."`
+	HTTPBootstrapAddr  string `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap."`
+	HTTPBootstrapPeer  string `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
 }
 
 type RegistryCmd struct {
@@ -239,12 +235,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 
 func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //nolint: ireturn // Return type can be different structs.
 	switch cfg.BootstrapKind {
-	case "kubernetes":
-		cs, err := kubernetes.GetClientset(cfg.KubeconfigPath)
-		if err != nil {
-			return nil, err
-		}
-		return routing.NewKubernetesBootstrapper(cs, cfg.LeaderElectionNamespace, cfg.LeaderElectionName), nil
 	case "dns":
 		return routing.NewDNSBootstrapper(cfg.DNSBootstrapDomain, 10), nil
 	case "http":
