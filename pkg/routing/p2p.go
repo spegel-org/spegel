@@ -106,17 +106,19 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 	}, nil
 }
 
-func (r *P2PRouter) Run(ctx context.Context) error {
+func (r *P2PRouter) Run(ctx context.Context) (err error) {
 	self := fmt.Sprintf("%s/p2p/%s", r.host.Addrs()[0].String(), r.host.ID().String())
 	logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", self)
 	if err := r.kdht.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("could not bootstrap distributed hash table: %w", err)
 	}
-	err := r.bootstrapper.Run(ctx, self)
-	if err != nil {
-		return err
-	}
-	err = r.host.Close()
+	defer func() {
+		cerr := r.host.Close()
+		if cerr != nil {
+			err = errors.Join(err, cerr)
+		}
+	}()
+	err = r.bootstrapper.Run(ctx, self)
 	if err != nil {
 		return err
 	}
@@ -223,7 +225,7 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) 
 		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer bootstrapCancel()
 
-		// TODO (phillebaba): Consider if we should do a best effor bootstrap without host address.
+		// TODO (phillebaba): Consider if we should do a best effort bootstrap without host address.
 		hostAddrs := h.Addrs()
 		if len(hostAddrs) == 0 {
 			return nil
