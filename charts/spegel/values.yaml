@@ -138,7 +138,7 @@ spegel:
     # - https://docker.io
     # - https://ghcr.io
   # -- Additional target mirror registries other than Spegel.
-  additionalMirrorRegistries: []
+  additionalMirrorTargets: []
   # -- Max amount of mirrors to attempt.
   mirrorResolveRetries: 3
   # -- Max duration spent finding a mirror.

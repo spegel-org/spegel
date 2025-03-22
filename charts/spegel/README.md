@@ -46,7 +46,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | serviceMonitor.metricRelabelings | list | `[]` | List of relabeling rules to apply to the samples before ingestion. |
 | serviceMonitor.relabelings | list | `[]` | List of relabeling rules to apply the target’s metadata labels. |
 | serviceMonitor.scrapeTimeout | string | `"30s"` | Prometheus scrape interval timeout. |
-| spegel.additionalMirrorRegistries | list | `[]` | Additional target mirror registries other than Spegel. |
+| spegel.additionalMirrorTargets | list | `[]` | Additional target mirror registries other than Spegel. |
 | spegel.containerdContentPath | string | `"/var/lib/containerd/io.containerd.content.v1.content"` | Path to Containerd content store.. |
 | spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
