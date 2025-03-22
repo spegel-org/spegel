@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.1.0
+
+### Added
+
 - [#717](https://github.com/spegel-org/spegel/pull/717) Extend tests for distribution.
 - [#753](https://github.com/spegel-org/spegel/pull/753) Set GOMAXPROCS and GOMEMLIMIT when limits are set.
 - [#792](https://github.com/spegel-org/spegel/pull/792) Add dev deploy recipe to simplify local development.
@@ -25,8 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#787](https://github.com/spegel-org/spegel/pull/787) Refactor OCI image to allow parsing without digest.
 - [#794](https://github.com/spegel-org/spegel/pull/794) Set default memory request and limit in Helm chart.
 
-### Deprecated
-
 ### Removed
 
 - [#796](https://github.com/spegel-org/spegel/pull/796) Remove name from OCI image struct.
@@ -34,14 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- [#743](https://github.com/spegel-org/spegel/pull/743) Charts - removed metrics label from bootstrap service
+- [#743](https://github.com/spegel-org/spegel/pull/743) Remove metrics label from bootstrap service in Helm chart.
 - [#748](https://github.com/spegel-org/spegel/pull/748) Fix topology annotation.
 - [#785](https://github.com/spegel-org/spegel/pull/785) Fix verification of digests when parsing distribution path.
 - [#798](https://github.com/spegel-org/spegel/pull/798) Restart Spegel if Containerd event subscription is disconnected.
 - [#800](https://github.com/spegel-org/spegel/pull/800) Fix so that host is closed even when a bootstrap error occurs.
 - [#801](https://github.com/spegel-org/spegel/pull/801) Fix helm values naming for additionalMirrorTargets and mirroredRegistries.
-
-### Security
 
 ## v0.0.30
 
