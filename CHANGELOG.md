@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - [#796](https://github.com/spegel-org/spegel/pull/796) Remove name from OCI image struct.
+- [#799](https://github.com/spegel-org/spegel/pull/799) Remove Kubernetes bootstrapper.
 
 ### Fixed
 

@@ -16,9 +16,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/leaderelection"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
 // Bootstrapper resolves peers to bootstrap with for the P2P router.
@@ -57,88 +54,6 @@ func (b *StaticBootstrapper) SetPeers(peers []peer.AddrInfo) {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 	b.peers = peers
-}
-
-var _ Bootstrapper = &KubernetesBootstrapper{}
-
-type KubernetesBootstrapper struct {
-	cs                      kubernetes.Interface
-	initCh                  chan any
-	leaderElectionNamespace string
-	leaderElectioName       string
-	id                      string
-	mx                      sync.RWMutex
-}
-
-func NewKubernetesBootstrapper(cs kubernetes.Interface, namespace, name string) *KubernetesBootstrapper {
-	return &KubernetesBootstrapper{
-		leaderElectionNamespace: namespace,
-		leaderElectioName:       name,
-		cs:                      cs,
-		initCh:                  make(chan any),
-	}
-}
-
-func (bs *KubernetesBootstrapper) Run(ctx context.Context, id string) error {
-	lockCfg := resourcelock.ResourceLockConfig{
-		Identity: id,
-	}
-	rl, err := resourcelock.New(
-		resourcelock.LeasesResourceLock,
-		bs.leaderElectionNamespace,
-		bs.leaderElectioName,
-		bs.cs.CoreV1(),
-		bs.cs.CoordinationV1(),
-		lockCfg,
-	)
-	if err != nil {
-		return err
-	}
-	leCfg := leaderelection.LeaderElectionConfig{
-		Lock:            rl,
-		ReleaseOnCancel: true,
-		LeaseDuration:   10 * time.Second,
-		RenewDeadline:   5 * time.Second,
-		RetryPeriod:     2 * time.Second,
-		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(ctx context.Context) {},
-			OnStoppedLeading: func() {},
-			OnNewLeader: func(identity string) {
-				if identity == resourcelock.UnknownLeader {
-					return
-				}
-				// Close channel if not already closed
-				select {
-				case <-bs.initCh:
-					break
-				default:
-					close(bs.initCh)
-				}
-
-				bs.mx.Lock()
-				defer bs.mx.Unlock()
-				bs.id = identity
-			},
-		},
-	}
-	leaderelection.RunOrDie(ctx, leCfg)
-	return nil
-}
-
-func (bs *KubernetesBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
-	<-bs.initCh
-	bs.mx.RLock()
-	defer bs.mx.RUnlock()
-
-	addr, err := ma.NewMultiaddr(bs.id)
-	if err != nil {
-		return nil, err
-	}
-	addrInfo, err := peer.AddrInfoFromP2pAddr(addr)
-	if err != nil {
-		return nil, err
-	}
-	return []peer.AddrInfo{*addrInfo}, err
 }
 
 var _ Bootstrapper = &DNSBootstrapper{}

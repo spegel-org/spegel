@@ -12,7 +12,6 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/stretchr/testify/require"
-	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestStaticBootstrap(t *testing.T) {
@@ -40,35 +39,6 @@ func TestStaticBootstrap(t *testing.T) {
 	bsPeers, err := bs.Get(context.TODO())
 	require.NoError(t, err)
 	require.ElementsMatch(t, peers, bsPeers)
-
-	cancel()
-	err = g.Wait()
-	require.NoError(t, err)
-}
-
-func TestKubernetesBootstrap(t *testing.T) {
-	t.Parallel()
-
-	addr := "/ip4/10.244.1.2/tcp/5001"
-	peerID := "12D3KooWEkFzmb2PhhgxZv4ubV3aPfnTAhAmhmfTGuwvH4MHyPTV"
-	id := addr + "/p2p/" + peerID
-
-	cs := fake.NewSimpleClientset()
-	bs := NewKubernetesBootstrapper(cs, "spegel", "leader")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		return bs.Run(gCtx, id)
-	})
-
-	addrInfos, err := bs.Get(context.TODO())
-	require.NoError(t, err)
-	require.Len(t, addrInfos, 1)
-	addrInfo := addrInfos[0]
-	require.Len(t, addrInfo.Addrs, 1)
-	require.Equal(t, addr, addrInfo.Addrs[0].String())
-	require.Equal(t, peerID, addrInfo.ID.String())
 
 	cancel()
 	err = g.Wait()
