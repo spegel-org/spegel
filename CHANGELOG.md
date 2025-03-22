@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#785](https://github.com/spegel-org/spegel/pull/785) Fix verification of digests when parsing distribution path.
 - [#798](https://github.com/spegel-org/spegel/pull/798) Restart Spegel if Containerd event subscription is disconnected.
 - [#800](https://github.com/spegel-org/spegel/pull/800) Fix so that host is closed even when a bootstrap error occurs.
+- [#801](https://github.com/spegel-org/spegel/pull/801) Fix helm values naming for additionalMirrorTargets and mirroredRegistries.
 
 ### Security
 

@@ -52,7 +52,7 @@ spec:
           - --mirror-targets
           - http://$(NODE_IP):{{ .Values.service.registry.hostPort }}
           - http://$(NODE_IP):{{ .Values.service.registry.nodePort }}
-          {{- with .Values.spegel.additionalMirrorRegistries }}
+          {{- with .Values.spegel.additionalMirrorTargets }}
           {{- range . }}
           - {{ . | quote }}
           {{- end }}
@@ -87,7 +87,7 @@ spec:
           - --registry-addr=:{{ .Values.service.registry.port }}
           - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
-          {{- with .Values.spegel.registries }}
+          {{- with .Values.spegel.mirroredRegistries }}
           - --mirrored-registries
           {{- range . }}
           - {{ . | quote }}
