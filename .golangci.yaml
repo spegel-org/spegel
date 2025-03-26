@@ -66,6 +66,8 @@ linters:
           alias: digest
         - pkg: github.com/opencontainers/image-spec/specs-go/v1
           alias: ocispec
+        - pkg: k8s.io/apimachinery/pkg/util/version
+          alias: utilversion
       no-extra-aliases: true
     nolintlint:
       require-explanation: true

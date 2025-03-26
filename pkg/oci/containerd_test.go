@@ -31,6 +31,47 @@ func TestNewContainerd(t *testing.T) {
 	require.Equal(t, "local", c.contentPath)
 }
 
+func TestCanVerifyContainerdConfiguration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		version  string
+		expected bool
+	}{
+		{
+			version:  "v2.0.2",
+			expected: false,
+		},
+		{
+			version:  "2.1.4",
+			expected: false,
+		},
+		{
+			version:  "v1.7.27",
+			expected: true,
+		},
+		{
+			version:  "1.6.0",
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		// Testing with a suffix is important as some Linux distributions will modify the version
+		// with a non Semver compliant modification. Even if the version is supposed to comply with
+		// semver that may not always be the case.
+		for _, suffix := range []string{"", "~ds1"} {
+			version := tt.version + suffix
+			t.Run(version, func(t *testing.T) {
+				t.Parallel()
+
+				ok, err := canVerifyContainerdConfiguration(tt.version)
+				require.NoError(t, err)
+				require.Equal(t, tt.expected, ok)
+			})
+		}
+	}
+}
+
 func TestVerifyStatusResponse(t *testing.T) {
 	t.Parallel()
 
