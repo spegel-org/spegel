@@ -1,80 +1,96 @@
-run:
-  timeout: 3m
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - misspell
-    - testifylint
-    - nolintlint
     - bodyclose
-    - goimports
-    - importas
-    - ireturn
-    - perfsprint
+    - errcheck
     - gocritic
-    - paralleltest
+    - govet
     - importas
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-    disable-default-exclusions: true
-  govet:
-    enable-all: true
-    disable:
-      - shadow
-  testifylint:
-    enable-all: true
-  nolintlint:
-    require-explanation: true
-    require-specific: true
-  perfsprint:
-    strconcat: false
-  gocritic:
-    enable-all: true
-    disabled-checks:
-      - importShadow
-      - hugeParam
-      - rangeValCopy
-      - whyNoLint
-      - unnamedResult
-      - httpNoBody
-  importas:
-    no-extra-aliases: true
-    alias:
-      - pkg: io/fs
-        alias: iofs
-      - pkg: github.com/go-logr/logr/testing
-        alias: tlog
-      - pkg: github.com/pelletier/go-toml/v2/unstable
-        alias: tomlu
-      - pkg: github.com/multiformats/go-multiaddr/net
-        alias: manet
-      - pkg: github.com/multiformats/go-multiaddr
-        alias: ma
-      - pkg: github.com/multiformats/go-multicodec
-        alias: mc
-      - pkg: github.com/multiformats/go-multihash
-        alias: mh
-      - pkg: github.com/ipfs/go-cid
-        alias: cid
-      - pkg: github.com/libp2p/go-libp2p-kad-dht
-        alias: dht
-      - pkg: github.com/libp2p/go-libp2p/p2p/net/mock
-        alias: mocknet
-      - pkg: go.etcd.io/bbolt
-        alias: bolt
-      - pkg: k8s.io/cri-api/pkg/apis/runtime/v1
-        alias: runtimeapi
-      - pkg: github.com/containerd/containerd/api/events
-        alias: eventtypes
-      - pkg: github.com/opencontainers/go-digest
-        alias: digest
-      - pkg: github.com/opencontainers/image-spec/specs-go/v1
-        alias: ocispec
+    - ineffassign
+    - ireturn
+    - misspell
+    - nolintlint
+    - paralleltest
+    - perfsprint
+    - staticcheck
+    - testifylint
+    - unused
+  settings:
+    errcheck:
+      disable-default-exclusions: true
+      check-type-assertions: true
+      check-blank: true
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - importShadow
+        - hugeParam
+        - rangeValCopy
+        - whyNoLint
+        - unnamedResult
+        - httpNoBody
+    govet:
+      disable:
+        - shadow
+      enable-all: true
+    importas:
+      alias:
+        - pkg: io/fs
+          alias: iofs
+        - pkg: github.com/go-logr/logr/testing
+          alias: tlog
+        - pkg: github.com/pelletier/go-toml/v2/unstable
+          alias: tomlu
+        - pkg: github.com/multiformats/go-multiaddr/net
+          alias: manet
+        - pkg: github.com/multiformats/go-multiaddr
+          alias: ma
+        - pkg: github.com/multiformats/go-multicodec
+          alias: mc
+        - pkg: github.com/multiformats/go-multihash
+          alias: mh
+        - pkg: github.com/ipfs/go-cid
+          alias: cid
+        - pkg: github.com/libp2p/go-libp2p-kad-dht
+          alias: dht
+        - pkg: github.com/libp2p/go-libp2p/p2p/net/mock
+          alias: mocknet
+        - pkg: go.etcd.io/bbolt
+          alias: bolt
+        - pkg: k8s.io/cri-api/pkg/apis/runtime/v1
+          alias: runtimeapi
+        - pkg: github.com/containerd/containerd/api/events
+          alias: eventtypes
+        - pkg: github.com/opencontainers/go-digest
+          alias: digest
+        - pkg: github.com/opencontainers/image-spec/specs-go/v1
+          alias: ocispec
+      no-extra-aliases: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    perfsprint:
+      strconcat: false
+    testifylint:
+      enable-all: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

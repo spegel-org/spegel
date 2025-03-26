@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#807](https://github.com/spegel-org/spegel/pull/807) Update golangci lint and fix new issues.
+
 ### Security
 
 ## v0.1.0

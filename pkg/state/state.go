@@ -93,6 +93,7 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 
 func update(ctx context.Context, ociClient oci.Client, router routing.Router, event oci.ImageEvent, skipDigests, resolveLatestTag bool) (int, error) {
 	keys := []string{}
+	//nolint: staticcheck // Simplify in future.
 	if !(!resolveLatestTag && event.Image.IsLatestTag()) {
 		if tagName, ok := event.Image.TagName(); ok {
 			keys = append(keys, tagName)
