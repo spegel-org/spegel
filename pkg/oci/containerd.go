@@ -15,7 +15,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Masterminds/semver/v3"
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/content"
@@ -28,6 +27,7 @@ import (
 	tomlu "github.com/pelletier/go-toml/v2/unstable"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc"
+	utilversion "k8s.io/apimachinery/pkg/util/version"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
@@ -105,16 +105,12 @@ func (c *Containerd) Verify(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	version, err := semver.NewVersion(versionResp.GetRuntimeVersion())
+	ok, err = canVerifyContainerdConfiguration(versionResp.RuntimeVersion)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not check Containerd version %s: %w", versionResp.RuntimeVersion, err)
 	}
-	constraint, err := semver.NewConstraint(">1-0")
-	if err != nil {
-		return err
-	}
-	if constraint.Check(version) {
-		log.Info("unable to verify status response", "runtime_version", version.String())
+	if !ok {
+		log.Info("skipping verification of Containerd configuration", "version", versionResp.RuntimeVersion)
 		return nil
 	}
 
@@ -127,6 +123,14 @@ func (c *Containerd) Verify(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func canVerifyContainerdConfiguration(version string) (bool, error) {
+	v, err := utilversion.Parse(version)
+	if err != nil {
+		return false, err
+	}
+	return v.LessThan(utilversion.MustParse("2.0")), nil
 }
 
 func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) error {
