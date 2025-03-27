@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#807](https://github.com/spegel-org/spegel/pull/807) Update golangci lint and fix new issues.
+- [#810](https://github.com/spegel-org/spegel/pull/810) Increase timeout to avoid flakiness in conformance tests.
 
 ### Security
 
