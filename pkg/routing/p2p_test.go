@@ -189,6 +189,7 @@ func TestListenMultiaddrs(t *testing.T) {
 
 			multiAddrs, err := listenMultiaddrs(tt.addr)
 			require.NoError(t, err)
+			//nolint: testifylint // This is easier to read and understand.
 			require.Equal(t, len(tt.expected), len(multiAddrs))
 			for i, e := range tt.expected {
 				require.Equal(t, e, multiAddrs[i].String())

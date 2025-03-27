@@ -170,6 +170,7 @@ func measureImagePull(client *http.Client, regURL string, img oci.Image) ([]pull
 		},
 	}
 	for {
+		//nolint: staticcheck // Ignore until we have proper tests.
 		if len(queue) == 0 {
 			break
 		}
@@ -232,6 +233,7 @@ func fetchDistributionPath(client *http.Client, regURL string, dist oci.Distribu
 				return pullResult{}, nil, err
 			}
 			for _, m := range idx.Manifests {
+				//nolint: staticcheck // Simplify in the future.
 				if !(m.Platform.OS == runtime.GOOS && m.Platform.Architecture == runtime.GOARCH) {
 					continue
 				}
