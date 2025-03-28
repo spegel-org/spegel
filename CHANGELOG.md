@@ -17,11 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+### Security
+
+## v0.1.1
+
+### Fixed
+
 - [#807](https://github.com/spegel-org/spegel/pull/807) Update golangci lint and fix new issues.
 - [#810](https://github.com/spegel-org/spegel/pull/810) Increase timeout to avoid flakiness in conformance tests.
 - [#806](https://github.com/spegel-org/spegel/pull/806) Fix verification of Containerd configuration with suffixes.
-
-### Security
 
 ## v0.1.0
 
