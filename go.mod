@@ -1,8 +1,6 @@
 module github.com/spegel-org/spegel
 
-go 1.23.6
-
-toolchain go1.24.1
+go 1.24.1
 
 require (
 	github.com/alexflint/go-arg v1.5.1
@@ -17,7 +15,6 @@ require (
 	github.com/multiformats/go-multiaddr v0.15.0
 	github.com/multiformats/go-multicodec v0.9.0
 	github.com/multiformats/go-multihash v0.2.3
-	github.com/norwoodj/helm-docs v1.14.2
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pelletier/go-toml/v2 v2.2.3
@@ -128,6 +125,7 @@ require (
 	github.com/multiformats/go-multistream v0.6.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/norwoodj/helm-docs v1.14.2 // indirect
 	github.com/onsi/ginkgo/v2 v2.22.2 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/opencontainers/selinux v1.11.1 // indirect
@@ -199,3 +197,5 @@ require (
 	helm.sh/helm/v3 v3.15.2 // indirect
 	lukechampine.com/blake3 v1.4.0 // indirect
 )
+
+tool github.com/norwoodj/helm-docs/cmd/helm-docs
