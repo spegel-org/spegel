@@ -1,6 +1,7 @@
 module github.com/spegel-org/spegel
 
 go 1.24.1
+
 require (
 	github.com/alexflint/go-arg v1.5.1
 	github.com/containerd/containerd/api v1.8.0
@@ -22,7 +23,7 @@ require (
 	github.com/spf13/afero v1.14.0
 	github.com/stretchr/testify v1.10.0
 	go.etcd.io/bbolt v1.4.0
-	golang.org/x/sync v0.12.0
+	golang.org/x/sync v0.13.0
 	google.golang.org/grpc v1.71.0
 	k8s.io/apimachinery v0.32.3
 	k8s.io/cri-api v0.32.3
