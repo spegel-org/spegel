@@ -28,19 +28,19 @@ func TestE2E(t *testing.T) {
 	require.NotEmpty(t, proxyMode)
 	ipFamily := os.Getenv("E2E_IP_FAMILY")
 	require.NotEmpty(t, ipFamily)
-
-	ctx := context.Background()
 	kindName := "spegel-e2e"
 
 	// Create kind cluster.
-	kcPath := createKindCluster(ctx, t, kindName, proxyMode, ipFamily)
+	kcPath := createKindCluster(t.Context(), t, kindName, proxyMode, ipFamily)
 	t.Cleanup(func() {
 		t.Log("Deleting Kind cluster")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
 		command(ctx, t, fmt.Sprintf("kind delete cluster --name %s", kindName))
 	})
 
 	// Pull test images.
-	g, gCtx := errgroup.WithContext(ctx)
+	g, gCtx := errgroup.WithContext(t.Context())
 	images := []string{
 		"ghcr.io/spegel-org/conformance:583e014",
 		"docker.io/library/nginx:1.23.0",
@@ -65,30 +65,30 @@ func TestE2E(t *testing.T) {
 
 [host.https://registry-1.docker.io]
   capabilities = [push]`
-	command(ctx, t, fmt.Sprintf("docker exec %s-worker2 bash -c \"mkdir -p /etc/containerd/certs.d/docker.io; echo -e '%s' > /etc/containerd/certs.d/docker.io/hosts.toml\"", kindName, hostsToml))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 bash -c \"mkdir -p /etc/containerd/certs.d/docker.io; echo -e '%s' > /etc/containerd/certs.d/docker.io/hosts.toml\"", kindName, hostsToml))
 
 	// Deploy Spegel.
-	deploySpegel(ctx, t, kindName, imageRef, kcPath)
-	podOutput := command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
+	deploySpegel(t.Context(), t, kindName, imageRef, kcPath)
+	podOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
 	require.Len(t, strings.Split(podOutput, "\n"), 5)
 
 	// Verify that configuration has been backed up.
-	backupHostToml := command(ctx, t, fmt.Sprintf("docker exec %s-worker2 cat /etc/containerd/certs.d/_backup/docker.io/hosts.toml", kindName))
+	backupHostToml := command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 cat /etc/containerd/certs.d/_backup/docker.io/hosts.toml", kindName))
 	require.Equal(t, hostsToml, backupHostToml)
 
 	// Run conformance tests.
 	t.Log("Running conformance tests")
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s create namespace conformance --dry-run=client -o yaml | kubectl --kubeconfig %s apply -f -", kcPath, kcPath))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s apply --namespace conformance -f ./testdata/conformance-job.yaml", kcPath))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 90s --for=condition=complete job/conformance", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s create namespace conformance --dry-run=client -o yaml | kubectl --kubeconfig %s apply -f -", kcPath, kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply --namespace conformance -f ./testdata/conformance-job.yaml", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 90s --for=condition=complete job/conformance", kcPath))
 
 	// Remove Spegel from the last node to test that the mirror fallback is working.
-	workerPod := command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=%s-worker4", kcPath, kindName))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-worker4 spegel-", kcPath, kindName))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel wait --for=delete %s --timeout=60s", kcPath, workerPod))
+	workerPod := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=%s-worker4", kcPath, kindName))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-worker4 spegel-", kcPath, kindName))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel wait --for=delete %s --timeout=60s", kcPath, workerPod))
 
 	// Pull image from registry after Spegel has started.
-	command(ctx, t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd", kindName))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd", kindName))
 
 	// Verify that both local and external ports are working.
 	tests := []struct {
@@ -118,57 +118,57 @@ func TestE2E(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		hostIP := command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get nodes %s-%s -o jsonpath='{.status.addresses[?(@.type==\"InternalIP\")].address}'", kcPath, kindName, tt.node))
+		hostIP := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get nodes %s-%s -o jsonpath='{.status.addresses[?(@.type==\"InternalIP\")].address}'", kcPath, kindName, tt.node))
 		addr, err := netip.ParseAddr(hostIP)
 		require.NoError(t, err)
 		if addr.Is6() {
 			hostIP = fmt.Sprintf("[%s]", hostIP)
 		}
-		httpCode := command(ctx, t, fmt.Sprintf("docker exec %s-worker curl -s -o /dev/null -w \"%%{http_code}\" http://%s:%s/healthz || true", kindName, hostIP, tt.port))
+		httpCode := command(t.Context(), t, fmt.Sprintf("docker exec %s-worker curl -s -o /dev/null -w \"%%{http_code}\" http://%s:%s/healthz || true", kindName, hostIP, tt.port))
 		require.Equal(t, tt.expected, httpCode)
 	}
 
 	// Block internet access by only allowing RFC1918 CIDR.
-	nodes := getNodes(ctx, t, kindName)
+	nodes := getNodes(t.Context(), t, kindName)
 	for _, node := range nodes {
-		command(ctx, t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -d 10.0.0.0/8 -j ACCEPT", kindName, node))
-		command(ctx, t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -d 172.16.0.0/12 -j ACCEPT", kindName, node))
-		command(ctx, t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -d 192.168.0.0/16 -j ACCEPT", kindName, node))
-		command(ctx, t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -j REJECT", kindName, node))
+		command(t.Context(), t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -d 10.0.0.0/8 -j ACCEPT", kindName, node))
+		command(t.Context(), t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -d 172.16.0.0/12 -j ACCEPT", kindName, node))
+		command(t.Context(), t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -d 192.168.0.0/16 -j ACCEPT", kindName, node))
+		command(t.Context(), t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -j REJECT", kindName, node))
 	}
 
 	// Pull test image that does not contain any media types.
-	command(ctx, t, fmt.Sprintf("docker exec %s-worker3 crictl pull mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416", kindName))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker3 crictl pull mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416", kindName))
 
 	// Deploy test Nginx pods and verify deployment status.
 	t.Log("Deploy test Nginx pods")
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s apply -f ./testdata/test-nginx.yaml", kcPath))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-tag --for condition=available", kcPath))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-digest --for condition=available", kcPath))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-tag-and-digest --for condition=available", kcPath))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s -l app=nginx-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply -f ./testdata/test-nginx.yaml", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-tag --for condition=available", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-digest --for condition=available", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-tag-and-digest --for condition=available", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s -l app=nginx-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod", kcPath))
 
 	// Verify that Spegel has never restarted.
-	restartOutput := command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
+	restartOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
 	require.Equal(t, "0 0 0 0", restartOutput)
 
 	// Remove all Spegel Pods and only restart one to verify that running a single instance works.
 	t.Log("Scale down Spegel to single instance")
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-control-plane %s-worker %s-worker2 spegel-", kcPath, kindName, kindName, kindName))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel delete pods --all", kcPath))
-	command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel rollout status daemonset spegel --timeout 60s", kcPath))
-	podOutput = command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-control-plane %s-worker %s-worker2 spegel-", kcPath, kindName, kindName, kindName))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel delete pods --all", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel rollout status daemonset spegel --timeout 60s", kcPath))
+	podOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
 	require.Len(t, strings.Split(podOutput, "\n"), 1)
 
 	// Verify that Spegel has never restarted
-	restartOutput = command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
+	restartOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
 	require.Equal(t, "0", restartOutput)
 
 	// Restart Containerd and verify that Spegel restarts
 	t.Log("Restarting Containerd")
-	command(ctx, t, fmt.Sprintf("docker exec %s-worker3 systemctl restart containerd", kindName))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker3 systemctl restart containerd", kindName))
 	require.Eventually(t, func() bool {
-		restartOutput = command(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
+		restartOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
 		return restartOutput == "1"
 	}, 5*time.Second, 1*time.Second)
 }
@@ -178,11 +178,9 @@ func TestDevDeploy(t *testing.T) {
 
 	imageRef := os.Getenv("IMG_REF")
 	require.NotEmpty(t, imageRef)
-
-	ctx := context.Background()
 	kindName := "spegel-dev"
 
-	clusterOutput := command(ctx, t, "kind get clusters")
+	clusterOutput := command(t.Context(), t, "kind get clusters")
 	exists := false
 	for _, cluster := range strings.Split(clusterOutput, "\n") {
 		if cluster != kindName {
@@ -194,13 +192,13 @@ func TestDevDeploy(t *testing.T) {
 	kcPath := ""
 	if exists {
 		kcPath = filepath.Join(t.TempDir(), "kind.kubeconfig")
-		kcOutput := command(ctx, t, fmt.Sprintf("kind get kubeconfig --name %s", kindName))
+		kcOutput := command(t.Context(), t, fmt.Sprintf("kind get kubeconfig --name %s", kindName))
 		err := os.WriteFile(kcPath, []byte(kcOutput), 0o644)
 		require.NoError(t, err)
 	} else {
-		kcPath = createKindCluster(ctx, t, kindName, "iptables", "ipv4")
+		kcPath = createKindCluster(t.Context(), t, kindName, "iptables", "ipv4")
 	}
-	deploySpegel(ctx, t, kindName, imageRef, kcPath)
+	deploySpegel(t.Context(), t, kindName, imageRef, kcPath)
 }
 
 func createKindCluster(ctx context.Context, t *testing.T, kindName, proxyMode, ipFamily string) string {

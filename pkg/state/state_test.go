@@ -74,7 +74,7 @@ func TestTrack(t *testing.T) {
 			t.Parallel()
 
 			log := tlog.NewTestLogger(t)
-			ctx := logr.NewContext(context.Background(), log)
+			ctx := logr.NewContext(t.Context(), log)
 			ctx, cancel := context.WithCancel(ctx)
 
 			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))

@@ -1,7 +1,6 @@
 package oci
 
 import (
-	"context"
 	"fmt"
 	iofs "io/fs"
 	"maps"
@@ -602,7 +601,7 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 				err := afero.WriteFile(fs, k, []byte(v), 0o644)
 				require.NoError(t, err)
 			}
-			err := AddMirrorConfiguration(context.TODO(), fs, registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags, tt.prependExisting, tt.username, tt.password)
+			err := AddMirrorConfiguration(t.Context(), fs, registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags, tt.prependExisting, tt.username, tt.password)
 			require.NoError(t, err)
 			ok, err := afero.DirExists(fs, "/etc/containerd/certs.d/_backup")
 			require.NoError(t, err)
@@ -633,19 +632,19 @@ func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
 	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 
 	registries := stringListToUrlList(t, []string{"ftp://docker.io"})
-	err := AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
+	err := AddMirrorConfiguration(t.Context(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url scheme must be http or https: ftp://docker.io")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io/foo/bar"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
+	err = AddMirrorConfiguration(t.Context(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url path has to be empty: https://docker.io/foo/bar")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io?foo=bar"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
+	err = AddMirrorConfiguration(t.Context(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url query has to be empty: https://docker.io?foo=bar")
 
 	registries = stringListToUrlList(t, []string{"https://foo@docker.io"})
-	err = AddMirrorConfiguration(context.TODO(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
+	err = AddMirrorConfiguration(t.Context(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
 }
 

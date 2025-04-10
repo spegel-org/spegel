@@ -19,10 +19,10 @@ import (
 func TestP2PRouter(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	bs := NewStaticBootstrapper()
-	router, err := NewP2PRouter(context.TODO(), "localhost:0", bs, "9090")
+	router, err := NewP2PRouter(ctx, "localhost:0", bs, "9090")
 	require.NoError(t, err)
 
 	g, gCtx := errgroup.WithContext(ctx)
@@ -57,23 +57,23 @@ func TestReady(t *testing.T) {
 	t.Parallel()
 
 	bs := NewStaticBootstrapper()
-	router, err := NewP2PRouter(context.TODO(), "localhost:0", bs, "9090")
+	router, err := NewP2PRouter(t.Context(), "localhost:0", bs, "9090")
 	require.NoError(t, err)
 
 	// Should not be ready if no peers are found.
-	isReady, err := router.Ready(context.TODO())
+	isReady, err := router.Ready(t.Context())
 	require.NoError(t, err)
 	require.False(t, isReady)
 
 	// Should be ready if only peer is host.
 	bs.SetPeers([]peer.AddrInfo{*host.InfoFromHost(router.host)})
-	isReady, err = router.Ready(context.TODO())
+	isReady, err = router.Ready(t.Context())
 	require.NoError(t, err)
 	require.True(t, isReady)
 
 	// Shouldd be not ready with multiple peers but empty routing table.
 	bs.SetPeers([]peer.AddrInfo{{}, {}})
-	isReady, err = router.Ready(context.TODO())
+	isReady, err = router.Ready(t.Context())
 	require.NoError(t, err)
 	require.False(t, isReady)
 
@@ -84,7 +84,7 @@ func TestReady(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	bs.SetPeers([]peer.AddrInfo{{}, {}})
-	isReady, err = router.Ready(context.TODO())
+	isReady, err = router.Ready(t.Context())
 	require.NoError(t, err)
 	require.True(t, isReady)
 }
@@ -93,7 +93,7 @@ func TestBootstrapFunc(t *testing.T) {
 	t.Parallel()
 
 	log := tlog.NewTestLogger(t)
-	ctx := logr.NewContext(context.Background(), log)
+	ctx := logr.NewContext(t.Context(), log)
 
 	mn, err := mocknet.WithNPeers(2)
 	require.NoError(t, err)
