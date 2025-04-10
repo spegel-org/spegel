@@ -1,7 +1,6 @@
 package oci
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -51,7 +50,7 @@ func TestOCIClient(t *testing.T) {
 	require.NoError(t, err)
 	db := metadata.NewDB(boltDB, contentStore, nil)
 	imageStore := metadata.NewImageStore(db)
-	ctx := namespaces.WithNamespace(context.TODO(), "k8s.io")
+	ctx := namespaces.WithNamespace(t.Context(), "k8s.io")
 	for _, img := range imgs {
 		dgst, err := digest.Parse(img["digest"])
 		require.NoError(t, err)

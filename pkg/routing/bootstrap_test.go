@@ -30,13 +30,13 @@ func TestStaticBootstrap(t *testing.T) {
 	bs := NewStaticBootstrapper()
 	bs.SetPeers(peers)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return bs.Run(gCtx, "")
 	})
 
-	bsPeers, err := bs.Get(context.TODO())
+	bsPeers, err := bs.Get(t.Context())
 	require.NoError(t, err)
 	require.ElementsMatch(t, peers, bsPeers)
 
@@ -48,9 +48,6 @@ func TestStaticBootstrap(t *testing.T) {
 func TestHTTPBootstrap(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
-
 	id := "/ip4/104.131.131.82/tcp/4001/ipfs/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"
 	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//nolint:errcheck // ignore
@@ -58,14 +55,23 @@ func TestHTTPBootstrap(t *testing.T) {
 	}))
 	defer svr.Close()
 
-	bootstrapper := NewHTTPBootstrapper(":", svr.URL)
-	//nolint:errcheck // ignore
-	go bootstrapper.Run(ctx, id)
-	addrInfos, err := bootstrapper.Get(context.TODO())
+	bs := NewHTTPBootstrapper(":", svr.URL)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return bs.Run(gCtx, "")
+	})
+
+	addrInfos, err := bs.Get(t.Context())
 	require.NoError(t, err)
 	require.Len(t, addrInfos, 1)
 	addrInfo := addrInfos[0]
 	require.Len(t, addrInfo.Addrs, 1)
 	require.Equal(t, "/ip4/104.131.131.82/tcp/4001", addrInfo.Addrs[0].String())
 	require.Equal(t, "QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ", addrInfo.ID.String())
+
+	cancel()
+	err = g.Wait()
+	require.NoError(t, err)
 }
