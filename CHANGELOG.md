@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#812](https://github.com/spegel-org/spegel/pull/812) Upgrade to Go 1.24.1 and switch to use go tool for helm docs.
 - [#725](https://github.com/spegel-org/spegel/pull/725) Remove use of httputil reverse proxy.
+- [#820](https://github.com/spegel-org/spegel/pull/820) Switch to using new test context.
 
 ### Deprecated
 
