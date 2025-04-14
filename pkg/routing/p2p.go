@@ -1,7 +1,9 @@
 package routing
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -15,7 +17,9 @@ import (
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/sec"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	ma "github.com/multiformats/go-multiaddr"
@@ -27,10 +31,15 @@ import (
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
-const KeyTTL = 10 * time.Minute
+const (
+	KeyTTL            = 10 * time.Minute
+	MetadataProtocol  = "/spegel/metadata"
+	DHTProtocolPrefix = "/spegel"
+)
 
 type P2PRouterConfig struct {
-	libp2pOpts []libp2p.Option
+	Zone       string
+	Libp2pOpts []libp2p.Option
 }
 
 func (cfg *P2PRouterConfig) Apply(opts ...P2PRouterOption) error {
@@ -49,9 +58,20 @@ type P2PRouterOption func(cfg *P2PRouterConfig) error
 
 func LibP2POptions(opts ...libp2p.Option) P2PRouterOption {
 	return func(cfg *P2PRouterConfig) error {
-		cfg.libp2pOpts = opts
+		cfg.Libp2pOpts = opts
 		return nil
 	}
+}
+
+func Zone(zone string) P2PRouterOption {
+	return func(cfg *P2PRouterConfig) error {
+		cfg.Zone = zone
+		return nil
+	}
+}
+
+type PeerMetadata struct {
+	Zone string `json:"zone"`
 }
 
 type P2PRouter struct {
@@ -59,6 +79,7 @@ type P2PRouter struct {
 	host         host.Host
 	kdht         *dht.IpfsDHT
 	rd           *routing.RoutingDiscovery
+	selfMd       *PeerMetadata
 	registryPort uint16
 }
 
@@ -103,7 +124,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
 		addrFactoryOpt,
 	}
-	libp2pOpts = append(libp2pOpts, cfg.libp2pOpts...)
+	libp2pOpts = append(libp2pOpts, cfg.Libp2pOpts...)
 	host, err := libp2p.New(libp2pOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
@@ -116,9 +137,20 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		return nil, fmt.Errorf("expected single host address but got %d %s", len(addrs), strings.Join(addrs, ", "))
 	}
 
+	var selfMd *PeerMetadata
+	if cfg.Zone != "" {
+		selfMd = &PeerMetadata{
+			Zone: cfg.Zone,
+		}
+		err = registerPeerMetadata(ctx, host, *selfMd)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	dhtOpts := []dht.Option{
 		dht.Mode(dht.ModeServer),
-		dht.ProtocolPrefix("/spegel"),
+		dht.ProtocolPrefix(DHTProtocolPrefix),
 		dht.DisableValues(),
 		dht.MaxRecordAge(KeyTTL),
 		dht.BootstrapPeersFunc(bootstrapFunc(ctx, bs, host)),
@@ -135,6 +167,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		kdht:         kdht,
 		rd:           rd,
 		registryPort: uint16(registryPort),
+		selfMd:       selfMd,
 	}, nil
 }
 
@@ -186,18 +219,22 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 
 func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
+
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
 	}
+
 	// If using unlimited retries (count=0), ensure that the peer address channel
 	// does not become blocking by using a reasonable non-zero buffer size.
 	peerBufferSize := count
 	if peerBufferSize == 0 {
 		peerBufferSize = 20
 	}
+
 	addrInfoCh := r.rd.FindProvidersAsync(ctx, c, count)
 	peerCh := make(chan netip.AddrPort, peerBufferSize)
+	peerBuffer := []netip.AddrPort{}
 	go func() {
 		resolveTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
 		for addrInfo := range addrInfoCh {
@@ -205,6 +242,8 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 			if !allowSelf && addrInfo.ID == r.host.ID() {
 				continue
 			}
+
+			// Convert address to netip.
 			if len(addrInfo.Addrs) != 1 {
 				addrs := []string{}
 				for _, addr := range addrInfo.Addrs {
@@ -224,6 +263,19 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 				continue
 			}
 			peer := netip.AddrPortFrom(ipAddr, r.registryPort)
+
+			// Delay peers that do not match the same zone.
+			if r.selfMd != nil {
+				md, err := getPeerMetadata(ctx, r.host, addrInfo.ID, *r.selfMd)
+				if err != nil {
+					log.Error(err, "could not get peer metadata")
+				}
+				if md.Zone != r.selfMd.Zone {
+					peerBuffer = append(peerBuffer, peer)
+					continue
+				}
+			}
+
 			// Don't block if the client has disconnected before reading all values from the channel
 			select {
 			case peerCh <- peer:
@@ -233,6 +285,14 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 		}
 		close(peerCh)
 	}()
+	for _, peer := range peerBuffer {
+		// Don't block if the client has disconnected before reading all values from the channel
+		select {
+		case peerCh <- peer:
+		default:
+			log.V(4).Info("mirror endpoint dropped: peer channel is full")
+		}
+	}
 	return peerCh, nil
 }
 
@@ -409,4 +469,88 @@ func hostMatches(host, addrInfo peer.AddrInfo) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func registerPeerMetadata(ctx context.Context, h host.Host, selfMd PeerMetadata) error {
+	err := h.Peerstore().Put(h.ID(), MetadataProtocol, selfMd)
+	if err != nil {
+		return err
+	}
+	h.SetStreamHandler(MetadataProtocol, func(s network.Stream) {
+		defer s.Close()
+
+		buf := bufio.NewReader(s)
+		b, err := buf.ReadBytes('\n')
+		if err != nil {
+			s.Reset()
+			return
+		}
+		md := PeerMetadata{}
+		err = json.Unmarshal(b, &md)
+		if err != nil {
+			s.Reset()
+			return
+		}
+		err = h.Peerstore().Put(s.Conn().RemotePeer(), MetadataProtocol, md)
+		if err != nil {
+			s.Reset()
+			return
+		}
+		b, err = json.Marshal(selfMd)
+		if err != nil {
+			s.Reset()
+			return
+		}
+		b = append(b, '\n')
+		_, err = s.Write(b)
+		if err != nil {
+			s.Reset()
+			return
+		}
+	})
+	return nil
+}
+
+func getPeerMetadata(ctx context.Context, h host.Host, peerID peer.ID, selfMd PeerMetadata) (PeerMetadata, error) {
+	d, err := h.Peerstore().Get(peerID, MetadataProtocol)
+	if err != nil && !errors.Is(err, peerstore.ErrNotFound) {
+		return PeerMetadata{}, err
+	}
+	if err == nil {
+		md, ok := d.(PeerMetadata)
+		if !ok {
+			return PeerMetadata{}, errors.New("unknown peer metadata type")
+		}
+		return md, nil
+	}
+
+	b, err := json.Marshal(selfMd)
+	if err != nil {
+		return PeerMetadata{}, err
+	}
+	b = append(b, '\n')
+	s, err := h.NewStream(ctx, peerID, MetadataProtocol)
+	if err != nil {
+		return PeerMetadata{}, err
+	}
+	defer s.Close()
+	_, err = s.Write(b)
+	if err != nil {
+		return PeerMetadata{}, err
+	}
+	buf := bufio.NewReader(s)
+	b, err = buf.ReadBytes('\n')
+	if err != nil {
+		return PeerMetadata{}, err
+	}
+	md := PeerMetadata{}
+	err = json.Unmarshal(b, &md)
+	if err != nil {
+		return PeerMetadata{}, err
+	}
+	err = h.Peerstore().Put(peerID, MetadataProtocol, md)
+	if err != nil {
+		return PeerMetadata{}, err
+	}
+	return md, nil
 }

@@ -23,13 +23,16 @@ func TestP2PRouterOptions(t *testing.T) {
 	libp2pOpts := []libp2p.Option{
 		libp2p.ListenAddrStrings("foo"),
 	}
+	zone := "west-1-a"
 	opts := []P2PRouterOption{
 		LibP2POptions(libp2pOpts...),
+		Zone(zone),
 	}
 	cfg := P2PRouterConfig{}
 	err := cfg.Apply(opts...)
 	require.NoError(t, err)
-	require.Equal(t, libp2pOpts, cfg.libp2pOpts)
+	require.Equal(t, libp2pOpts, cfg.Libp2pOpts)
+	require.Equal(t, zone, cfg.Zone)
 }
 
 func TestP2PRouter(t *testing.T) {

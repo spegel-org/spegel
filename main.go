@@ -55,6 +55,7 @@ type RegistryCmd struct {
 	ContainerdContentPath        string        `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
 	RouterAddr                   string        `arg:"--router-addr,env:ROUTER_ADDR,required" help:"address to serve router."`
 	RegistryAddr                 string        `arg:"--registry-addr,env:REGISTRY_ADDR,required" help:"address to server image registry."`
+	Zone                         string        `arg:"--zone,env:ZONE" help:"If set the router will prioritize peers within the same zone."`
 	MirroredRegistries           []url.URL     `arg:"--mirrored-registries,env:MIRRORED_REGISTRIES" help:"Registries that are configured to be mirrored, if slice is empty all registires are mirrored."`
 	MirrorResolveTimeout         time.Duration `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries         int           `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
@@ -143,7 +144,11 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	if err != nil {
 		return err
 	}
-	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort)
+
+	p2pOpts := []routing.P2PRouterOption{
+		routing.Zone(args.Zone),
+	}
+	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort, p2pOpts...)
 	if err != nil {
 		return err
 	}
