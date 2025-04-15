@@ -52,14 +52,14 @@ func TestP2PRouter(t *testing.T) {
 
 	err = router.Advertise(ctx, nil)
 	require.NoError(t, err)
-	peerCh, err := router.Resolve(ctx, "foo", true, 1)
+	peerCh, err := router.Resolve(ctx, "foo", 1)
 	require.NoError(t, err)
 	peer := <-peerCh
 	require.False(t, peer.IsValid())
 
 	err = router.Advertise(ctx, []string{"foo"})
 	require.NoError(t, err)
-	peerCh, err = router.Resolve(ctx, "foo", true, 1)
+	peerCh, err = router.Resolve(ctx, "foo", 1)
 	require.NoError(t, err)
 	peer = <-peerCh
 	require.True(t, peer.IsValid())

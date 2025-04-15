@@ -18,7 +18,7 @@ var (
 	MirrorRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "spegel_mirror_requests_total",
 		Help: "Total number of mirror requests.",
-	}, []string{"registry", "cache", "source"})
+	}, []string{"registry", "cache"})
 	ResolveDurHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "spegel_resolve_duration_seconds",
 		Help: "The duration for router to resolve a peer.",

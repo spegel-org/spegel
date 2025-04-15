@@ -134,7 +134,7 @@ func (w *Web) measure(req *http.Request) (string, any, error) {
 
 	// Resolve peers for the given image.
 	resolveStart := time.Now()
-	peerCh, err := w.router.Resolve(req.Context(), imgName, false, 0)
+	peerCh, err := w.router.Resolve(req.Context(), imgName, 0)
 	if err != nil {
 		return "", nil, err
 	}
