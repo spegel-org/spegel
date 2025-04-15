@@ -90,7 +90,7 @@ func WithBasicAuth(username, password string) Option {
 
 func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *Registry {
 	bufferPool := &sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			buf := make([]byte, 32*1024)
 			return &buf
 		},
