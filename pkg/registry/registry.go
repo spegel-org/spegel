@@ -277,7 +277,7 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist o
 			// Request has been closed by server or client. No use continuing.
 			rw.WriteError(http.StatusNotFound, fmt.Errorf("mirroring for image component %s has been cancelled: %w", dist.Reference(), resolveCtx.Err()))
 			return
-		case ipAddr, ok := <-peerCh:
+		case peer, ok := <-peerCh:
 			// Channel closed means no more mirrors will be received and max retries has been reached.
 			if !ok {
 				err = fmt.Errorf("mirror with image component %s could not be found", dist.Reference())
@@ -290,12 +290,12 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist o
 
 			mirrorAttempts++
 
-			err := forwardRequest(r.client, r.bufferPool, req, rw, ipAddr)
+			err := forwardRequest(r.client, r.bufferPool, req, rw, peer)
 			if err != nil {
-				log.Error(err, "request to mirror failed", "attempt", mirrorAttempts, "path", req.URL.Path, "mirror", ipAddr)
+				log.Error(err, "request to mirror failed", "attempt", mirrorAttempts, "path", req.URL.Path, "mirror", peer)
 				continue
 			}
-			log.V(4).Info("mirrored request", "path", req.URL.Path, "mirror", ipAddr)
+			log.V(4).Info("mirrored request", "path", req.URL.Path, "mirror", peer)
 			return
 		}
 	}
