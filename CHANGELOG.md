@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#824](https://github.com/spegel-org/spegel/pull/824) Fix improper image string formatting and expand tests.
+
 ### Security
 
 ## v0.1.1
