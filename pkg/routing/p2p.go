@@ -29,6 +29,31 @@ import (
 
 const KeyTTL = 10 * time.Minute
 
+type P2PRouterConfig struct {
+	libp2pOpts []libp2p.Option
+}
+
+func (cfg *P2PRouterConfig) Apply(opts ...P2PRouterOption) error {
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type P2PRouterOption func(cfg *P2PRouterConfig) error
+
+func LibP2POptions(opts ...libp2p.Option) P2PRouterOption {
+	return func(cfg *P2PRouterConfig) error {
+		cfg.libp2pOpts = opts
+		return nil
+	}
+}
+
 type P2PRouter struct {
 	bootstrapper Bootstrapper
 	host         host.Host
@@ -37,7 +62,13 @@ type P2PRouter struct {
 	registryPort uint16
 }
 
-func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...libp2p.Option) (*P2PRouter, error) {
+func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
+	cfg := P2PRouterConfig{}
+	err := cfg.Apply(opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	registryPort, err := strconv.ParseUint(registryPortStr, 10, 16)
 	if err != nil {
 		return nil, err
@@ -67,12 +98,13 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		}
 		return nil
 	})
-	opts = append(opts,
+	libp2pOpts := []libp2p.Option{
 		libp2p.ListenAddrs(multiAddrs...),
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
 		addrFactoryOpt,
-	)
-	host, err := libp2p.New(opts...)
+	}
+	libp2pOpts = append(libp2pOpts, cfg.libp2pOpts...)
+	host, err := libp2p.New(libp2pOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
 	}

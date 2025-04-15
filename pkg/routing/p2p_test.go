@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	tlog "github.com/go-logr/logr/testing"
+	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
@@ -15,6 +16,21 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 )
+
+func TestP2PRouterOptions(t *testing.T) {
+	t.Parallel()
+
+	libp2pOpts := []libp2p.Option{
+		libp2p.ListenAddrStrings("foo"),
+	}
+	opts := []P2PRouterOption{
+		LibP2POptions(libp2pOpts...),
+	}
+	cfg := P2PRouterConfig{}
+	err := cfg.Apply(opts...)
+	require.NoError(t, err)
+	require.Equal(t, libp2pOpts, cfg.libp2pOpts)
+}
 
 func TestP2PRouter(t *testing.T) {
 	t.Parallel()
