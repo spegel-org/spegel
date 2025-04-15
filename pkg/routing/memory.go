@@ -3,6 +3,7 @@ package routing
 import (
 	"context"
 	"net/netip"
+	"slices"
 	"sync"
 )
 
@@ -62,10 +63,8 @@ func (m *MemoryRouter) Add(key string, ap netip.AddrPort) {
 		m.resolver[key] = []netip.AddrPort{ap}
 		return
 	}
-	for _, h := range v {
-		if h == ap {
-			return
-		}
+	if slices.Contains(v, ap) {
+		return
 	}
 	m.resolver[key] = append(v, ap)
 }

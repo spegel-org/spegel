@@ -99,10 +99,7 @@ func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 			Addrs: []ma.Multiaddr{addr},
 		})
 	}
-	limit := b.limit
-	if len(addrInfos) < limit {
-		limit = len(addrInfos)
-	}
+	limit := min(len(addrInfos), b.limit)
 	return addrInfos[:limit], nil
 }
 
