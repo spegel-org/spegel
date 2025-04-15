@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- [#831](https://github.com/spegel-org/spegel/pull/831) Remove local address check when resolving peers.
+
 ### Fixed
 
 - [#824](https://github.com/spegel-org/spegel/pull/824) Fix improper image string formatting and expand tests.

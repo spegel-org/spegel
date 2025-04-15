@@ -99,7 +99,6 @@ spec:
           - --bootstrap-kind=dns
           - --dns-bootstrap-domain={{ include "spegel.fullname" . }}-bootstrap.{{ include "spegel.namespace" . }}.svc.{{ .Values.clusterDomain }}
           - --resolve-latest-tag={{ .Values.spegel.resolveLatestTag }}
-          - --local-addr=$(NODE_IP):{{ .Values.service.registry.hostPort }}
           {{- with .Values.spegel.containerdContentPath }}
           - --containerd-content-path={{ . }}
           {{- end }}

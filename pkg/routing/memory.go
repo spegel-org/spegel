@@ -7,6 +7,8 @@ import (
 	"sync"
 )
 
+var _ Router = &MemoryRouter{}
+
 type MemoryRouter struct {
 	resolver map[string][]netip.AddrPort
 	self     netip.AddrPort
@@ -27,7 +29,7 @@ func (m *MemoryRouter) Ready(ctx context.Context) (bool, error) {
 	return len(m.resolver) > 0, nil
 }
 
-func (m *MemoryRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {
+func (m *MemoryRouter) Resolve(ctx context.Context, key string, count int) (<-chan netip.AddrPort, error) {
 	m.mx.RLock()
 	peers, ok := m.resolver[key]
 	m.mx.RUnlock()

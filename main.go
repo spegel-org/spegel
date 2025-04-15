@@ -49,7 +49,6 @@ type RegistryCmd struct {
 	BootstrapConfig
 	ContainerdRegistryConfigPath string        `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
 	MetricsAddr                  string        `arg:"--metrics-addr,required,env:METRICS_ADDR" help:"address to serve metrics."`
-	LocalAddr                    string        `arg:"--local-addr,required,env:LOCAL_ADDR" help:"Address that the local Spegel instance will be reached at."`
 	ContainerdSock               string        `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string        `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
 	ContainerdContentPath        string        `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
@@ -165,7 +164,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithResolveLatestTag(args.ResolveLatestTag),
 		registry.WithResolveRetries(args.MirrorResolveRetries),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
-		registry.WithLocalAddress(args.LocalAddr),
 		registry.WithLogger(log),
 		registry.WithBasicAuth(username, password),
 	}

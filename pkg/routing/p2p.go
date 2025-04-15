@@ -54,6 +54,8 @@ func LibP2POptions(opts ...libp2p.Option) P2PRouterOption {
 	}
 }
 
+var _ Router = &P2PRouter{}
+
 type P2PRouter struct {
 	bootstrapper Bootstrapper
 	host         host.Host
@@ -184,7 +186,7 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, count int) (<-chan netip.AddrPort, error) {
+func (r *P2PRouter) Resolve(ctx context.Context, key string, count int) (<-chan netip.AddrPort, error) {
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
@@ -202,9 +204,6 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 		resolveTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
 		for addrInfo := range addrInfoCh {
 			resolveTimer.ObserveDuration()
-			if !allowSelf && addrInfo.ID == r.host.ID() {
-				continue
-			}
 			if len(addrInfo.Addrs) != 1 {
 				addrs := []string{}
 				for _, addr := range addrInfo.Addrs {

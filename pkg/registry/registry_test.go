@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spegel-org/spegel/internal/mux"
+	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
@@ -128,7 +129,7 @@ func TestMirrorHandler(t *testing.T) {
 		"sha256:11242d2a347bf8ab30b9f92d5ca219bbbedf95df5a8b74631194561497c1fae8": {badAddrPort, badAddrPort, goodAddrPort},
 	}
 	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
-	reg := NewRegistry(nil, router)
+	reg := NewRegistry(oci.NewMemory(), router)
 
 	tests := []struct {
 		expectedHeaders map[string][]string

@@ -23,7 +23,7 @@ func TestMemoryRouter(t *testing.T) {
 	require.True(t, isReady)
 
 	r.Add("foo", netip.MustParseAddrPort("127.0.0.1:9090"))
-	peerCh, err := r.Resolve(t.Context(), "foo", true, 2)
+	peerCh, err := r.Resolve(t.Context(), "foo", 2)
 	require.NoError(t, err)
 	peers := []netip.AddrPort{}
 	for peer := range peerCh {
@@ -34,7 +34,7 @@ func TestMemoryRouter(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, peers, 2)
 
-	peerCh, err = r.Resolve(t.Context(), "bar", false, 1)
+	peerCh, err = r.Resolve(t.Context(), "bar", 1)
 	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 	select {

@@ -33,7 +33,6 @@ type Registry struct {
 	log              logr.Logger
 	ociClient        oci.Client
 	router           routing.Router
-	localAddr        string
 	username         string
 	password         string
 	resolveRetries   int
@@ -66,12 +65,6 @@ func WithTransport(transport http.RoundTripper) Option {
 		r.client = &http.Client{
 			Transport: transport,
 		}
-	}
-}
-
-func WithLocalAddress(localAddr string) Option {
-	return func(r *Registry) {
-		r.localAddr = localAddr
 	}
 }
 
@@ -216,8 +209,18 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 	if req.Header.Get(MirroredHeaderKey) != "true" {
 		// Set mirrored header in request to stop infinite loops
 		req.Header.Set(MirroredHeaderKey, "true")
-		r.handleMirror(rw, req, dist)
-		return "mirror"
+
+		// If content is present locally we should skip the mirroring and just serve it.
+		var ociErr error
+		if dist.Digest == "" {
+			_, ociErr = r.ociClient.Resolve(req.Context(), dist.Reference())
+		} else {
+			_, ociErr = r.ociClient.Size(req.Context(), dist.Digest)
+		}
+		if ociErr != nil {
+			r.handleMirror(rw, req, dist)
+			return "mirror"
+		}
 	}
 
 	// Serve registry endpoints.
@@ -237,21 +240,12 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	log := r.log.WithValues("ref", dist.Reference(), "path", req.URL.Path, "ip", getClientIP(req))
 
-	isExternal := r.isExternalRequest(req)
-	if isExternal {
-		log.Info("handling mirror request from external node")
-	}
-
 	defer func() {
-		sourceType := "internal"
-		if isExternal {
-			sourceType = "external"
-		}
 		cacheType := "hit"
 		if rw.Status() != http.StatusOK {
 			cacheType = "miss"
 		}
-		metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, cacheType, sourceType).Inc()
+		metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, cacheType).Inc()
 	}()
 
 	if !r.resolveLatestTag && dist.IsLatestTag() {
@@ -264,7 +258,7 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist o
 	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
 	defer cancel()
 	resolveCtx = logr.NewContext(resolveCtx, log)
-	peerCh, err := r.router.Resolve(resolveCtx, dist.Reference(), isExternal, r.resolveRetries)
+	peerCh, err := r.router.Resolve(resolveCtx, dist.Reference(), r.resolveRetries)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("error occurred when attempting to resolve mirrors: %w", err))
 		return
@@ -350,10 +344,6 @@ func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dist oci
 	defer rc.Close()
 
 	http.ServeContent(rw, req, "", time.Time{}, rc)
-}
-
-func (r *Registry) isExternalRequest(req *http.Request) bool {
-	return req.Host != r.localAddr
 }
 
 func forwardRequest(client *http.Client, bufferPool *sync.Pool, req *http.Request, rw http.ResponseWriter, addrPort netip.AddrPort) error {
