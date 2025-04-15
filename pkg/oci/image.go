@@ -50,7 +50,7 @@ func (i Image) String() string {
 	if i.Digest != "" {
 		digest = "@" + i.Digest.String()
 	}
-	return fmt.Sprintf("%s/%s%s@%s", i.Registry, i.Repository, tag, digest)
+	return fmt.Sprintf("%s/%s%s%s", i.Registry, i.Repository, tag, digest)
 }
 
 func (i Image) TagName() (string, bool) {

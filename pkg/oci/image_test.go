@@ -16,6 +16,7 @@ func TestParseImageRequireDigest(t *testing.T) {
 		image              string
 		expectedRepository string
 		expectedTag        string
+		expectedString     string
 		expectedDigest     digest.Digest
 		expectedIsLatest   bool
 		digestInImage      bool
@@ -28,6 +29,7 @@ func TestParseImageRequireDigest(t *testing.T) {
 			expectedTag:        "latest",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
 			expectedIsLatest:   true,
+			expectedString:     "library/ubuntu:latest@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 		{
 			name:               "Only tag",
@@ -37,6 +39,7 @@ func TestParseImageRequireDigest(t *testing.T) {
 			expectedTag:        "3.18.0",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
 			expectedIsLatest:   false,
+			expectedString:     "library/alpine:3.18.0@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 		{
 			name:               "Tag and digest",
@@ -46,6 +49,7 @@ func TestParseImageRequireDigest(t *testing.T) {
 			expectedTag:        "3.18.0",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
 			expectedIsLatest:   false,
+			expectedString:     "jetstack/cert-manager-controller:3.18.0@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 		{
 			name:               "Only digest",
@@ -55,6 +59,7 @@ func TestParseImageRequireDigest(t *testing.T) {
 			expectedTag:        "",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
 			expectedIsLatest:   false,
+			expectedString:     "fluxcd/helm-controller@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 		{
 			name:               "Digest only in extra digest",
@@ -63,6 +68,7 @@ func TestParseImageRequireDigest(t *testing.T) {
 			expectedRepository: "foo/bar",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
 			expectedIsLatest:   false,
+			expectedString:     "foo/bar@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 	}
 	registries := []string{"docker.io", "quay.io", "ghcr.com", "127.0.0.1"}
@@ -91,22 +97,100 @@ func TestParseImageRequireDigest(t *testing.T) {
 						require.True(t, ok)
 						require.Equal(t, registry+"/"+tt.expectedRepository+":"+tt.expectedTag, tagName)
 					}
+					require.Equal(t, fmt.Sprintf("%s/%s", registry, tt.expectedString), img.String())
 				}
 			})
 		}
 	}
 }
 
-func TestParseImageDigestDoesNotMatch(t *testing.T) {
+func TestParseImageRequireDigestErrors(t *testing.T) {
 	t.Parallel()
 
-	_, err := ParseImageRequireDigest("quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb", digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"))
-	require.EqualError(t, err, "invalid digest set does not match parsed digest: quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb")
+	tests := []struct {
+		name          string
+		s             string
+		dgst          digest.Digest
+		expectedError string
+	}{
+		{
+			name:          "digests do not match",
+			s:             "quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb",
+			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
+			expectedError: "invalid digest set does not match parsed digest: quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb",
+		},
+		{
+			name:          "no tag or digest",
+			s:             "ghcr.io/spegel-org/spegel",
+			dgst:          "",
+			expectedError: "image needs to contain a digest",
+		},
+		{
+			name:          "reference contains protocol",
+			s:             "https://example.com/test:latest",
+			dgst:          "",
+			expectedError: "invalid reference",
+		},
+		{
+			name:          "unparsable url",
+			s:             "example%#$.com/foo",
+			dgst:          "",
+			expectedError: "parse \"dummy://example%\": invalid URL escape \"%\"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := ParseImageRequireDigest(tt.s, tt.dgst)
+			require.EqualError(t, err, tt.expectedError)
+		})
+	}
 }
 
-func TestParseImageNoTagOrDigest(t *testing.T) {
+func TestNewImageErrors(t *testing.T) {
 	t.Parallel()
 
-	_, err := ParseImageRequireDigest("ghcr.io/spegel-org/spegel", digest.Digest(""))
-	require.EqualError(t, err, "image needs to contain a digest")
+	// TODO (phillebaba): Add test case for no digest or tag. One needs to be set.
+	tests := []struct {
+		name          string
+		registry      string
+		repository    string
+		tag           string
+		dgst          digest.Digest
+		expectedError string
+	}{
+		{
+			name:          "missing registry",
+			registry:      "",
+			repository:    "foo/bar",
+			tag:           "latest",
+			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
+			expectedError: "image needs to contain a registry",
+		},
+		{
+			name:          "missing repository",
+			registry:      "example.com",
+			repository:    "",
+			tag:           "latest",
+			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
+			expectedError: "image needs to contain a repository",
+		},
+		{
+			name:          "invalid digest",
+			registry:      "example.com",
+			repository:    "foo/bar",
+			tag:           "latest",
+			dgst:          digest.Digest("test"),
+			expectedError: "invalid checksum digest format",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := NewImage(tt.registry, tt.repository, tt.tag, tt.dgst)
+			require.EqualError(t, err, tt.expectedError)
+		})
+	}
 }
