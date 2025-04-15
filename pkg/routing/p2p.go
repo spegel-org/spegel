@@ -164,24 +164,24 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, allowSelf bool, cou
 	if peerBufferSize == 0 {
 		peerBufferSize = 20
 	}
-	addrCh := r.rd.FindProvidersAsync(ctx, c, count)
+	addrInfoCh := r.rd.FindProvidersAsync(ctx, c, count)
 	peerCh := make(chan netip.AddrPort, peerBufferSize)
 	go func() {
 		resolveTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
-		for info := range addrCh {
+		for addrInfo := range addrInfoCh {
 			resolveTimer.ObserveDuration()
-			if !allowSelf && info.ID == r.host.ID() {
+			if !allowSelf && addrInfo.ID == r.host.ID() {
 				continue
 			}
-			if len(info.Addrs) != 1 {
+			if len(addrInfo.Addrs) != 1 {
 				addrs := []string{}
-				for _, addr := range info.Addrs {
+				for _, addr := range addrInfo.Addrs {
 					addrs = append(addrs, addr.String())
 				}
 				log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
 				continue
 			}
-			ip, err := manet.ToIP(info.Addrs[0])
+			ip, err := manet.ToIP(addrInfo.Addrs[0])
 			if err != nil {
 				log.Error(err, "could not get IP address")
 				continue
