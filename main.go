@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -61,9 +62,22 @@ type RegistryCmd struct {
 	DebugWebEnabled              bool          `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"false" help:"When true enables debug web page."`
 }
 
+type CleanupCmd struct {
+	Addr                         string `arg:"--addr,required,env:ADDR" help:"address to run readiness probe on."`
+	ContainerdRegistryConfigPath string `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
+}
+
+type CleanupWaitCmd struct {
+	ProbeEndpoint string        `arg:"--probe-endpoint,required,env:PROBE_ENDPOINT" help:"endpoint to probe cleanup jobs from."`
+	Threshold     int           `arg:"--threshold,env:THRESHOLD" default:"3" help:"amount of consecutive successful probes to consider cleanup done."`
+	Period        time.Duration `arg:"--period,env:PERIOD" default:"2s" help:"address to run readiness probe on."`
+}
+
 type Arguments struct {
 	Configuration *ConfigurationCmd `arg:"subcommand:configuration"`
 	Registry      *RegistryCmd      `arg:"subcommand:registry"`
+	Cleanup       *CleanupCmd       `arg:"subcommand:cleanup"`
+	CleanupWait   *CleanupWaitCmd   `arg:"subcommand:cleanup-wait"`
 	LogLevel      slog.Level        `arg:"--log-level,env:LOG_LEVEL" default:"INFO" help:"Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR."`
 }
 
@@ -96,6 +110,10 @@ func run(ctx context.Context, args *Arguments) error {
 		return configurationCommand(ctx, args.Configuration)
 	case args.Registry != nil:
 		return registryCommand(ctx, args.Registry)
+	case args.Cleanup != nil:
+		return cleanupCommand(ctx, args.Cleanup)
+	case args.CleanupWait != nil:
+		return cleanupWaitCommand(ctx, args.CleanupWait)
 	default:
 		return errors.New("unknown subcommand")
 	}
@@ -253,4 +271,119 @@ func loadBasicAuth() (string, string, error) {
 		return "", "", err
 	}
 	return string(username), string(password), nil
+}
+
+func cleanupCommand(ctx context.Context, args *CleanupCmd) error {
+	log := logr.FromContextOrDiscard(ctx)
+
+	fs := afero.NewOsFs()
+	err := oci.CleanupMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath)
+	if err != nil {
+		return err
+	}
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	mux := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet && req.URL.Path != "/healthz" {
+			log.Error(errors.New("unknown request"), "unsupported probe request", "path", req.URL.Path, "method", req.Method)
+			rw.WriteHeader(http.StatusNotFound)
+			return
+		}
+		rw.WriteHeader(http.StatusOK)
+	})
+	srv := &http.Server{
+		Addr:    args.Addr,
+		Handler: mux,
+	}
+	g.Go(func() error {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	})
+
+	log.Info("waiting to be shutdown")
+	err = g.Wait()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func cleanupWaitCommand(ctx context.Context, args *CleanupWaitCmd) error {
+	log := logr.FromContextOrDiscard(ctx)
+
+	addr, port, err := net.SplitHostPort(args.ProbeEndpoint)
+	if err != nil {
+		return err
+	}
+
+	resolver := &net.Resolver{}
+	client := &http.Client{}
+	thresholdCount := 0
+	for {
+		time.Sleep(args.Period)
+		start := time.Now()
+
+		log.Info("running probe lookup", "host", addr)
+		ips, err := resolver.LookupIPAddr(ctx, addr)
+		if err != nil {
+			log.Error(err, "cleanup probe lookup failed")
+			thresholdCount = 0
+			continue
+		}
+
+		log.Info("running probe request", "endpoints", len(ips))
+		g, gCtx := errgroup.WithContext(ctx)
+		g.SetLimit(10)
+		for _, ip := range ips {
+			g.Go(func() error {
+				u := url.URL{
+					Scheme: "http",
+					Host:   net.JoinHostPort(ip.String(), port),
+					Path:   "/healthz",
+				}
+				reqCtx, cancel := context.WithTimeout(gCtx, 1*time.Second)
+				defer cancel()
+				req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, u.String(), nil)
+				if err != nil {
+					return err
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					return err
+				}
+				defer resp.Body.Close()
+				_, err = io.Copy(io.Discard, resp.Body)
+				if err != nil {
+					return err
+				}
+				if resp.StatusCode != http.StatusOK {
+					return fmt.Errorf("unexpected status code %s", resp.Status)
+				}
+				return nil
+			})
+		}
+		err = g.Wait()
+		if err != nil {
+			log.Error(err, "cleanup probe request failed")
+			thresholdCount = 0
+			continue
+		}
+
+		thresholdCount += 1
+		log.Info("probe ran successfully", "threshold", thresholdCount, "duration", time.Since(start).String())
+		if thresholdCount == args.Threshold {
+			log.Info("probe threshold reached")
+			return nil
+		}
+	}
 }

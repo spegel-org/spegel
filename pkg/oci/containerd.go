@@ -417,6 +417,50 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 	return nil
 }
 
+func CleanupMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string) error {
+	log := logr.FromContextOrDiscard(ctx)
+
+	// If backup directory does not exist it means mirrors was never configured or cleanup has already run.
+	backupDirPath := path.Join(configPath, backupDir)
+	ok, err := afero.DirExists(fs, backupDirPath)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		log.Info("skipping cleanup because backup directory does not exist")
+		return nil
+	}
+
+	// Remove everything except _backup
+	err = clearConfig(fs, configPath)
+	if err != nil {
+		return err
+	}
+
+	// Move content from backup directory
+	files, err := afero.ReadDir(fs, backupDirPath)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		oldPath := path.Join(backupDirPath, fi.Name())
+		newPath := path.Join(configPath, fi.Name())
+		err := fs.Rename(oldPath, newPath)
+		if err != nil {
+			return err
+		}
+		log.Info("recovering Containerd host configuration", "path", oldPath)
+	}
+
+	// Remove backup directory to indicate that cleanup has been run.
+	err = fs.RemoveAll(backupDirPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func validateRegistries(urls []url.URL) error {
 	errs := []error{}
 	for _, u := range urls {

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- [#832](https://github.com/spegel-org/spegel/pull/832) Add delete hook to cleanup configuration from host when chart is uninstalled.
+
 ### Changed
 
 - [#812](https://github.com/spegel-org/spegel/pull/812) Upgrade to Go 1.24.1 and switch to use go tool for helm docs.

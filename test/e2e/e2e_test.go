@@ -76,6 +76,10 @@ func TestE2E(t *testing.T) {
 	backupHostToml := command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 cat /etc/containerd/certs.d/_backup/docker.io/hosts.toml", kindName))
 	require.Equal(t, hostsToml, backupHostToml)
 
+	// Cleanup backup for uninstall tests
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 rm -rf /etc/containerd/certs.d/_backup", kindName))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 mkdir /etc/containerd/certs.d/_backup", kindName))
+
 	// Run conformance tests.
 	t.Log("Running conformance tests")
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s create namespace conformance --dry-run=client -o yaml | kubectl --kubeconfig %s apply -f -", kcPath, kcPath))
@@ -171,6 +175,19 @@ func TestE2E(t *testing.T) {
 		restartOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
 		return restartOutput == "1"
 	}, 5*time.Second, 1*time.Second)
+
+	// Uninstall Spegel and make sure cleanup is run
+	t.Log("Uninstalling Spegel")
+	command(t.Context(), t, fmt.Sprintf("helm --kubeconfig %s uninstall --timeout 60s --namespace spegel spegel", kcPath))
+	require.Eventually(t, func() bool {
+		allOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s get all --namespace spegel", kcPath))
+		return allOutput == ""
+	}, 10*time.Second, 1*time.Second)
+	nodes = getNodes(t.Context(), t, kindName)
+	for _, node := range nodes {
+		lsOutput := command(t.Context(), t, fmt.Sprintf("docker exec %s-%s ls /etc/containerd/certs.d", kindName, node))
+		require.Empty(t, lsOutput)
+	}
 }
 
 func TestDevDeploy(t *testing.T) {

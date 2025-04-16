@@ -61,6 +61,9 @@ service:
   metrics:
     # -- Port to expose the metrics via the service.
     port: 9090
+  cleanup:
+    # -- Port to expose cleanup probe on.
+    port: 8080
 
 # -- Resource requests and limits for the Spegel container.
 resources:

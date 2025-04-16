@@ -31,6 +31,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | resources | object | `{"limits":{"memory":"128Mi"},"requests":{"memory":"128Mi"}}` | Resource requests and limits for the Spegel container. |
 | revisionHistoryLimit | int | `10` | The number of old history to retain to allow rollback. |
 | securityContext | object | `{}` | Security context for the Spegel container. |
+| service.cleanup.port | int | `8080` | Port to expose cleanup probe on. |
 | service.metrics.port | int | `9090` | Port to expose the metrics via the service. |
 | service.registry.hostPort | int | `30020` | Local host port to expose the registry. |
 | service.registry.nodeIp | string | `""` | Override the NODE_ID environment variable. It defaults to the field status.hostIP |
