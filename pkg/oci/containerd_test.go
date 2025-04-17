@@ -731,7 +731,27 @@ x-custom-2 = ['foo']
 capabilities = ['pull']
 override_path = true`
 	require.Equal(t, expected, eh)
+}
 
+func TestCleanupMirrorConfiguration(t *testing.T) {
+	t.Parallel()
+
+	fs := afero.NewMemMapFs()
+	err := afero.WriteFile(fs, filepath.Join("certs.d", backupDir, "data.txt"), []byte("hello world"), 0o644)
+	require.NoError(t, err)
+	err = afero.WriteFile(fs, filepath.Join("certs.d", "foo.bin"), []byte("hello world"), 0o644)
+	require.NoError(t, err)
+	err = fs.MkdirAll("certs.d/docker.io", 0o755)
+	require.NoError(t, err)
+
+	for range 2 {
+		err = CleanupMirrorConfiguration(t.Context(), fs, "certs.d")
+		require.NoError(t, err)
+		files, err := afero.ReadDir(fs, "certs.d")
+		require.NoError(t, err)
+		require.Len(t, files, 1)
+		require.Equal(t, "data.txt", files[0].Name())
+	}
 }
 
 func stringListToUrlList(t *testing.T, list []string) []url.URL {
