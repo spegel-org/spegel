@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#725](https://github.com/spegel-org/spegel/pull/725) Remove use of httputil reverse proxy.
 - [#820](https://github.com/spegel-org/spegel/pull/820) Switch to using new test context.
 - [#827](https://github.com/spegel-org/spegel/pull/827) Add p2p options to router for optional configuration.
+- [#835](https://github.com/spegel-org/spegel/pull/835) Refactor registry config to align with router config.
 
 ### Deprecated
 

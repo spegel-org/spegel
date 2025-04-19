@@ -7,13 +7,40 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"testing"
+	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
+
+func TestRegistryOptions(t *testing.T) {
+	t.Parallel()
+
+	transport := &http.Transport{}
+	log := logr.Discard()
+	opts := []RegistryOption{
+		WithResolveRetries(5),
+		WithResolveLatestTag(true),
+		WithResolveTimeout(10 * time.Minute),
+		WithTransport(transport),
+		WithLogger(log),
+		WithBasicAuth("foo", "bar"),
+	}
+	cfg := RegistryConfig{}
+	err := cfg.Apply(opts...)
+	require.NoError(t, err)
+	require.Equal(t, 5, cfg.ResolveRetries)
+	require.True(t, cfg.ResolveLatestTag)
+	require.Equal(t, 10*time.Minute, cfg.ResolveTimeout)
+	require.Equal(t, transport, cfg.Client.Transport)
+	require.Equal(t, log, cfg.Log)
+	require.Equal(t, "foo", cfg.Username)
+	require.Equal(t, "bar", cfg.Password)
+}
 
 func TestBasicAuth(t *testing.T) {
 	t.Parallel()
@@ -77,7 +104,8 @@ func TestBasicAuth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			reg := NewRegistry(nil, nil, WithBasicAuth(tt.username, tt.password))
+			reg, err := NewRegistry(nil, nil, WithBasicAuth(tt.username, tt.password))
+			require.NoError(t, err)
 			rw := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodGet, "http://localhost/v2", nil)
 			req.SetBasicAuth(tt.reqUsername, tt.reqPassword)
@@ -129,7 +157,8 @@ func TestMirrorHandler(t *testing.T) {
 		"sha256:11242d2a347bf8ab30b9f92d5ca219bbbedf95df5a8b74631194561497c1fae8": {badAddrPort, badAddrPort, goodAddrPort},
 	}
 	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
-	reg := NewRegistry(oci.NewMemory(), router)
+	reg, err := NewRegistry(oci.NewMemory(), router)
+	require.NoError(t, err)
 
 	tests := []struct {
 		expectedHeaders map[string][]string
