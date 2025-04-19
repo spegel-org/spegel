@@ -178,14 +178,17 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	})
 
 	// Registry
-	registryOpts := []registry.Option{
+	registryOpts := []registry.RegistryOption{
 		registry.WithResolveLatestTag(args.ResolveLatestTag),
 		registry.WithResolveRetries(args.MirrorResolveRetries),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithLogger(log),
 		registry.WithBasicAuth(username, password),
 	}
-	reg := registry.NewRegistry(ociClient, router, registryOpts...)
+	reg, err := registry.NewRegistry(ociClient, router, registryOpts...)
+	if err != nil {
+		return err
+	}
 	regSrv, err := reg.Server(args.RegistryAddr)
 	if err != nil {
 		return err

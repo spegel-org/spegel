@@ -27,6 +27,76 @@ const (
 	MirroredHeaderKey = "X-Spegel-Mirrored"
 )
 
+type RegistryConfig struct {
+	Client           *http.Client
+	Log              logr.Logger
+	Username         string
+	Password         string
+	ResolveRetries   int
+	ResolveLatestTag bool
+	ResolveTimeout   time.Duration
+}
+
+func (cfg *RegistryConfig) Apply(opts ...RegistryOption) error {
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type RegistryOption func(cfg *RegistryConfig) error
+
+func WithResolveRetries(resolveRetries int) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.ResolveRetries = resolveRetries
+		return nil
+	}
+}
+
+func WithResolveLatestTag(resolveLatestTag bool) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.ResolveLatestTag = resolveLatestTag
+		return nil
+	}
+}
+
+func WithResolveTimeout(resolveTimeout time.Duration) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.ResolveTimeout = resolveTimeout
+		return nil
+	}
+}
+
+func WithTransport(transport http.RoundTripper) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		if cfg.Client == nil {
+			cfg.Client = &http.Client{}
+		}
+		cfg.Client.Transport = transport
+		return nil
+	}
+}
+
+func WithLogger(log logr.Logger) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.Log = log
+		return nil
+	}
+}
+
+func WithBasicAuth(username, password string) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.Username = username
+		cfg.Password = password
+		return nil
+	}
+}
+
 type Registry struct {
 	client           *http.Client
 	bufferPool       *sync.Pool
@@ -40,48 +110,25 @@ type Registry struct {
 	resolveLatestTag bool
 }
 
-type Option func(*Registry)
-
-func WithResolveRetries(resolveRetries int) Option {
-	return func(r *Registry) {
-		r.resolveRetries = resolveRetries
+func NewRegistry(ociClient oci.Client, router routing.Router, opts ...RegistryOption) (*Registry, error) {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("default transporn is not of type http.Transport")
 	}
-}
-
-func WithResolveLatestTag(resolveLatestTag bool) Option {
-	return func(r *Registry) {
-		r.resolveLatestTag = resolveLatestTag
+	cfg := RegistryConfig{
+		Client: &http.Client{
+			Transport: transport.Clone(),
+		},
+		Log:              logr.Discard(),
+		ResolveRetries:   3,
+		ResolveLatestTag: true,
+		ResolveTimeout:   20 * time.Millisecond,
 	}
-}
-
-func WithResolveTimeout(resolveTimeout time.Duration) Option {
-	return func(r *Registry) {
-		r.resolveTimeout = resolveTimeout
+	err := cfg.Apply(opts...)
+	if err != nil {
+		return nil, err
 	}
-}
 
-func WithTransport(transport http.RoundTripper) Option {
-	return func(r *Registry) {
-		r.client = &http.Client{
-			Transport: transport,
-		}
-	}
-}
-
-func WithLogger(log logr.Logger) Option {
-	return func(r *Registry) {
-		r.log = log
-	}
-}
-
-func WithBasicAuth(username, password string) Option {
-	return func(r *Registry) {
-		r.username = username
-		r.password = password
-	}
-}
-
-func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *Registry {
 	bufferPool := &sync.Pool{
 		New: func() any {
 			buf := make([]byte, 32*1024)
@@ -91,23 +138,16 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...Option) *R
 	r := &Registry{
 		ociClient:        ociClient,
 		router:           router,
-		resolveRetries:   3,
-		resolveTimeout:   20 * time.Millisecond,
-		resolveLatestTag: true,
+		client:           cfg.Client,
+		log:              cfg.Log,
+		resolveRetries:   cfg.ResolveRetries,
+		resolveLatestTag: cfg.ResolveLatestTag,
+		resolveTimeout:   cfg.ResolveTimeout,
+		username:         cfg.Username,
+		password:         cfg.Password,
 		bufferPool:       bufferPool,
 	}
-	for _, opt := range opts {
-		opt(r)
-	}
-	if r.client == nil {
-		//nolint: errcheck // Ignore
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.MaxIdleConnsPerHost = 100
-		r.client = &http.Client{
-			Transport: transport,
-		}
-	}
-	return r
+	return r, nil
 }
 
 func (r *Registry) Server(addr string) (*http.Server, error) {
