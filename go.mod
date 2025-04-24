@@ -25,8 +25,8 @@ require (
 	go.etcd.io/bbolt v1.4.0
 	golang.org/x/sync v0.13.0
 	google.golang.org/grpc v1.72.0
-	k8s.io/apimachinery v0.32.4
-	k8s.io/cri-api v0.32.4
+	k8s.io/apimachinery v0.33.0
+	k8s.io/cri-api v0.33.0
 	k8s.io/klog/v2 v2.130.1
 )
 
@@ -187,7 +187,6 @@ require (
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	golang.org/x/time v0.8.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
 	gonum.org/v1/gonum v0.15.1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a // indirect
