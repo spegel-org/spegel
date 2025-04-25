@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#824](https://github.com/spegel-org/spegel/pull/824) Fix improper image string formatting and expand tests.
 - [#825](https://github.com/spegel-org/spegel/pull/825) Fix gopls modernize warnings.
 - [#826](https://github.com/spegel-org/spegel/pull/826) Standardize router channel naming.
+- [#844](https://github.com/spegel-org/spegel/pull/844) Fix p2p option naming to conform with the standard.
 
 ### Security
 
