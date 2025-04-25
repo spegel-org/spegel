@@ -7,8 +7,12 @@ Thank you for considering contributing to Spegel, hopefully this document will m
 The following tools are required to run the tests properly.
 
 * go
-* golangci-lint
-* kind
+* [golangci-lint](https://github.com/golangci/golangci-lint)
+* [kind](https://github.com/kubernetes-sigs/kind)
+* [goreleaser](https://github.com/goreleaser/goreleaser)
+* [docker](https://docs.docker.com/get-started/get-docker/)
+* [helm](https://github.com/helm/helm)
+* [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
 
 Run the linter and the unit tests to quickly validate changes.
 
@@ -33,33 +37,32 @@ make test-e2e E2E_CNI=ipvs
 Build the Docker image locally.
 
 ```shell
-make docker-build
+make build-image
 ```
 
 It is possible to specify a different image name and tag.
 
 ```shell
-make docker-build IMG=example.com/spegel TAG=feature
+make build-image IMG=example.com/spegel TAG=feature
 ```
 
-### Local testing
+### Local debugging
 
-In order to manually test or debug Spegel, you will need the following tools.
-
-* kind
-* docker
-* helm
-* kubectl
-
-First run dev deploy which will create a Kind cluster with the proper configuration and deploy Spegel into it. If you run this command a second time the cluster will be kept but Spegel will be updated.
+Run the `dev-deploy` recipe which will create a Kind cluster with the proper configuration and deploy Spegel into it. If you run this command a second time the cluster will be kept but Spegel will be updated.
 
 ```shell
 make dev-deploy
 ```
 
-After the command has run a Kind cluster named `spegel-dev` should be created. 
+After the command has run you can get a kubeconfig file to access the cluster and do any debugging.
 
-## Generating documentation
+```shell
+kind get kubeconfig --name spegel-dev > kubeconfig
+export KUBECOONFIG=$(pwd)/kubeconfig
+kubectl -n spegel get pods
+```
+
+## Generate Helm documentation
 
 Changes to the Helm chart values will require the documentation to be regenerated.
 

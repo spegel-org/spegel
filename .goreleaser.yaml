@@ -1,0 +1,26 @@
+version: 2
+project_name: spegel
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - 7
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+      - -a
+    no_unique_dist_dir: true
+    binary: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}/{{ .ProjectName }}"
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*

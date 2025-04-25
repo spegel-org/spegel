@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - [#832](https://github.com/spegel-org/spegel/pull/832) Add delete hook to cleanup configuration from host when chart is uninstalled.
+- [#846](https://github.com/spegel-org/spegel/pull/846) Build binaries as part of the release process.
 
 ### Changed
 
