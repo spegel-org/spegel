@@ -1,6 +1,8 @@
 name: e2e
 on:
   pull_request:
+permissions:
+  contents: read
 defaults:
   run:
     shell: bash
