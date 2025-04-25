@@ -47,7 +47,7 @@ func (cfg *P2PRouterConfig) Apply(opts ...P2PRouterOption) error {
 
 type P2PRouterOption func(cfg *P2PRouterConfig) error
 
-func LibP2POptions(opts ...libp2p.Option) P2PRouterOption {
+func WithLibP2POptions(opts ...libp2p.Option) P2PRouterOption {
 	return func(cfg *P2PRouterConfig) error {
 		cfg.libp2pOpts = opts
 		return nil

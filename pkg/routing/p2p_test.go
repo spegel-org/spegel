@@ -24,7 +24,7 @@ func TestP2PRouterOptions(t *testing.T) {
 		libp2p.ListenAddrStrings("foo"),
 	}
 	opts := []P2PRouterOption{
-		LibP2POptions(libp2pOpts...),
+		WithLibP2POptions(libp2pOpts...),
 	}
 	cfg := P2PRouterConfig{}
 	err := cfg.Apply(opts...)
