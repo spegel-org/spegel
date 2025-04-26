@@ -54,6 +54,7 @@ type RegistryCmd struct {
 	ContainerdSock               string        `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string        `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
 	ContainerdContentPath        string        `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
+	DataDir                      string        `arg:"--data-dir,env:DATA_DIR" default:"/var/lib/spegel" help:"Directory where Spegel persists data."`
 	RouterAddr                   string        `arg:"--router-addr,env:ROUTER_ADDR" default:":5001" help:"address to serve router."`
 	RegistryAddr                 string        `arg:"--registry-addr,env:REGISTRY_ADDR" default:":5000" help:"address to server image registry."`
 	MirroredRegistries           []url.URL     `arg:"--mirrored-registries,env:MIRRORED_REGISTRIES" help:"Registries that are configured to be mirrored, if slice is empty all registires are mirrored."`
@@ -161,7 +162,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	if err != nil {
 		return err
 	}
-	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort)
+	routerOpts := []routing.P2PRouterOption{
+		routing.WithDataDir(args.DataDir),
+	}
+	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort, routerOpts...)
 	if err != nil {
 		return err
 	}

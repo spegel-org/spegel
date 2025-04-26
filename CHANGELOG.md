@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#832](https://github.com/spegel-org/spegel/pull/832) Add delete hook to cleanup configuration from host when chart is uninstalled.
 - [#846](https://github.com/spegel-org/spegel/pull/846) Build binaries as part of the release process.
 - [#848](https://github.com/spegel-org/spegel/pull/848) Add support for a static bootstrapper.
+- [#850](https://github.com/spegel-org/spegel/pull/850) Perist libp2p key to disk when data directory is set.
 
 ### Changed
 
