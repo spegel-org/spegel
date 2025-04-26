@@ -9,10 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.2.0
+
+### Added
+
 - [#832](https://github.com/spegel-org/spegel/pull/832) Add delete hook to cleanup configuration from host when chart is uninstalled.
 - [#846](https://github.com/spegel-org/spegel/pull/846) Build binaries as part of the release process.
 - [#848](https://github.com/spegel-org/spegel/pull/848) Add support for a static bootstrapper.
-- [#850](https://github.com/spegel-org/spegel/pull/850) Perist libp2p key to disk when data directory is set.
+- [#850](https://github.com/spegel-org/spegel/pull/850) Persist libp2p key to disk when data directory is set.
 
 ### Changed
 
@@ -22,8 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#827](https://github.com/spegel-org/spegel/pull/827) Add p2p options to router for optional configuration.
 - [#835](https://github.com/spegel-org/spegel/pull/835) Refactor registry config to align with router config.
 - [#847](https://github.com/spegel-org/spegel/pull/847) Set default values for address arguments.
-
-### Deprecated
 
 ### Removed
 
@@ -36,8 +48,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#826](https://github.com/spegel-org/spegel/pull/826) Standardize router channel naming.
 - [#844](https://github.com/spegel-org/spegel/pull/844) Fix p2p option naming to conform with the standard.
 - [#849](https://github.com/spegel-org/spegel/pull/849) Fix libp2p options so field is exported in configuration.
-
-### Security
 
 ## v0.1.1
 
