@@ -2,10 +2,16 @@ package routing
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +20,7 @@ import (
 	cid "github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/sec"
@@ -30,6 +37,7 @@ import (
 const KeyTTL = 10 * time.Minute
 
 type P2PRouterConfig struct {
+	DataDir    string
 	Libp2pOpts []libp2p.Option
 }
 
@@ -50,6 +58,13 @@ type P2PRouterOption func(cfg *P2PRouterConfig) error
 func WithLibP2POptions(opts ...libp2p.Option) P2PRouterOption {
 	return func(cfg *P2PRouterConfig) error {
 		cfg.Libp2pOpts = opts
+		return nil
+	}
+}
+
+func WithDataDir(dataDir string) P2PRouterOption {
+	return func(cfg *P2PRouterConfig) error {
+		cfg.DataDir = dataDir
 		return nil
 	}
 }
@@ -104,6 +119,13 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		libp2p.ListenAddrs(multiAddrs...),
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
 		addrFactoryOpt,
+	}
+	if cfg.DataDir != "" {
+		peerKey, err := loadOrCreatePrivateKey(ctx, cfg.DataDir)
+		if err != nil {
+			return nil, err
+		}
+		libp2pOpts = append(libp2pOpts, libp2p.Identity(peerKey))
 	}
 	libp2pOpts = append(libp2pOpts, cfg.Libp2pOpts...)
 	host, err := libp2p.New(libp2pOpts...)
@@ -408,4 +430,60 @@ func hostMatches(host, addrInfo peer.AddrInfo) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func loadOrCreatePrivateKey(ctx context.Context, dataDir string) (crypto.PrivKey, error) { //nolint: ireturn // LibP2P returns interfaces so we also have to.
+	keyPath := filepath.Join(dataDir, "private.key")
+	log := logr.FromContextOrDiscard(ctx).WithValues("path", keyPath)
+	err := os.MkdirAll(dataDir, 0o755)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(keyPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		log.Info("creating a new private key")
+		privKey, _, err := crypto.GenerateEd25519Key(rand.Reader)
+		if err != nil {
+			return nil, err
+		}
+		rawBytes, err := privKey.Raw()
+		if err != nil {
+			return nil, err
+		}
+		pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(ed25519.PrivateKey(rawBytes))
+		if err != nil {
+			return nil, err
+		}
+		block := &pem.Block{
+			Type:  "PRIVATE KEY",
+			Bytes: pkcs8Bytes,
+		}
+		pemData := pem.EncodeToMemory(block)
+		err = os.WriteFile(keyPath, pemData, 0o600)
+		if err != nil {
+			return nil, err
+		}
+		return privKey, nil
+	}
+	log.Info("loading the private key from data directory")
+	block, _ := pem.Decode(b)
+	if block == nil || block.Type != "PRIVATE KEY" {
+		return nil, fmt.Errorf("invalid PEM block type %s", block.Type)
+	}
+	parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	edKey, ok := parsedKey.(ed25519.PrivateKey)
+	if !ok {
+		return nil, errors.New("not an Ed25519 private key")
+	}
+	privKey, err := crypto.UnmarshalEd25519PrivateKey(edKey)
+	if err != nil {
+		return nil, err
+	}
+	return privKey, nil
 }

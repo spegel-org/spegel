@@ -25,11 +25,13 @@ func TestP2PRouterOptions(t *testing.T) {
 	}
 	opts := []P2PRouterOption{
 		WithLibP2POptions(libp2pOpts...),
+		WithDataDir("foobar"),
 	}
 	cfg := P2PRouterConfig{}
 	err := cfg.Apply(opts...)
 	require.NoError(t, err)
 	require.Equal(t, libp2pOpts, cfg.Libp2pOpts)
+	require.Equal(t, "foobar", cfg.DataDir)
 }
 
 func TestP2PRouter(t *testing.T) {
@@ -311,4 +313,22 @@ func TestHostMatches(t *testing.T) {
 			require.Equal(t, tt.expected, matches)
 		})
 	}
+}
+
+func TestLoadOrCreatePrivateKey(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	data := []byte("hello world")
+
+	firstPrivKey, err := loadOrCreatePrivateKey(t.Context(), tmpDir)
+	require.NoError(t, err)
+	sig, err := firstPrivKey.Sign(data)
+	require.NoError(t, err)
+	secondPrivKey, err := loadOrCreatePrivateKey(t.Context(), tmpDir)
+	require.NoError(t, err)
+	ok, err := secondPrivKey.GetPublic().Verify(data, sig)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.True(t, firstPrivKey.Equals(secondPrivKey))
 }
