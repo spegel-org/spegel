@@ -29,7 +29,7 @@ func TestP2PRouterOptions(t *testing.T) {
 	cfg := P2PRouterConfig{}
 	err := cfg.Apply(opts...)
 	require.NoError(t, err)
-	require.Equal(t, libp2pOpts, cfg.libp2pOpts)
+	require.Equal(t, libp2pOpts, cfg.Libp2pOpts)
 }
 
 func TestP2PRouter(t *testing.T) {
