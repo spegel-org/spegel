@@ -30,7 +30,7 @@ import (
 const KeyTTL = 10 * time.Minute
 
 type P2PRouterConfig struct {
-	libp2pOpts []libp2p.Option
+	Libp2pOpts []libp2p.Option
 }
 
 func (cfg *P2PRouterConfig) Apply(opts ...P2PRouterOption) error {
@@ -49,7 +49,7 @@ type P2PRouterOption func(cfg *P2PRouterConfig) error
 
 func WithLibP2POptions(opts ...libp2p.Option) P2PRouterOption {
 	return func(cfg *P2PRouterConfig) error {
-		cfg.libp2pOpts = opts
+		cfg.Libp2pOpts = opts
 		return nil
 	}
 }
@@ -105,7 +105,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
 		addrFactoryOpt,
 	}
-	libp2pOpts = append(libp2pOpts, cfg.libp2pOpts...)
+	libp2pOpts = append(libp2pOpts, cfg.Libp2pOpts...)
 	host, err := libp2p.New(libp2pOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
