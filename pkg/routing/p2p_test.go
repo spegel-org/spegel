@@ -37,7 +37,7 @@ func TestP2PRouter(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 
-	bs := NewStaticBootstrapper()
+	bs := NewStaticBootstrapper(nil)
 	router, err := NewP2PRouter(ctx, "localhost:0", bs, "9090")
 	require.NoError(t, err)
 
@@ -72,7 +72,7 @@ func TestP2PRouter(t *testing.T) {
 func TestReady(t *testing.T) {
 	t.Parallel()
 
-	bs := NewStaticBootstrapper()
+	bs := NewStaticBootstrapper(nil)
 	router, err := NewP2PRouter(t.Context(), "localhost:0", bs, "9090")
 	require.NoError(t, err)
 
@@ -159,8 +159,7 @@ func TestBootstrapFunc(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			bs := NewStaticBootstrapper()
-			bs.SetPeers(tt.peers)
+			bs := NewStaticBootstrapper(tt.peers)
 			f := bootstrapFunc(ctx, bs, mn.Hosts()[0])
 			peers := f()
 
