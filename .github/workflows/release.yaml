@@ -1,9 +1,10 @@
 name: release
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 permissions:
-  contents: read
+  contents: write
   packages: write
   id-token: write
 defaults:
@@ -20,9 +21,7 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 #v4.3.0
         with:
-          version: v3.12.1
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
+          version: v3.17.3
       - name: Setup Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 #v3.10.0
@@ -34,19 +33,26 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Prepare
+      - name: Prepare version
         id: prep
         run: |
           VERSION=sha-${GITHUB_SHA::8}
           if [[ $GITHUB_REF == refs/tags/* ]]; then
             VERSION=${GITHUB_REF/refs\/tags\//}
           fi
+          echo "Refer to the [Changelog](https://github.com/spegel-org/spegel/blob/main/CHANGELOG.md#${VERSION//.}) for list of changes." > ${{ runner.temp }}/NOTES.txt
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --clean --release-notes ${{ runner.temp }}/NOTES.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate images meta
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 #v5.7.0
         with:
-          images: ghcr.io/spegel-org/spegel
+          images: ghcr.io/${{ github.repository_owner }}/spegel
           tags: type=raw,value=${{ steps.prep.outputs.VERSION }}
       - name: Publish multi-arch image
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 #v6.15.0
@@ -57,11 +63,11 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm/v7,linux/arm64
-          tags: ghcr.io/spegel-org/spegel:${{ steps.prep.outputs.VERSION }}
+          tags: ghcr.io/${{ github.repository_owner }}/spegel:${{ steps.prep.outputs.VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
       - name: Sign the image with Cosign
         run: |
-          cosign sign --yes ghcr.io/spegel-org/spegel@${{ steps.build.outputs.DIGEST }}
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/spegel@${{ steps.build.outputs.DIGEST }}
       - name: Publish Helm chart to GHCR
         id: helm
         run: |
@@ -70,9 +76,9 @@ jobs:
           rm charts/spegel/artifacthub-repo.yml
           yq -i '.image.digest = "${{ steps.build.outputs.DIGEST }}"' charts/spegel/values.yaml
           helm package --app-version ${{ steps.prep.outputs.VERSION }} --version ${HELM_VERSION} charts/spegel
-          helm push spegel-${HELM_VERSION}.tgz oci://ghcr.io/spegel-org/helm-charts 2> .digest
+          helm push spegel-${HELM_VERSION}.tgz oci://ghcr.io/${{ github.repository_owner }}/helm-charts 2> .digest
           DIGEST=$(cat .digest | awk -F "[, ]+" '/Digest/{print $NF}')
           echo "DIGEST=${DIGEST}" >> $GITHUB_OUTPUT
       - name: Sign the Helm chart with Cosign
         run: |
-          cosign sign --yes ghcr.io/spegel-org/helm-charts/spegel@${{ steps.helm.outputs.DIGEST }}
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/helm-charts/spegel@${{ steps.helm.outputs.DIGEST }}
