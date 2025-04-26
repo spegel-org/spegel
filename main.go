@@ -40,10 +40,11 @@ type ConfigurationCmd struct {
 }
 
 type BootstrapConfig struct {
-	BootstrapKind      string `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
-	DNSBootstrapDomain string `arg:"--dns-bootstrap-domain,env:DNS_BOOTSTRAP_DOMAIN" help:"Domain to use when bootstrapping using DNS."`
-	HTTPBootstrapAddr  string `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap."`
-	HTTPBootstrapPeer  string `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
+	BootstrapKind        string   `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
+	DNSBootstrapDomain   string   `arg:"--dns-bootstrap-domain,env:DNS_BOOTSTRAP_DOMAIN" help:"Domain to use when bootstrapping using DNS."`
+	HTTPBootstrapAddr    string   `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap."`
+	HTTPBootstrapPeer    string   `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
+	StaticBootstrapPeers []string `arg:"--static-bootstrap-peers,env:STATIC_BOOTSTRAP_PEERS" help:"Static list of peers to bootstrap with."`
 }
 
 type RegistryCmd struct {
@@ -258,6 +259,8 @@ func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //noli
 		return routing.NewDNSBootstrapper(cfg.DNSBootstrapDomain, 10), nil
 	case "http":
 		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer), nil
+	case "static":
+		return routing.NewStaticBootstrapperFromStrings(cfg.StaticBootstrapPeers)
 	default:
 		return nil, fmt.Errorf("unknown bootstrap kind %s", cfg.BootstrapKind)
 	}

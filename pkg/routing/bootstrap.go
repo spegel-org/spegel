@@ -35,8 +35,22 @@ type StaticBootstrapper struct {
 	mx    sync.RWMutex
 }
 
-func NewStaticBootstrapper() *StaticBootstrapper {
-	return &StaticBootstrapper{}
+func NewStaticBootstrapperFromStrings(peerStrs []string) (*StaticBootstrapper, error) {
+	peers := []peer.AddrInfo{}
+	for _, peerStr := range peerStrs {
+		peer, err := peer.AddrInfoFromString(peerStr)
+		if err != nil {
+			return nil, err
+		}
+		peers = append(peers, *peer)
+	}
+	return NewStaticBootstrapper(peers), nil
+}
+
+func NewStaticBootstrapper(peers []peer.AddrInfo) *StaticBootstrapper {
+	return &StaticBootstrapper{
+		peers: peers,
+	}
 }
 
 func (b *StaticBootstrapper) Run(ctx context.Context, id string) error {
