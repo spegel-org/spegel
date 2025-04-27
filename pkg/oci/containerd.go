@@ -25,7 +25,6 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
 	tomlu "github.com/pelletier/go-toml/v2/unstable"
-	"github.com/spf13/afero"
 	"google.golang.org/grpc"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -356,21 +355,21 @@ func createFilters(mirroredRegistries []url.URL) (string, string) {
 // Refer to containerd registry configuration documentation for more information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string, mirroredRegistries, mirrorTargets []url.URL, resolveTags, prependExisting bool, username, password string) error {
+func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegistries, mirrorTargets []url.URL, resolveTags, prependExisting bool, username, password string) error {
 	log := logr.FromContextOrDiscard(ctx)
 	err := validateRegistries(mirroredRegistries)
 	if err != nil {
 		return err
 	}
-	err = fs.MkdirAll(configPath, 0o755)
+	err = os.MkdirAll(configPath, 0o755)
 	if err != nil {
 		return err
 	}
-	err = backupConfig(log, fs, configPath)
+	err = backupConfig(log, configPath)
 	if err != nil {
 		return err
 	}
-	err = clearConfig(fs, configPath)
+	err = clearConfig(configPath)
 	if err != nil {
 		return err
 	}
@@ -390,7 +389,7 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 			return err
 		}
 		if prependExisting {
-			existingHosts, err := existingHosts(fs, configPath, mirroredRegistry)
+			existingHosts, err := existingHosts(configPath, mirroredRegistry)
 			if err != nil {
 				return err
 			}
@@ -404,11 +403,11 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 			hostComp = "_default"
 		}
 		fp := path.Join(configPath, hostComp, "hosts.toml")
-		err = fs.MkdirAll(path.Dir(fp), 0o755)
+		err = os.MkdirAll(filepath.Dir(fp), 0o755)
 		if err != nil {
 			return err
 		}
-		err = afero.WriteFile(fs, fp, []byte(templatedHosts), 0o644)
+		err = os.WriteFile(fp, []byte(templatedHosts), 0o644)
 		if err != nil {
 			return err
 		}
@@ -417,12 +416,12 @@ func AddMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string,
 	return nil
 }
 
-func CleanupMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath string) error {
+func CleanupMirrorConfiguration(ctx context.Context, configPath string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
 	// If backup directory does not exist it means mirrors was never configured or cleanup has already run.
 	backupDirPath := path.Join(configPath, backupDir)
-	ok, err := afero.DirExists(fs, backupDirPath)
+	ok, err := dirExists(backupDirPath)
 	if err != nil {
 		return err
 	}
@@ -432,20 +431,20 @@ func CleanupMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath str
 	}
 
 	// Remove everything except _backup
-	err = clearConfig(fs, configPath)
+	err = clearConfig(configPath)
 	if err != nil {
 		return err
 	}
 
 	// Move content from backup directory
-	files, err := afero.ReadDir(fs, backupDirPath)
+	files, err := os.ReadDir(backupDirPath)
 	if err != nil {
 		return err
 	}
 	for _, fi := range files {
 		oldPath := path.Join(backupDirPath, fi.Name())
 		newPath := path.Join(configPath, fi.Name())
-		err := fs.Rename(oldPath, newPath)
+		err := os.Rename(oldPath, newPath)
 		if err != nil {
 			return err
 		}
@@ -453,7 +452,7 @@ func CleanupMirrorConfiguration(ctx context.Context, fs afero.Fs, configPath str
 	}
 
 	// Remove backup directory to indicate that cleanup has been run.
-	err = fs.RemoveAll(backupDirPath)
+	err = os.RemoveAll(backupDirPath)
 	if err != nil {
 		return err
 	}
@@ -480,27 +479,27 @@ func validateRegistries(urls []url.URL) error {
 	return errors.Join(errs...)
 }
 
-func backupConfig(log logr.Logger, fs afero.Fs, configPath string) error {
+func backupConfig(log logr.Logger, configPath string) error {
 	backupDirPath := path.Join(configPath, backupDir)
-	ok, err := afero.DirExists(fs, backupDirPath)
+	ok, err := dirExists(backupDirPath)
 	if err != nil {
 		return err
 	}
 	if ok {
 		return nil
 	}
-	files, err := afero.ReadDir(fs, configPath)
+	files, err := os.ReadDir(configPath)
 	if err != nil {
 		return err
 	}
-	err = fs.MkdirAll(backupDirPath, 0o755)
+	err = os.MkdirAll(backupDirPath, 0o755)
 	if err != nil {
 		return err
 	}
 	for _, fi := range files {
 		oldPath := path.Join(configPath, fi.Name())
 		newPath := path.Join(backupDirPath, fi.Name())
-		err := fs.Rename(oldPath, newPath)
+		err := os.Rename(oldPath, newPath)
 		if err != nil {
 			return err
 		}
@@ -509,8 +508,8 @@ func backupConfig(log logr.Logger, fs afero.Fs, configPath string) error {
 	return nil
 }
 
-func clearConfig(fs afero.Fs, configPath string) error {
-	files, err := afero.ReadDir(fs, configPath)
+func clearConfig(configPath string) error {
+	files, err := os.ReadDir(configPath)
 	if err != nil {
 		return err
 	}
@@ -519,7 +518,7 @@ func clearConfig(fs afero.Fs, configPath string) error {
 			continue
 		}
 		filePath := path.Join(configPath, fi.Name())
-		err := fs.RemoveAll(filePath)
+		err := os.RemoveAll(filePath)
 		if err != nil {
 			return err
 		}
@@ -576,10 +575,10 @@ type hostFile struct {
 	Hosts map[string]any `toml:"host"`
 }
 
-func existingHosts(fs afero.Fs, configPath string, mirroredRegistry url.URL) (string, error) {
+func existingHosts(configPath string, mirroredRegistry url.URL) (string, error) {
 	fp := path.Join(configPath, backupDir, mirroredRegistry.Host, "hosts.toml")
-	b, err := afero.ReadFile(fs, fp)
-	if errors.Is(err, afero.ErrFileNotFound) {
+	b, err := os.ReadFile(fp)
+	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
 	if err != nil {
@@ -628,4 +627,15 @@ func existingHosts(fs afero.Fs, configPath string, mirroredRegistry url.URL) (st
 		ehs = append(ehs, eh)
 	}
 	return strings.TrimSpace(strings.Join(ehs, "\n")), nil
+}
+
+func dirExists(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return info.IsDir(), nil
 }
