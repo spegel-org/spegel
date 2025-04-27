@@ -5,13 +5,13 @@ import (
 	iofs "io/fs"
 	"maps"
 	"net/url"
+	"os"
 	"path/filepath"
 	"testing"
 
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
@@ -183,29 +183,25 @@ func TestBackupConfig(t *testing.T) {
 
 	log := logr.Discard()
 
-	fs := afero.NewMemMapFs()
-	err := fs.MkdirAll("/config", 0o755)
+	configPath := t.TempDir()
+	err := backupConfig(log, configPath)
 	require.NoError(t, err)
-	err = backupConfig(log, fs, "/config")
-	require.NoError(t, err)
-	ok, err := afero.DirExists(fs, "/config/_backup/")
+	ok, err := dirExists(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
 	require.True(t, ok)
-	files, err := afero.ReadDir(fs, "/config/_backup")
+	files, err := os.ReadDir(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
 	require.Empty(t, files)
 
-	fs = afero.NewMemMapFs()
-	err = fs.MkdirAll("/config", 0o755)
+	configPath = t.TempDir()
+	err = os.WriteFile(filepath.Join(configPath, "test.txt"), []byte("Hello World"), 0o644)
 	require.NoError(t, err)
-	err = afero.WriteFile(fs, "/config/test.txt", []byte("Hello World"), 0o644)
+	err = backupConfig(log, configPath)
 	require.NoError(t, err)
-	err = backupConfig(log, fs, "/config/")
-	require.NoError(t, err)
-	ok, err = afero.DirExists(fs, "/config/_backup/")
+	ok, err = dirExists(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
 	require.True(t, ok)
-	files, err = afero.ReadDir(fs, "/config/_backup/")
+	files, err = os.ReadDir(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
 	require.Len(t, files, 1)
 }
@@ -314,8 +310,6 @@ func TestGetEventImage(t *testing.T) {
 func TestMirrorConfiguration(t *testing.T) {
 	t.Parallel()
 
-	registryConfigPath := "/etc/containerd/certs.d"
-
 	tests := []struct {
 		existingFiles       map[string]string
 		expectedFiles       map[string]string
@@ -335,7 +329,7 @@ func TestMirrorConfiguration(t *testing.T) {
 			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.2:5000", "http://127.0.0.1:5001"}),
 			prependExisting: false,
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
@@ -354,7 +348,7 @@ capabilities = ['pull', 'resolve']`,
 			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			prependExisting: false,
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/_default/hosts.toml": `[host.'http://127.0.0.1:5000']
+				"_default/hosts.toml": `[host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
 			},
 		},
@@ -365,11 +359,11 @@ capabilities = ['pull', 'resolve']`,
 			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
 			prependExisting: false,
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull']`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull']`,
@@ -383,11 +377,11 @@ capabilities = ['pull']`,
 			createConfigPathDir: false,
 			prependExisting:     false,
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
@@ -401,11 +395,11 @@ capabilities = ['pull', 'resolve']`,
 			createConfigPathDir: true,
 			prependExisting:     false,
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
@@ -419,17 +413,17 @@ capabilities = ['pull', 'resolve']`,
 			createConfigPathDir: true,
 			prependExisting:     false,
 			existingFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": "hello = 'world'",
-				"/etc/containerd/certs.d/ghcr.io/hosts.toml":   "foo = 'bar'",
+				"docker.io/hosts.toml": "hello = 'world'",
+				"ghcr.io/hosts.toml":   "foo = 'bar'",
 			},
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "hello = 'world'",
-				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"_backup/docker.io/hosts.toml": "hello = 'world'",
+				"_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
@@ -443,19 +437,19 @@ capabilities = ['pull', 'resolve']`,
 			createConfigPathDir: true,
 			prependExisting:     false,
 			existingFiles: map[string]string{
-				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "hello = 'world'",
-				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
-				"/etc/containerd/certs.d/test.txt":                     "test",
-				"/etc/containerd/certs.d/foo":                          "bar",
+				"_backup/docker.io/hosts.toml": "hello = 'world'",
+				"_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
+				"test.txt":                     "test",
+				"foo":                          "bar",
 			},
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": "hello = 'world'",
-				"/etc/containerd/certs.d/_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"_backup/docker.io/hosts.toml": "hello = 'world'",
+				"_backup/ghcr.io/hosts.toml":   "foo = 'bar'",
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
@@ -469,7 +463,7 @@ capabilities = ['pull', 'resolve']`,
 			createConfigPathDir: true,
 			prependExisting:     true,
 			existingFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://example.com:30020']
 capabilities = ['pull', 'resolve']
@@ -484,7 +478,7 @@ capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
 			},
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://example.com:30020']
 capabilities = ['pull', 'resolve']
@@ -497,7 +491,7 @@ capabilities = ['pull', 'resolve']
 [host.'http://bar.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
@@ -513,7 +507,7 @@ client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 [host.'http://bar.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
@@ -527,7 +521,7 @@ capabilities = ['pull', 'resolve']`,
 			createConfigPathDir: true,
 			prependExisting:     false,
 			existingFiles: map[string]string{
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://example.com:30020']
 capabilities = ['pull', 'resolve']
@@ -542,7 +536,7 @@ capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
 			},
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://example.com:30020']
 capabilities = ['pull', 'resolve']
@@ -555,11 +549,11 @@ capabilities = ['pull', 'resolve']
 [host.'http://bar.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
-				"/etc/containerd/certs.d/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']`,
@@ -574,7 +568,7 @@ capabilities = ['pull', 'resolve']`,
 			username:        "hello",
 			password:        "world",
 			expectedFiles: map[string]string{
-				"/etc/containerd/certs.d/foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
+				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
@@ -592,29 +586,34 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			fs := afero.NewMemMapFs()
+			registryConfigPath := filepath.Join(t.TempDir(), "etc", "containerd", "certs.d")
 			if tt.createConfigPathDir {
-				err := fs.Mkdir(registryConfigPath, 0o755)
+				err := os.MkdirAll(registryConfigPath, 0o755)
 				require.NoError(t, err)
 			}
 			for k, v := range tt.existingFiles {
-				err := afero.WriteFile(fs, k, []byte(v), 0o644)
+				path := filepath.Join(registryConfigPath, k)
+				err := os.MkdirAll(filepath.Dir(path), 0o755)
+				require.NoError(t, err)
+				err = os.WriteFile(path, []byte(v), 0o644)
 				require.NoError(t, err)
 			}
-			err := AddMirrorConfiguration(t.Context(), fs, registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags, tt.prependExisting, tt.username, tt.password)
+			err := AddMirrorConfiguration(t.Context(), registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags, tt.prependExisting, tt.username, tt.password)
 			require.NoError(t, err)
-			ok, err := afero.DirExists(fs, "/etc/containerd/certs.d/_backup")
+			ok, err := dirExists(filepath.Join(registryConfigPath, "_backup"))
 			require.NoError(t, err)
 			require.True(t, ok)
 			seenExpectedFiles := maps.Clone(tt.expectedFiles)
-			err = afero.Walk(fs, registryConfigPath, func(path string, fi iofs.FileInfo, _ error) error {
+			err = filepath.Walk(registryConfigPath, func(path string, fi iofs.FileInfo, _ error) error {
 				if fi.IsDir() {
 					return nil
 				}
-				expectedContent, ok := tt.expectedFiles[path]
-				require.True(t, ok, path)
-				delete(seenExpectedFiles, path)
-				b, err := afero.ReadFile(fs, path)
+				relPath, err := filepath.Rel(registryConfigPath, path)
+				require.NoError(t, err)
+				expectedContent, ok := tt.expectedFiles[relPath]
+				require.True(t, ok)
+				delete(seenExpectedFiles, relPath)
+				b, err := os.ReadFile(path)
 				require.NoError(t, err)
 				require.Equal(t, expectedContent, string(b))
 				return nil
@@ -628,34 +627,34 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
 	t.Parallel()
 
-	fs := afero.NewMemMapFs()
+	configPath := filepath.Join(t.TempDir(), "etc", "containerd", "certs.d")
 	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
 
 	registries := stringListToUrlList(t, []string{"ftp://docker.io"})
-	err := AddMirrorConfiguration(t.Context(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
+	err := AddMirrorConfiguration(t.Context(), configPath, registries, mirrors, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url scheme must be http or https: ftp://docker.io")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io/foo/bar"})
-	err = AddMirrorConfiguration(t.Context(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
+	err = AddMirrorConfiguration(t.Context(), configPath, registries, mirrors, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url path has to be empty: https://docker.io/foo/bar")
 
 	registries = stringListToUrlList(t, []string{"https://docker.io?foo=bar"})
-	err = AddMirrorConfiguration(t.Context(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
+	err = AddMirrorConfiguration(t.Context(), configPath, registries, mirrors, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url query has to be empty: https://docker.io?foo=bar")
 
 	registries = stringListToUrlList(t, []string{"https://foo@docker.io"})
-	err = AddMirrorConfiguration(t.Context(), fs, "/etc/containerd/certs.d", registries, mirrors, true, false, "", "")
+	err = AddMirrorConfiguration(t.Context(), configPath, registries, mirrors, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
 }
 
 func TestExistingHosts(t *testing.T) {
 	t.Parallel()
 
-	fs := afero.NewMemMapFs()
+	configPath := t.TempDir()
 	u, err := url.Parse("https://ghcr.io")
 	require.NoError(t, err)
 
-	eh, err := existingHosts(fs, "", *u)
+	eh, err := existingHosts(configPath, *u)
 	require.NoError(t, err)
 	require.Empty(t, eh)
 
@@ -693,10 +692,11 @@ func TestExistingHosts(t *testing.T) {
 [host."https://non-compliant-mirror.registry/v2/upstream"]
   capabilities = ["pull"]
   override_path = true`
-
-	err = afero.WriteFile(fs, filepath.Join(backupDir, u.Host, "hosts.toml"), []byte(tomlHosts), 0o644)
+	err = os.MkdirAll(filepath.Join(configPath, backupDir, u.Host), 0o755)
 	require.NoError(t, err)
-	eh, err = existingHosts(fs, "", *u)
+	err = os.WriteFile(filepath.Join(configPath, backupDir, u.Host, "hosts.toml"), []byte(tomlHosts), 0o644)
+	require.NoError(t, err)
+	eh, err = existingHosts(configPath, *u)
 	require.NoError(t, err)
 	expected := `[host.'https://mirror.registry']
 ca = '/etc/certs/mirror.pem'
@@ -736,18 +736,20 @@ override_path = true`
 func TestCleanupMirrorConfiguration(t *testing.T) {
 	t.Parallel()
 
-	fs := afero.NewMemMapFs()
-	err := afero.WriteFile(fs, filepath.Join("certs.d", backupDir, "data.txt"), []byte("hello world"), 0o644)
+	configPath := filepath.Join(t.TempDir(), "certs.d")
+	err := os.MkdirAll(filepath.Join(configPath, "_backup"), 0o755)
 	require.NoError(t, err)
-	err = afero.WriteFile(fs, filepath.Join("certs.d", "foo.bin"), []byte("hello world"), 0o644)
+	err = os.WriteFile(filepath.Join(configPath, backupDir, "data.txt"), []byte("hello world"), 0o644)
 	require.NoError(t, err)
-	err = fs.MkdirAll("certs.d/docker.io", 0o755)
+	err = os.WriteFile(filepath.Join(configPath, "foo.bin"), []byte("hello world"), 0o644)
+	require.NoError(t, err)
+	err = os.MkdirAll(filepath.Join(configPath, "docker.io"), 0o755)
 	require.NoError(t, err)
 
 	for range 2 {
-		err = CleanupMirrorConfiguration(t.Context(), fs, "certs.d")
+		err = CleanupMirrorConfiguration(t.Context(), configPath)
 		require.NoError(t, err)
-		files, err := afero.ReadDir(fs, "certs.d")
+		files, err := os.ReadDir(configPath)
 		require.NoError(t, err)
 		require.Len(t, files, 1)
 		require.Equal(t, "data.txt", files[0].Name())
@@ -756,6 +758,7 @@ func TestCleanupMirrorConfiguration(t *testing.T) {
 
 func stringListToUrlList(t *testing.T, list []string) []url.URL {
 	t.Helper()
+
 	urls := []url.URL{}
 	for _, item := range list {
 		u, err := url.Parse(item)

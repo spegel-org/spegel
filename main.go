@@ -19,7 +19,6 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spf13/afero"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
 
@@ -126,8 +125,7 @@ func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	if err != nil {
 		return err
 	}
-	fs := afero.NewOsFs()
-	err = oci.AddMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath, args.MirroredRegistries, args.MirrorTargets, args.ResolveTags, args.PrependExisting, username, password)
+	err = oci.AddMirrorConfiguration(ctx, args.ContainerdRegistryConfigPath, args.MirroredRegistries, args.MirrorTargets, args.ResolveTags, args.PrependExisting, username, password)
 	if err != nil {
 		return err
 	}
@@ -286,8 +284,7 @@ func loadBasicAuth() (string, string, error) {
 func cleanupCommand(ctx context.Context, args *CleanupCmd) error {
 	log := logr.FromContextOrDiscard(ctx)
 
-	fs := afero.NewOsFs()
-	err := oci.CleanupMirrorConfiguration(ctx, fs, args.ContainerdRegistryConfigPath)
+	err := oci.CleanupMirrorConfiguration(ctx, args.ContainerdRegistryConfigPath)
 	if err != nil {
 		return err
 	}
