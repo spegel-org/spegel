@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
 
+	"github.com/spegel-org/spegel/internal/cleanup"
 	"github.com/spegel-org/spegel/internal/web"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -255,6 +255,22 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	return nil
 }
 
+func cleanupCommand(ctx context.Context, args *CleanupCmd) error {
+	err := cleanup.Run(ctx, args.Addr, args.ContainerdRegistryConfigPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func cleanupWaitCommand(ctx context.Context, args *CleanupWaitCmd) error {
+	err := cleanup.Wait(ctx, args.ProbeEndpoint, args.Period, args.Threshold)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //nolint: ireturn // Return type can be different structs.
 	switch cfg.BootstrapKind {
 	case "dns":
@@ -279,118 +295,4 @@ func loadBasicAuth() (string, string, error) {
 		return "", "", err
 	}
 	return string(username), string(password), nil
-}
-
-func cleanupCommand(ctx context.Context, args *CleanupCmd) error {
-	log := logr.FromContextOrDiscard(ctx)
-
-	err := oci.CleanupMirrorConfiguration(ctx, args.ContainerdRegistryConfigPath)
-	if err != nil {
-		return err
-	}
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	mux := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet && req.URL.Path != "/healthz" {
-			log.Error(errors.New("unknown request"), "unsupported probe request", "path", req.URL.Path, "method", req.Method)
-			rw.WriteHeader(http.StatusNotFound)
-			return
-		}
-		rw.WriteHeader(http.StatusOK)
-	})
-	srv := &http.Server{
-		Addr:    args.Addr,
-		Handler: mux,
-	}
-	g.Go(func() error {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	})
-	g.Go(func() error {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return srv.Shutdown(shutdownCtx)
-	})
-
-	log.Info("waiting to be shutdown")
-	err = g.Wait()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func cleanupWaitCommand(ctx context.Context, args *CleanupWaitCmd) error {
-	log := logr.FromContextOrDiscard(ctx)
-
-	addr, port, err := net.SplitHostPort(args.ProbeEndpoint)
-	if err != nil {
-		return err
-	}
-
-	resolver := &net.Resolver{}
-	client := &http.Client{}
-	thresholdCount := 0
-	for {
-		time.Sleep(args.Period)
-		start := time.Now()
-
-		log.Info("running probe lookup", "host", addr)
-		ips, err := resolver.LookupIPAddr(ctx, addr)
-		if err != nil {
-			log.Error(err, "cleanup probe lookup failed")
-			thresholdCount = 0
-			continue
-		}
-
-		log.Info("running probe request", "endpoints", len(ips))
-		g, gCtx := errgroup.WithContext(ctx)
-		g.SetLimit(10)
-		for _, ip := range ips {
-			g.Go(func() error {
-				u := url.URL{
-					Scheme: "http",
-					Host:   net.JoinHostPort(ip.String(), port),
-					Path:   "/healthz",
-				}
-				reqCtx, cancel := context.WithTimeout(gCtx, 1*time.Second)
-				defer cancel()
-				req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, u.String(), nil)
-				if err != nil {
-					return err
-				}
-				resp, err := client.Do(req)
-				if err != nil {
-					return err
-				}
-				defer resp.Body.Close()
-				_, err = io.Copy(io.Discard, resp.Body)
-				if err != nil {
-					return err
-				}
-				if resp.StatusCode != http.StatusOK {
-					return fmt.Errorf("unexpected status code %s", resp.Status)
-				}
-				return nil
-			})
-		}
-		err = g.Wait()
-		if err != nil {
-			log.Error(err, "cleanup probe request failed")
-			thresholdCount = 0
-			continue
-		}
-
-		thresholdCount += 1
-		log.Info("probe ran successfully", "threshold", thresholdCount, "duration", time.Since(start).String())
-		if thresholdCount == args.Threshold {
-			log.Info("probe threshold reached")
-			return nil
-		}
-	}
 }
