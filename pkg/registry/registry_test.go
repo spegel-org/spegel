@@ -12,7 +12,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
@@ -40,6 +39,27 @@ func TestRegistryOptions(t *testing.T) {
 	require.Equal(t, log, cfg.Log)
 	require.Equal(t, "foo", cfg.Username)
 	require.Equal(t, "bar", cfg.Password)
+}
+
+func TestReadyHandler(t *testing.T) {
+	t.Parallel()
+
+	router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:8080"))
+	reg, err := NewRegistry(nil, router)
+	require.NoError(t, err)
+	srv, err := reg.Server("")
+	require.NoError(t, err)
+
+	rw := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/healthz", nil)
+	srv.Handler.ServeHTTP(rw, req)
+	require.Equal(t, http.StatusInternalServerError, rw.Result().StatusCode)
+
+	router.Add("foo", netip.MustParseAddrPort("127.0.0.1:9090"))
+	rw = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "http://localhost/healthz", nil)
+	srv.Handler.ServeHTTP(rw, req)
+	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 }
 
 func TestBasicAuth(t *testing.T) {
@@ -107,11 +127,11 @@ func TestBasicAuth(t *testing.T) {
 			reg, err := NewRegistry(nil, nil, WithBasicAuth(tt.username, tt.password))
 			require.NoError(t, err)
 			rw := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "http://localhost/v2", nil)
+			req := httptest.NewRequest(http.MethodGet, "http://localhost/v2/", nil)
 			req.SetBasicAuth(tt.reqUsername, tt.reqPassword)
-			m, err := mux.NewServeMux(reg.handle)
+			srv, err := reg.Server("")
 			require.NoError(t, err)
-			m.ServeHTTP(rw, req)
+			srv.Handler.ServeHTTP(rw, req)
 
 			require.Equal(t, tt.expected, rw.Result().StatusCode)
 		})
@@ -211,9 +231,9 @@ func TestMirrorHandler(t *testing.T) {
 				target := fmt.Sprintf("http://example.com/v2/foo/bar/blobs/%s", tt.key)
 				rw := httptest.NewRecorder()
 				req := httptest.NewRequest(method, target, nil)
-				m, err := mux.NewServeMux(reg.handle)
+				srv, err := reg.Server("")
 				require.NoError(t, err)
-				m.ServeHTTP(rw, req)
+				srv.Handler.ServeHTTP(rw, req)
 
 				resp := rw.Result()
 				defer resp.Body.Close()
@@ -249,48 +269,4 @@ func TestCopyHeader(t *testing.T) {
 	copyHeader(dst, src)
 
 	require.Equal(t, []string{"2", "1"}, dst.Values("foo"))
-}
-
-func TestGetClientIP(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		request  *http.Request
-		expected string
-	}{
-		{
-			name: "x forwarded for single",
-			request: &http.Request{
-				Header: http.Header{
-					"X-Forwarded-For": []string{"localhost"},
-				},
-			},
-			expected: "localhost",
-		},
-		{
-			name: "x forwarded for multiple",
-			request: &http.Request{
-				Header: http.Header{
-					"X-Forwarded-For": []string{"localhost,127.0.0.1"},
-				},
-			},
-			expected: "localhost",
-		},
-		{
-			name: "remote address",
-			request: &http.Request{
-				RemoteAddr: "127.0.0.1:9090",
-			},
-			expected: "127.0.0.1",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			ip := getClientIP(tt.request)
-			require.Equal(t, tt.expected, ip)
-		})
-	}
 }
