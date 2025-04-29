@@ -1,6 +1,8 @@
 package metrics
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestRegister(t *testing.T) {
 	t.Parallel()

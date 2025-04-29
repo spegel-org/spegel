@@ -13,6 +13,7 @@ type ResponseWriter interface {
 	Error() error
 	Status() int
 	Size() int64
+	SetHandler(handler string)
 }
 
 var (
@@ -25,6 +26,7 @@ var (
 type response struct {
 	http.ResponseWriter
 	error         error
+	handler       string
 	status        int
 	size          int64
 	writtenHeader bool
@@ -86,4 +88,8 @@ func (r *response) Error() error {
 
 func (r *response) Size() int64 {
 	return r.size
+}
+
+func (r *response) SetHandler(handler string) {
+	r.handler = handler
 }

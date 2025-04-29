@@ -70,4 +70,10 @@ func TestResponseWriter(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, r.Size(), readFromN)
 	require.Equal(t, r.Size(), rw.Size())
+
+	rw = &response{
+		ResponseWriter: httptest.NewRecorder(),
+	}
+	rw.SetHandler("foo")
+	require.Equal(t, "foo", rw.handler)
 }

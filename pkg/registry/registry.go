@@ -5,20 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"path"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
 
-	"github.com/spegel-org/spegel/internal/mux"
 	"github.com/spegel-org/spegel/pkg/metrics"
+	"github.com/spegel-org/spegel/pkg/mux"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
@@ -151,10 +149,10 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...RegistryOp
 }
 
 func (r *Registry) Server(addr string) (*http.Server, error) {
-	m, err := mux.NewServeMux(r.handle)
-	if err != nil {
-		return nil, err
-	}
+	m := mux.NewServeMux(r.log)
+	m.Handle("GET /healthz", r.readyHandler)
+	m.Handle("GET /v2/", r.registryHandler)
+	m.Handle("HEAD /v2/", r.registryHandler)
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: m,
@@ -162,55 +160,8 @@ func (r *Registry) Server(addr string) (*http.Server, error) {
 	return srv, nil
 }
 
-func (r *Registry) handle(rw mux.ResponseWriter, req *http.Request) {
-	start := time.Now()
-	handler := ""
-	path := req.URL.Path
-	if strings.HasPrefix(path, "/v2") {
-		path = "/v2/*"
-	}
-	defer func() {
-		latency := time.Since(start)
-		statusCode := strconv.FormatInt(int64(rw.Status()), 10)
-
-		metrics.HttpRequestsInflight.WithLabelValues(path).Add(-1)
-		metrics.HttpRequestDurHistogram.WithLabelValues(path, req.Method, statusCode).Observe(latency.Seconds())
-		metrics.HttpResponseSizeHistogram.WithLabelValues(path, req.Method, statusCode).Observe(float64(rw.Size()))
-
-		// Ignore logging requests to healthz to reduce log noise
-		if req.URL.Path == "/healthz" {
-			return
-		}
-
-		kvs := []any{
-			"path", req.URL.Path,
-			"status", rw.Status(),
-			"method", req.Method,
-			"latency", latency.String(),
-			"ip", getClientIP(req),
-			"handler", handler,
-		}
-		if rw.Status() >= 200 && rw.Status() < 300 {
-			r.log.Info("", kvs...)
-			return
-		}
-		r.log.Error(rw.Error(), "", kvs...)
-	}()
-	metrics.HttpRequestsInflight.WithLabelValues(path).Add(1)
-
-	if req.URL.Path == "/healthz" && req.Method == http.MethodGet {
-		r.readyHandler(rw, req)
-		handler = "ready"
-		return
-	}
-	if strings.HasPrefix(req.URL.Path, "/v2") && (req.Method == http.MethodGet || req.Method == http.MethodHead) {
-		handler = r.registryHandler(rw, req)
-		return
-	}
-	rw.WriteHeader(http.StatusNotFound)
-}
-
 func (r *Registry) readyHandler(rw mux.ResponseWriter, req *http.Request) {
+	rw.SetHandler("ready")
 	ok, err := r.router.Ready(req.Context())
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine router readiness: %w", err))
@@ -222,27 +173,30 @@ func (r *Registry) readyHandler(rw mux.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) string {
+func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
+	rw.SetHandler("registry")
+
 	// Check basic authentication
 	if r.username != "" || r.password != "" {
 		username, password, _ := req.BasicAuth()
 		if r.username != username || r.password != password {
 			rw.WriteError(http.StatusUnauthorized, errors.New("invalid basic authentication"))
-			return "registry"
+			return
 		}
 	}
 
 	// Quickly return 200 for /v2 to indicate that registry supports v2.
 	if path.Clean(req.URL.Path) == "/v2" {
+		rw.SetHandler("v2")
 		rw.WriteHeader(http.StatusOK)
-		return "v2"
+		return
 	}
 
 	// Parse out path components from request.
 	dist, err := oci.ParseDistributionPath(req.URL)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not parse path according to OCI distribution spec: %w", err))
-		return "registry"
+		return
 	}
 
 	// Request with mirror header are proxied.
@@ -258,27 +212,30 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) str
 			_, ociErr = r.ociClient.Size(req.Context(), dist.Digest)
 		}
 		if ociErr != nil {
+			rw.SetHandler("mirror")
 			r.handleMirror(rw, req, dist)
-			return "mirror"
+			return
 		}
 	}
 
 	// Serve registry endpoints.
 	switch dist.Kind {
 	case oci.DistributionKindManifest:
+		rw.SetHandler("manifest")
 		r.handleManifest(rw, req, dist)
-		return "manifest"
+		return
 	case oci.DistributionKindBlob:
+		rw.SetHandler("blob")
 		r.handleBlob(rw, req, dist)
-		return "blob"
+		return
 	default:
 		rw.WriteError(http.StatusNotFound, fmt.Errorf("unknown distribution path kind %s", dist.Kind))
-		return "registry"
+		return
 	}
 }
 
 func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
-	log := r.log.WithValues("ref", dist.Reference(), "path", req.URL.Path, "ip", getClientIP(req))
+	log := r.log.WithValues("ref", dist.Reference(), "path", req.URL.Path)
 
 	defer func() {
 		cacheType := "hit"
@@ -438,20 +395,4 @@ func copyHeader(dst, src http.Header) {
 			dst.Add(k, v)
 		}
 	}
-}
-
-func getClientIP(req *http.Request) string {
-	forwardedFor := req.Header.Get("X-Forwarded-For")
-	if forwardedFor != "" {
-		comps := strings.Split(forwardedFor, ",")
-		if len(comps) > 1 {
-			return comps[0]
-		}
-		return forwardedFor
-	}
-	h, _, err := net.SplitHostPort(req.RemoteAddr)
-	if err != nil {
-		return ""
-	}
-	return h
 }
