@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#869](https://github.com/spegel-org/spegel/pull/869) Fix request logging for redirects and not found pages.
+
 ### Security
 
 ## v0.2.0

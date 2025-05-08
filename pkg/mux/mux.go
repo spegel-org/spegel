@@ -1,6 +1,7 @@
 package mux
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"strconv"
@@ -25,7 +26,19 @@ func NewServeMux(log logr.Logger) *ServeMux {
 }
 
 func (s *ServeMux) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	s.mux.ServeHTTP(rw, req)
+	h, pattern := s.mux.Handler(req)
+	if pattern == "" {
+		kvs := []any{
+			"path", req.URL.Path,
+			"status", http.StatusNotFound,
+			"method", req.Method,
+			"ip", GetClientIP(req),
+		}
+		s.log.Error(errors.New("page not found"), "", kvs...)
+		rw.WriteHeader(http.StatusNotFound)
+		return
+	}
+	h.ServeHTTP(rw, req)
 }
 
 func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
@@ -54,7 +67,7 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 				"ip", GetClientIP(req),
 				"handler", rw.handler,
 			}
-			if rw.Status() >= 200 && rw.Status() < 300 {
+			if rw.Status() >= 200 && rw.Status() < 400 {
 				s.log.Info("", kvs...)
 				return
 			}
