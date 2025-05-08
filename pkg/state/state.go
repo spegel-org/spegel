@@ -14,9 +14,9 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
-func Track(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
+func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resolveLatestTag bool) error {
 	log := logr.FromContextOrDiscard(ctx)
-	eventCh, errCh, err := ociClient.Subscribe(ctx)
+	eventCh, errCh, err := ociStore.Subscribe(ctx)
 	if err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 			return nil
 		case <-tickerCh:
 			log.Info("running scheduled image state update")
-			if err := all(ctx, ociClient, router, resolveLatestTag); err != nil {
+			if err := all(ctx, ociStore, router, resolveLatestTag); err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
 			}
@@ -41,7 +41,7 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 				return errors.New("image event channel closed")
 			}
 			log.Info("received image event", "image", event.Image.String(), "type", event.Type)
-			if _, err := update(ctx, ociClient, router, event, false, resolveLatestTag); err != nil {
+			if _, err := update(ctx, ociStore, router, event, false, resolveLatestTag); err != nil {
 				log.Error(err, "received error when updating image")
 				continue
 			}
@@ -54,9 +54,9 @@ func Track(ctx context.Context, ociClient oci.Client, router routing.Router, res
 	}
 }
 
-func all(ctx context.Context, ociClient oci.Client, router routing.Router, resolveLatestTag bool) error {
+func all(ctx context.Context, ociStore oci.Store, router routing.Router, resolveLatestTag bool) error {
 	log := logr.FromContextOrDiscard(ctx).V(4)
-	imgs, err := ociClient.ListImages(ctx)
+	imgs, err := ociStore.ListImages(ctx)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 		// update function from setting metrics values.
 		event := oci.ImageEvent{Image: img, Type: oci.UpdateEvent}
 		log.Info("sync image event", "image", event.Image.String(), "type", event.Type)
-		keyTotal, err := update(ctx, ociClient, router, event, skipDigests, resolveLatestTag)
+		keyTotal, err := update(ctx, ociStore, router, event, skipDigests, resolveLatestTag)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -91,7 +91,7 @@ func all(ctx context.Context, ociClient oci.Client, router routing.Router, resol
 	return errors.Join(errs...)
 }
 
-func update(ctx context.Context, ociClient oci.Client, router routing.Router, event oci.ImageEvent, skipDigests, resolveLatestTag bool) (int, error) {
+func update(ctx context.Context, ociStore oci.Store, router routing.Router, event oci.ImageEvent, skipDigests, resolveLatestTag bool) (int, error) {
 	keys := []string{}
 	//nolint: staticcheck // Simplify in future.
 	if !(!resolveLatestTag && event.Image.IsLatestTag()) {
@@ -108,7 +108,7 @@ func update(ctx context.Context, ociClient oci.Client, router routing.Router, ev
 		return 0, nil
 	}
 	if !skipDigests {
-		dgsts, err := oci.WalkImage(ctx, ociClient, event.Image)
+		dgsts, err := oci.WalkImage(ctx, ociStore, event.Image)
 		if err != nil {
 			return 0, fmt.Errorf("could not get digests for image %s: %w", event.Image.String(), err)
 		}

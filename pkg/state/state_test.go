@@ -25,7 +25,7 @@ import (
 
 func TestTrack(t *testing.T) {
 	t.Parallel()
-	ociClient := oci.NewMemory()
+	ociStore := oci.NewMemory()
 
 	imgRefs := []string{
 		"docker.io/library/ubuntu:latest",
@@ -48,10 +48,10 @@ func TestTrack(t *testing.T) {
 		_, err = hash.Write(b)
 		require.NoError(t, err)
 		dgst := digest.NewDigest(digest.SHA256, hash)
-		ociClient.AddBlob(b, dgst)
+		ociStore.AddBlob(b, dgst)
 		img, err := oci.ParseImageRequireDigest(imageStr, dgst)
 		require.NoError(t, err)
-		ociClient.AddImage(img)
+		ociStore.AddImage(img)
 
 		imgs = append(imgs, img)
 	}
@@ -80,7 +80,7 @@ func TestTrack(t *testing.T) {
 			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
 			g, gCtx := errgroup.WithContext(ctx)
 			g.Go(func() error {
-				return Track(gCtx, ociClient, router, tt.resolveLatestTag)
+				return Track(gCtx, ociStore, router, tt.resolveLatestTag)
 			})
 			time.Sleep(100 * time.Millisecond)
 

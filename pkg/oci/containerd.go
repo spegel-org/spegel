@@ -34,7 +34,7 @@ const (
 	backupDir = "_backup"
 )
 
-var _ Client = &Containerd{}
+var _ Store = &Containerd{}
 
 type Containerd struct {
 	contentPath        string

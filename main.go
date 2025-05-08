@@ -141,12 +141,12 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return err
 	}
 
-	// OCI Client
-	ociClient, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.MirroredRegistries, oci.WithContentPath(args.ContainerdContentPath))
+	// OCI Store
+	ociStore, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.MirroredRegistries, oci.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
 		return err
 	}
-	err = ociClient.Verify(ctx)
+	err = ociStore.Verify(ctx)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 
 	// State tracking
 	g.Go(func() error {
-		err := state.Track(ctx, ociClient, router, args.ResolveLatestTag)
+		err := state.Track(ctx, ociStore, router, args.ResolveLatestTag)
 		if err != nil {
 			return err
 		}
@@ -188,7 +188,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithLogger(log),
 		registry.WithBasicAuth(username, password),
 	}
-	reg, err := registry.NewRegistry(ociClient, router, registryOpts...)
+	reg, err := registry.NewRegistry(ociStore, router, registryOpts...)
 	if err != nil {
 		return err
 	}
