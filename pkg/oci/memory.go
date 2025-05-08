@@ -11,7 +11,7 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
-var _ Client = &Memory{}
+var _ Store = &Memory{}
 
 type Memory struct {
 	blobs  map[digest.Digest][]byte

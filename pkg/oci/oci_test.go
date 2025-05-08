@@ -96,28 +96,28 @@ func TestOCIClient(t *testing.T) {
 		memoryClient.AddBlob(v, k)
 	}
 
-	for _, ociClient := range []Client{remoteContainerd, localContainerd, memoryClient} {
-		t.Run(ociClient.Name(), func(t *testing.T) {
+	for _, ociStore := range []Store{remoteContainerd, localContainerd, memoryClient} {
+		t.Run(ociStore.Name(), func(t *testing.T) {
 			t.Parallel()
 
-			b, mt, err := ociClient.GetManifest(ctx, digest.FromString("foo"))
+			b, mt, err := ociStore.GetManifest(ctx, digest.FromString("foo"))
 			require.Empty(t, b)
 			require.Empty(t, mt)
 			require.ErrorIs(t, err, ErrNotFound)
-			rc, err := ociClient.GetBlob(ctx, digest.FromString("foo"))
+			rc, err := ociStore.GetBlob(ctx, digest.FromString("foo"))
 			require.Empty(t, rc)
 			require.ErrorIs(t, err, ErrNotFound)
-			size, err := ociClient.Size(ctx, digest.FromString("foo"))
+			size, err := ociStore.Size(ctx, digest.FromString("foo"))
 			require.Empty(t, size)
 			require.ErrorIs(t, err, ErrNotFound)
 
-			imgs, err := ociClient.ListImages(ctx)
+			imgs, err := ociStore.ListImages(ctx)
 			require.NoError(t, err)
 			require.Len(t, imgs, 5)
 			for _, img := range imgs {
 				tagName, ok := img.TagName()
 				require.True(t, ok)
-				_, err := ociClient.Resolve(ctx, tagName)
+				_, err := ociStore.Resolve(ctx, tagName)
 				require.NoError(t, err)
 			}
 
@@ -128,10 +128,10 @@ func TestOCIClient(t *testing.T) {
 			}
 			tagName, ok := noPlatformImg.TagName()
 			require.True(t, ok)
-			dgst, err := ociClient.Resolve(ctx, tagName)
+			dgst, err := ociStore.Resolve(ctx, tagName)
 			require.NoError(t, err)
 			noPlatformImg.Digest = dgst
-			_, err = WalkImage(ctx, ociClient, noPlatformImg)
+			_, err = WalkImage(ctx, ociStore, noPlatformImg)
 			require.EqualError(t, err, "failed to walk image manifests: could not find any platforms with local content in manifest sha256:addc990c58744bdf96364fe89bd4aab38b1e824d51c688edb36c75247cd45fa9")
 
 			contentTests := []struct {
@@ -164,16 +164,16 @@ func TestOCIClient(t *testing.T) {
 				t.Run(tt.mediaType, func(t *testing.T) {
 					t.Parallel()
 
-					size, err := ociClient.Size(ctx, tt.dgst)
+					size, err := ociStore.Size(ctx, tt.dgst)
 					require.NoError(t, err)
 					require.Equal(t, tt.size, size)
 					if tt.mediaType != ocispec.MediaTypeImageLayer {
-						b, mediaType, err := ociClient.GetManifest(ctx, tt.dgst)
+						b, mediaType, err := ociStore.GetManifest(ctx, tt.dgst)
 						require.NoError(t, err)
 						require.Equal(t, tt.mediaType, mediaType)
 						require.Equal(t, blobs[tt.dgst], b)
 					} else {
-						rc, err := ociClient.GetBlob(ctx, tt.dgst)
+						rc, err := ociStore.GetBlob(ctx, tt.dgst)
 						require.NoError(t, err)
 						defer rc.Close()
 						b, err := io.ReadAll(rc)
@@ -287,7 +287,7 @@ func TestOCIClient(t *testing.T) {
 
 					img, err := ParseImageRequireDigest(tt.imageName, digest.Digest(tt.imageDigest))
 					require.NoError(t, err)
-					keys, err := WalkImage(ctx, ociClient, img)
+					keys, err := WalkImage(ctx, ociStore, img)
 					require.NoError(t, err)
 					require.Equal(t, tt.expectedKeys, keys)
 				})

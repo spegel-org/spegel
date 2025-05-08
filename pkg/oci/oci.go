@@ -30,8 +30,8 @@ type ImageEvent struct {
 	Type  EventType
 }
 
-type Client interface {
-	// Name returns the name of the Client implementation.
+type Store interface {
+	// Name returns the name of the store implementation.
 	Name() string
 
 	// Verify checks that all expected configuration is set.
@@ -94,10 +94,10 @@ func DetermineMediaType(b []byte) (string, error) {
 	return "", errors.New("not able to determine media type")
 }
 
-func WalkImage(ctx context.Context, client Client, img Image) ([]string, error) {
+func WalkImage(ctx context.Context, store Store, img Image) ([]string, error) {
 	keys := []string{}
 	err := walk(ctx, []digest.Digest{img.Digest}, func(dgst digest.Digest) ([]digest.Digest, error) {
-		b, mt, err := client.GetManifest(ctx, dgst)
+		b, mt, err := store.GetManifest(ctx, dgst)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +110,7 @@ func WalkImage(ctx context.Context, client Client, img Image) ([]string, error) 
 			}
 			manifestDgsts := []digest.Digest{}
 			for _, m := range idx.Manifests {
-				_, err := client.Size(ctx, m.Digest)
+				_, err := store.Size(ctx, m.Digest)
 				if errors.Is(err, ErrNotFound) {
 					continue
 				}

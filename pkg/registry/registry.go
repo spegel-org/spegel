@@ -99,7 +99,7 @@ type Registry struct {
 	client           *http.Client
 	bufferPool       *sync.Pool
 	log              logr.Logger
-	ociClient        oci.Client
+	ociStore         oci.Store
 	router           routing.Router
 	username         string
 	password         string
@@ -108,7 +108,7 @@ type Registry struct {
 	resolveLatestTag bool
 }
 
-func NewRegistry(ociClient oci.Client, router routing.Router, opts ...RegistryOption) (*Registry, error) {
+func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
 	transport, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
 		return nil, errors.New("default transporn is not of type http.Transport")
@@ -134,7 +134,7 @@ func NewRegistry(ociClient oci.Client, router routing.Router, opts ...RegistryOp
 		},
 	}
 	r := &Registry{
-		ociClient:        ociClient,
+		ociStore:         ociStore,
 		router:           router,
 		client:           cfg.Client,
 		log:              cfg.Log,
@@ -207,9 +207,9 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
 		// If content is present locally we should skip the mirroring and just serve it.
 		var ociErr error
 		if dist.Digest == "" {
-			_, ociErr = r.ociClient.Resolve(req.Context(), dist.Reference())
+			_, ociErr = r.ociStore.Resolve(req.Context(), dist.Reference())
 		} else {
-			_, ociErr = r.ociClient.Size(req.Context(), dist.Digest)
+			_, ociErr = r.ociStore.Size(req.Context(), dist.Digest)
 		}
 		if ociErr != nil {
 			rw.SetHandler("mirror")
@@ -294,14 +294,14 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist o
 
 func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	if dist.Digest == "" {
-		dgst, err := r.ociClient.Resolve(req.Context(), dist.Reference())
+		dgst, err := r.ociStore.Resolve(req.Context(), dist.Reference())
 		if err != nil {
 			rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get digest for image %s: %w", dist.Reference(), err))
 			return
 		}
 		dist.Digest = dgst
 	}
-	b, mediaType, err := r.ociClient.GetManifest(req.Context(), dist.Digest)
+	b, mediaType, err := r.ociStore.GetManifest(req.Context(), dist.Digest)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get manifest content for digest %s: %w", dist.Digest.String(), err))
 		return
@@ -320,7 +320,7 @@ func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, dist
 }
 
 func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
-	size, err := r.ociClient.Size(req.Context(), dist.Digest)
+	size, err := r.ociStore.Size(req.Context(), dist.Digest)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine size of blob with digest %s: %w", dist.Digest.String(), err))
 		return
@@ -333,7 +333,7 @@ func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dist oci
 		return
 	}
 
-	rc, err := r.ociClient.GetBlob(req.Context(), dist.Digest)
+	rc, err := r.ociStore.GetBlob(req.Context(), dist.Digest)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not get reader for blob with digest %s: %w", dist.Digest.String(), err))
 		return
