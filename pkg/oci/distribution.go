@@ -54,6 +54,8 @@ func (d DistributionPath) URL() *url.URL {
 		ref = d.Tag
 	}
 	return &url.URL{
+		Scheme:   "https",
+		Host:     d.Registry,
 		Path:     fmt.Sprintf("/v2/%s/%s/%s", d.Name, d.Kind, ref),
 		RawQuery: fmt.Sprintf("ns=%s", d.Registry),
 	}

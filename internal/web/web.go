@@ -2,22 +2,15 @@ package web
 
 import (
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
-	"io"
 	"net"
 	"net/http"
 	"net/netip"
-	"net/url"
-	"runtime"
-	"strconv"
 	"time"
 
-	"github.com/containerd/containerd/v2/core/images"
 	"github.com/go-logr/logr"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/prometheus/common/expfmt"
 
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -29,7 +22,7 @@ var templatesFS embed.FS
 
 type Web struct {
 	router routing.Router
-	client *http.Client
+	client *oci.Client
 	tmpls  *template.Template
 }
 
@@ -40,7 +33,7 @@ func NewWeb(router routing.Router) (*Web, error) {
 	}
 	return &Web{
 		router: router,
-		client: &http.Client{},
+		client: oci.NewClient(),
 		tmpls:  tmpls,
 	}, nil
 }
@@ -149,139 +142,22 @@ func (w *Web) measure(req *http.Request) (string, any, error) {
 	}
 
 	// Pull the image and measure performance.
-	pullResults, err := measureImagePull(w.client, "http://localhost:5000", img)
+	pullMetrics, err := w.client.Pull(req.Context(), img, "http://localhost:5000")
 	if err != nil {
 		return "", nil, err
+	}
+	pullResults := []pullResult{}
+	for _, metric := range pullMetrics {
+		pullResults = append(pullResults, pullResult{
+			Identifier:    metric.Digest.String(),
+			ContentType:   metric.ContentType,
+			ContentLength: formatByteSize(metric.ContentLength),
+			Duration:      metric.Duration,
+		})
 	}
 	res.PullResults = pullResults
 
 	return "measure", res, nil
-}
-
-func measureImagePull(client *http.Client, regURL string, img oci.Image) ([]pullResult, error) {
-	pullResults := []pullResult{}
-	queue := []oci.DistributionPath{
-		{
-			Kind:     oci.DistributionKindManifest,
-			Name:     img.Repository,
-			Digest:   img.Digest,
-			Tag:      img.Tag,
-			Registry: img.Registry,
-		},
-	}
-	for {
-		//nolint: staticcheck // Ignore until we have proper tests.
-		if len(queue) == 0 {
-			break
-		}
-		pr, dists, err := fetchDistributionPath(client, regURL, queue[0])
-		if err != nil {
-			return nil, err
-		}
-		queue = queue[1:]
-		queue = append(queue, dists...)
-		pullResults = append(pullResults, pr)
-	}
-	return pullResults, nil
-}
-
-func fetchDistributionPath(client *http.Client, regURL string, dist oci.DistributionPath) (pullResult, []oci.DistributionPath, error) {
-	regU, err := url.Parse(regURL)
-	if err != nil {
-		return pullResult{}, nil, err
-	}
-	u := dist.URL()
-	u.Scheme = regU.Scheme
-	u.Host = regU.Host
-
-	pullStart := time.Now()
-	pullReq, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return pullResult{}, nil, err
-	}
-	pullResp, err := client.Do(pullReq)
-	if err != nil {
-		return pullResult{}, nil, err
-	}
-	defer pullResp.Body.Close()
-	if pullResp.StatusCode != http.StatusOK {
-		_, err = io.Copy(io.Discard, pullResp.Body)
-		if err != nil {
-			return pullResult{}, nil, err
-		}
-		return pullResult{}, nil, fmt.Errorf("request returned unexpected status code %s", pullResp.Status)
-	}
-
-	queue := []oci.DistributionPath{}
-	ct := pullResp.Header.Get("Content-Type")
-	switch dist.Kind {
-	case oci.DistributionKindBlob:
-		_, err = io.Copy(io.Discard, pullResp.Body)
-		if err != nil {
-			return pullResult{}, nil, err
-		}
-		ct = "Layer"
-	case oci.DistributionKindManifest:
-		b, err := io.ReadAll(pullResp.Body)
-		if err != nil {
-			return pullResult{}, nil, err
-		}
-		switch ct {
-		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-			var idx ocispec.Index
-			if err := json.Unmarshal(b, &idx); err != nil {
-				return pullResult{}, nil, err
-			}
-			for _, m := range idx.Manifests {
-				//nolint: staticcheck // Simplify in the future.
-				if !(m.Platform.OS == runtime.GOOS && m.Platform.Architecture == runtime.GOARCH) {
-					continue
-				}
-				queue = append(queue, oci.DistributionPath{
-					Kind:     oci.DistributionKindManifest,
-					Name:     dist.Name,
-					Digest:   m.Digest,
-					Registry: dist.Registry,
-				})
-			}
-			ct = "Index"
-		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-			var manifest ocispec.Manifest
-			err := json.Unmarshal(b, &manifest)
-			if err != nil {
-				return pullResult{}, nil, err
-			}
-			queue = append(queue, oci.DistributionPath{
-				Kind:     oci.DistributionKindManifest,
-				Name:     dist.Name,
-				Digest:   manifest.Config.Digest,
-				Registry: dist.Registry,
-			})
-			for _, layer := range manifest.Layers {
-				queue = append(queue, oci.DistributionPath{
-					Kind:     oci.DistributionKindBlob,
-					Name:     dist.Name,
-					Digest:   layer.Digest,
-					Registry: dist.Registry,
-				})
-			}
-			ct = "Manifest"
-		case ocispec.MediaTypeImageConfig:
-			ct = "Config"
-		}
-	}
-	pullResp.Body.Close()
-
-	i, err := strconv.ParseInt(pullResp.Header.Get("Content-Length"), 10, 0)
-	if err != nil {
-		return pullResult{}, nil, err
-	}
-	return pullResult{
-		Identifier:    dist.Reference(),
-		ContentType:   ct,
-		ContentLength: formatByteSize(i),
-		Duration:      time.Since(pullStart),
-	}, queue, nil
 }
 
 func formatByteSize(size int64) string {
