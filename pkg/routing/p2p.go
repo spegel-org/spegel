@@ -432,7 +432,7 @@ func hostMatches(host, addrInfo peer.AddrInfo) (bool, error) {
 	return false, nil
 }
 
-func loadOrCreatePrivateKey(ctx context.Context, dataDir string) (crypto.PrivKey, error) { //nolint: ireturn // LibP2P returns interfaces so we also have to.
+func loadOrCreatePrivateKey(ctx context.Context, dataDir string) (crypto.PrivKey, error) {
 	keyPath := filepath.Join(dataDir, "private.key")
 	log := logr.FromContextOrDiscard(ctx).WithValues("path", keyPath)
 	err := os.MkdirAll(dataDir, 0o755)

@@ -76,6 +76,13 @@ linters:
       strconcat: false
     testifylint:
       enable-all: true
+    ireturn:
+      allow:
+        - anon
+        - error
+        - empty
+        - stdlib
+        - github.com/libp2p/go-libp2p/core/crypto.PrivKey
   exclusions:
     generated: lax
     presets:
