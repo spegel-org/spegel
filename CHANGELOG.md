@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#860](https://github.com/spegel-org/spegel/pull/860) Update Go to 1.24.2.
 - [#864](https://github.com/spegel-org/spegel/pull/864) Rename OCI client to store.
 - [#871](https://github.com/spegel-org/spegel/pull/871) Implement OCI client and refactor debug web pulling.
+- [#873](https://github.com/spegel-org/spegel/pull/873) Refactor web to use internal mux router.
 
 ### Deprecated
 
