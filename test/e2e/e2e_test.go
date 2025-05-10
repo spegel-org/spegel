@@ -85,8 +85,9 @@ func TestE2E(t *testing.T) {
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s create namespace conformance --dry-run=client -o yaml | kubectl --kubeconfig %s apply -f -", kcPath, kcPath))
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply --namespace conformance -f ./testdata/conformance-job.yaml", kcPath))
 	require.Eventually(t, func() bool {
-		res, err := commandWithError(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 0s --for=condition=complete job/conformance", kcPath))
-		fmt.Println(res, err)
+		_, err := commandWithError(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 0s --for=condition=complete job/conformance", kcPath))
+		res, _ := commandWithError(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance logs -l job-name=conformance", kcPath))
+		fmt.Println(res)
 		return err == nil
 	}, 30*time.Second, 1*time.Second)
 
