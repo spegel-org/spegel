@@ -13,6 +13,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/prometheus/common/expfmt"
 
+	"github.com/spegel-org/spegel/pkg/mux"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
@@ -39,47 +40,35 @@ func NewWeb(router routing.Router) (*Web, error) {
 }
 
 func (w *Web) Handler(log logr.Logger) http.Handler {
-	log = log.WithName("web")
-	handlers := map[string]func(*http.Request) (string, any, error){
-		"/debug/web/": func(r *http.Request) (string, any, error) {
-			return "index", nil, nil
-		},
-		"/debug/web/stats":   w.stats,
-		"/debug/web/measure": w.measure,
-	}
-	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		h, ok := handlers[req.URL.Path]
-		if !ok {
-			rw.WriteHeader(http.StatusNotFound)
-			return
-		}
-		t, data, err := h(req)
-		if err != nil {
-			log.Error(err, "error when running handler", "path", req.URL.Path)
-			rw.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		err = w.tmpls.ExecuteTemplate(rw, t+".html", data)
-		if err != nil {
-			log.Error(err, "error rendering page", "path", req.URL.Path)
-			rw.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	})
+	m := mux.NewServeMux(log)
+	m.Handle("GET /debug/web/", w.indexHandler)
+	m.Handle("GET /debug/web/stats", w.statsHandler)
+	m.Handle("GET /debug/web/measure", w.measureHandler)
+	return m
 }
 
-func (w *Web) stats(req *http.Request) (string, any, error) {
+func (w *Web) indexHandler(rw mux.ResponseWriter, req *http.Request) {
+	err := w.tmpls.ExecuteTemplate(rw, "index.html", nil)
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+}
+
+func (w *Web) statsHandler(rw mux.ResponseWriter, req *http.Request) {
 	//nolint: errcheck // Ignore error.
 	srvAddr := req.Context().Value(http.LocalAddrContextKey).(net.Addr)
 	resp, err := http.Get(fmt.Sprintf("http://%s/metrics", srvAddr.String()))
 	if err != nil {
-		return "", nil, err
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
 	}
 	defer resp.Body.Close()
 	parser := expfmt.TextParser{}
 	metricFamilies, err := parser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		return "", nil, err
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
 	}
 
 	data := struct {
@@ -92,7 +81,11 @@ func (w *Web) stats(req *http.Request) (string, any, error) {
 	for _, metric := range metricFamilies["spegel_advertised_keys"].Metric {
 		data.LayerCount += int64(*metric.Gauge.Value)
 	}
-	return "stats", data, nil
+	err = w.tmpls.ExecuteTemplate(rw, "stats.html", data)
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
+	}
 }
 
 type measureResult struct {
@@ -112,15 +105,17 @@ type pullResult struct {
 	Duration      time.Duration
 }
 
-func (w *Web) measure(req *http.Request) (string, any, error) {
+func (w *Web) measureHandler(rw mux.ResponseWriter, req *http.Request) {
 	// Parse image name.
 	imgName := req.URL.Query().Get("image")
 	if imgName == "" {
-		return "", nil, errors.New("image name cannot be empty")
+		rw.WriteError(http.StatusBadRequest, errors.New("image name cannot be empty"))
+		return
 	}
 	img, err := oci.ParseImage(imgName)
 	if err != nil {
-		return "", nil, err
+		rw.WriteError(http.StatusBadRequest, err)
+		return
 	}
 
 	res := measureResult{}
@@ -129,7 +124,8 @@ func (w *Web) measure(req *http.Request) (string, any, error) {
 	resolveStart := time.Now()
 	peerCh, err := w.router.Resolve(req.Context(), imgName, 0)
 	if err != nil {
-		return "", nil, err
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
 	}
 	for peer := range peerCh {
 		res.PeerResults = append(res.PeerResults, peerResult{
@@ -137,27 +133,31 @@ func (w *Web) measure(req *http.Request) (string, any, error) {
 			Duration: time.Since(resolveStart),
 		})
 	}
-	if len(res.PeerResults) == 0 {
-		return "measure", res, nil
+
+	if len(res.PeerResults) > 0 {
+		// Pull the image and measure performance.
+		pullMetrics, err := w.client.Pull(req.Context(), img, "http://localhost:5000")
+		if err != nil {
+			rw.WriteError(http.StatusInternalServerError, err)
+			return
+		}
+		pullResults := []pullResult{}
+		for _, metric := range pullMetrics {
+			pullResults = append(pullResults, pullResult{
+				Identifier:    metric.Digest.String(),
+				ContentType:   metric.ContentType,
+				ContentLength: formatByteSize(metric.ContentLength),
+				Duration:      metric.Duration,
+			})
+		}
+		res.PullResults = pullResults
 	}
 
-	// Pull the image and measure performance.
-	pullMetrics, err := w.client.Pull(req.Context(), img, "http://localhost:5000")
+	err = w.tmpls.ExecuteTemplate(rw, "measure.html", res)
 	if err != nil {
-		return "", nil, err
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
 	}
-	pullResults := []pullResult{}
-	for _, metric := range pullMetrics {
-		pullResults = append(pullResults, pullResult{
-			Identifier:    metric.Digest.String(),
-			ContentType:   metric.ContentType,
-			ContentLength: formatByteSize(metric.ContentLength),
-			Duration:      metric.Duration,
-		})
-	}
-	res.PullResults = pullResults
-
-	return "measure", res, nil
 }
 
 func formatByteSize(size int64) string {
