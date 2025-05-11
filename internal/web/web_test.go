@@ -1,13 +1,21 @@
 package web
 
 import (
-	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestFormatByteSize(t *testing.T) {
+func TestWeb(t *testing.T) {
+	t.Parallel()
+
+	w, err := NewWeb(nil)
+	require.NoError(t, err)
+	require.NotNil(t, w.tmpls)
+}
+
+func TestFormatBytes(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -19,19 +27,53 @@ func TestFormatByteSize(t *testing.T) {
 			expected: "1 B",
 		},
 		{
-			size:     18954,
-			expected: "19.0 kB",
+			size:     19456,
+			expected: "19.0 KB",
 		},
 		{
-			size:     1000000000,
+			size:     1073741824,
 			expected: "1.0 GB",
 		},
 	}
 	for _, tt := range tests {
-		t.Run(strconv.FormatInt(tt.size, 10), func(t *testing.T) {
+		t.Run(tt.expected, func(t *testing.T) {
 			t.Parallel()
 
-			result := formatByteSize(tt.size)
+			result := formatBytes(tt.size)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDuration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		expected string
+		duration time.Duration
+	}{
+		{
+			duration: 36 * time.Millisecond,
+			expected: "36ms",
+		},
+		{
+			duration: 5 * time.Microsecond,
+			expected: "<1ms",
+		},
+		{
+			duration: 5*time.Minute + 128*time.Second,
+			expected: "7m8s",
+		},
+		{
+			duration: 2 * time.Hour,
+			expected: "120m",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			t.Parallel()
+
+			result := formatDuration(tt.duration)
 			require.Equal(t, tt.expected, result)
 		})
 	}
