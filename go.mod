@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/alexflint/go-arg v1.5.1
-	github.com/containerd/containerd/api v1.8.0
+	github.com/containerd/containerd/api v1.9.0
 	github.com/containerd/containerd/v2 v2.0.5
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/typeurl/v2 v2.2.3
