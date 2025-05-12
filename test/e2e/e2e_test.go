@@ -33,9 +33,24 @@ func TestE2E(t *testing.T) {
 	// Create kind cluster.
 	kcPath := createKindCluster(t.Context(), t, kindName, proxyMode, ipFamily)
 	t.Cleanup(func() {
-		t.Log("Deleting Kind cluster")
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
+
+		if t.Failed() {
+			t.Log("Test failure debug output")
+
+			out, _ := commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods", kcPath))
+			t.Logf("Spegel Pods:\n\n%s\n\n", out)
+			out, _ = commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel logs -l app.kubernetes.io/name=spegel --max-log-requests 50", kcPath))
+			t.Logf("Spegel Logs:\n\n%s\n\n", out)
+
+			out, _ = commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance get pods", kcPath))
+			t.Logf("Conformance Pods:\n\n%s\n\n", out)
+			out, _ = commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance logs -l job-name=conformance", kcPath))
+			t.Logf("Conformance Logs:\n\n%s\n\n", out)
+		}
+
+		t.Log("Deleting Kind cluster")
 		command(ctx, t, fmt.Sprintf("kind delete cluster --name %s", kindName))
 	})
 
@@ -84,11 +99,7 @@ func TestE2E(t *testing.T) {
 	t.Log("Running conformance tests")
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s create namespace conformance --dry-run=client -o yaml | kubectl --kubeconfig %s apply -f -", kcPath, kcPath))
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply --namespace conformance -f ./testdata/conformance-job.yaml", kcPath))
-	require.Eventually(t, func() bool {
-		res, err := commandWithError(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 0s --for=condition=complete job/conformance", kcPath))
-		fmt.Println(res, err)
-		return err == nil
-	}, 30*time.Second, 1*time.Second)
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 60s --for=condition=complete job/conformance", kcPath))
 
 	// Remove Spegel from the last node to test that the mirror fallback is working.
 	workerPod := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=%s-worker4", kcPath, kindName))
