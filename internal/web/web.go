@@ -28,7 +28,11 @@ type Web struct {
 }
 
 func NewWeb(router routing.Router) (*Web, error) {
-	tmpls, err := template.New("").ParseFS(templatesFS, "templates/*")
+	funcs := template.FuncMap{
+		"formatBytes":    formatBytes,
+		"formatDuration": formatDuration,
+	}
+	tmpls, err := template.New("").Funcs(funcs).ParseFS(templatesFS, "templates/*")
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +93,11 @@ func (w *Web) statsHandler(rw mux.ResponseWriter, req *http.Request) {
 }
 
 type measureResult struct {
-	PeerResults []peerResult
-	PullResults []pullResult
+	PeerResults  []peerResult
+	PullResults  []pullResult
+	PeerDuration time.Duration
+	PullDuration time.Duration
+	PullSize     int64
 }
 
 type peerResult struct {
@@ -99,10 +106,10 @@ type peerResult struct {
 }
 
 type pullResult struct {
-	Identifier    string
-	ContentType   string
-	ContentLength string
-	Duration      time.Duration
+	Identifier string
+	Type       string
+	Size       int64
+	Duration   time.Duration
 }
 
 func (w *Web) measureHandler(rw mux.ResponseWriter, req *http.Request) {
@@ -128,9 +135,11 @@ func (w *Web) measureHandler(rw mux.ResponseWriter, req *http.Request) {
 		return
 	}
 	for peer := range peerCh {
+		d := time.Since(resolveStart)
+		res.PeerDuration += d
 		res.PeerResults = append(res.PeerResults, peerResult{
 			Peer:     peer,
-			Duration: time.Since(resolveStart),
+			Duration: d,
 		})
 	}
 
@@ -141,16 +150,16 @@ func (w *Web) measureHandler(rw mux.ResponseWriter, req *http.Request) {
 			rw.WriteError(http.StatusInternalServerError, err)
 			return
 		}
-		pullResults := []pullResult{}
 		for _, metric := range pullMetrics {
-			pullResults = append(pullResults, pullResult{
-				Identifier:    metric.Digest.String(),
-				ContentType:   metric.ContentType,
-				ContentLength: formatByteSize(metric.ContentLength),
-				Duration:      metric.Duration,
+			res.PullDuration += metric.Duration
+			res.PullSize += metric.ContentLength
+			res.PullResults = append(res.PullResults, pullResult{
+				Identifier: metric.Digest.String(),
+				Type:       metric.ContentType,
+				Size:       metric.ContentLength,
+				Duration:   metric.Duration,
 			})
 		}
-		res.PullResults = pullResults
 	}
 
 	err = w.tmpls.ExecuteTemplate(rw, "measure.html", res)
@@ -160,8 +169,8 @@ func (w *Web) measureHandler(rw mux.ResponseWriter, req *http.Request) {
 	}
 }
 
-func formatByteSize(size int64) string {
-	const unit = 1000
+func formatBytes(size int64) string {
+	const unit = 1024
 	if size < unit {
 		return fmt.Sprintf("%d B", size)
 	}
@@ -170,5 +179,28 @@ func formatByteSize(size int64) string {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "kMGTPE"[exp])
+	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Millisecond {
+		return "<1ms"
+	}
+
+	totalMs := int64(d / time.Millisecond)
+	minutes := totalMs / 60000
+	seconds := (totalMs % 60000) / 1000
+	milliseconds := totalMs % 1000
+
+	out := ""
+	if minutes > 0 {
+		out += fmt.Sprintf("%dm", minutes)
+	}
+	if seconds > 0 {
+		out += fmt.Sprintf("%ds", seconds)
+	}
+	if milliseconds > 0 {
+		out += fmt.Sprintf("%dms", milliseconds)
+	}
+	return out
 }

@@ -1,5 +1,8 @@
 {{ if .PeerResults }}
 <h3>Resolved Peers</h3>
+<div style="margin-bottom: 10px;">
+  <strong>Duration:</strong> {{ .PeerDuration | formatDuration }}
+</div>
 <div class="table-container">
   <table>
     <tr>
@@ -10,13 +13,17 @@
     {{ range .PeerResults }}
     <tr>
       <td>{{ .Peer.Addr }}</td>
-      <td>{{ .Duration }}</td>
+      <td>{{ .Duration | formatDuration }}</td>
     </tr>
     {{ end }}
   </table>
 </div>
 
 <h3>Result</h3>
+<div style="margin-bottom: 10px;">
+  <strong>Duration:</strong> {{ .PullDuration | formatDuration }}
+  <strong>Size:</strong> {{ .PullSize | formatBytes }}
+</div>
 <div class="table-container">
   <table>
     <tr>
@@ -25,12 +32,13 @@
       <th>Size</th>
       <th>Duration</th>
     </tr>
+
     {{ range .PullResults }}
     <tr>
       <td>{{ .Identifier }}</td>
-      <td>{{ .ContentType }}</td>
-      <td>{{ .ContentLength }}</td>
-      <td>{{ .Duration }}</td>
+      <td>{{ .Type }}</td>
+      <td>{{ .Size | formatBytes }}</td>
+      <td>{{ .Duration | formatDuration }}</td>
     </tr>
     {{ end }}
   </table>
