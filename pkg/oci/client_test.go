@@ -52,7 +52,7 @@ func TestPull(t *testing.T) {
 					return nil, "", err
 				}
 				return b, ocispec.MediaTypeImageManifest, nil
-			case "/v2/test/image/manifests/config":
+			case "/v2/test/image/blobs/config":
 				config := ocispec.ImageConfig{
 					User: "root",
 				}

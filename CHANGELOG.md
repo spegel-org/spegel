@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- [#877](https://github.com/spegel-org/spegel/pull/877) Add support for www authenticate header.
+
 ### Changed
 
 - [#852](https://github.com/spegel-org/spegel/pull/852) Remove use of Afero in Containerd config.

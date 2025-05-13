@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"slices"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/containerd/containerd/v2/core/images"
@@ -23,13 +26,39 @@ const (
 	ContentLengthHeader = "Content-Length"
 )
 
+type StatusError struct {
+	Content    string
+	StatusCode int
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("unexpected status code %d with body %s", e.StatusCode, e.Content)
+}
+
+func CheckResponseStatus(resp *http.Response, expected ...int) error {
+	if slices.Contains(expected, resp.StatusCode) {
+		return nil
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	return &StatusError{
+		StatusCode: resp.StatusCode,
+		Content:    string(b),
+	}
+}
+
 type Client struct {
-	httpClient *http.Client
+	hc *http.Client
+	tc sync.Map
 }
 
 func NewClient() *Client {
 	return &Client{
-		httpClient: &http.Client{},
+		hc: &http.Client{},
+		tc: sync.Map{},
 	}
 }
 
@@ -57,7 +86,6 @@ func (c *Client) Pull(ctx context.Context, img Image, mirror string) ([]PullMetr
 		queue = queue[1:]
 
 		start := time.Now()
-
 		rc, desc, err := c.Get(ctx, dist, mirror)
 		if err != nil {
 			return nil, err
@@ -104,7 +132,7 @@ func (c *Client) Pull(ctx context.Context, img Image, mirror string) ([]PullMetr
 					return nil, err
 				}
 				queue = append(queue, DistributionPath{
-					Kind:     DistributionKindManifest,
+					Kind:     DistributionKindBlob,
 					Name:     dist.Name,
 					Digest:   manifest.Config.Digest,
 					Registry: dist.Registry,
@@ -154,6 +182,8 @@ func (c *Client) Get(ctx context.Context, dist DistributionPath, mirror string) 
 }
 
 func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, mirror string) (io.ReadCloser, ocispec.Descriptor, error) {
+	tcKey := dist.Registry + dist.Name
+
 	u := dist.URL()
 	if mirror != "" {
 		mirrorUrl, err := url.Parse(mirror)
@@ -163,51 +193,125 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		u.Scheme = mirrorUrl.Scheme
 		u.Host = mirrorUrl.Host
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
-	if err != nil {
-		return nil, ocispec.Descriptor{}, err
+	if u.Host == "docker.io" {
+		u.Host = "registry-1.docker.io"
 	}
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, ocispec.Descriptor{}, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		statusErr := fmt.Errorf("unexpected status code  %s", resp.Status)
-		_, err := io.Copy(io.Discard, resp.Body)
+
+	for range 2 {
+		req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 		if err != nil {
-			return nil, ocispec.Descriptor{}, errors.Join(statusErr, err)
+			return nil, ocispec.Descriptor{}, err
 		}
-		err = resp.Body.Close()
+		req.Header.Set("User-Agent", "spegel")
+		req.Header.Add("Accept", "application/vnd.oci.image.manifest.v1+json")
+		req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+		req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
+		req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+		token, ok := c.tc.Load(tcKey)
+		if ok {
+			//nolint: errcheck // We know it will be a string.
+			req.Header.Set("Authorization", "Bearer "+token.(string))
+		}
+		resp, err := c.hc.Do(req)
 		if err != nil {
-			return nil, ocispec.Descriptor{}, errors.Join(statusErr, err)
+			return nil, ocispec.Descriptor{}, err
 		}
-		return nil, ocispec.Descriptor{}, statusErr
+		if resp.StatusCode == http.StatusUnauthorized {
+			c.tc.Delete(tcKey)
+			wwwAuth := resp.Header.Get("WWW-Authenticate")
+			token, err = getBearerToken(ctx, wwwAuth, c.hc)
+			if err != nil {
+				return nil, ocispec.Descriptor{}, err
+			}
+			c.tc.Store(tcKey, token)
+			continue
+		}
+		err = CheckResponseStatus(resp, http.StatusOK)
+		if err != nil {
+			return nil, ocispec.Descriptor{}, err
+		}
+
+		dgst := dist.Digest
+		dgstStr := resp.Header.Get(DigestHeader)
+		if dgstStr != "" {
+			dgst, err = digest.Parse(dgstStr)
+			if err != nil {
+				return nil, ocispec.Descriptor{}, err
+			}
+		}
+		if dgst == "" {
+			return nil, ocispec.Descriptor{}, errors.New("digest cannot be empty")
+		}
+		mt := resp.Header.Get(ContentTypeHeader)
+		if mt == "" {
+			return nil, ocispec.Descriptor{}, errors.New("content type header cannot be empty")
+		}
+		cl := resp.Header.Get(ContentLengthHeader)
+		if cl == "" {
+			return nil, ocispec.Descriptor{}, errors.New("content length header cannot be empty")
+		}
+		size, err := strconv.ParseInt(cl, 10, 64)
+		if err != nil {
+			return nil, ocispec.Descriptor{}, err
+		}
+		desc := ocispec.Descriptor{
+			Digest:    dgst,
+			MediaType: mt,
+			Size:      size,
+		}
+		return resp.Body, desc, nil
 	}
-	// TODO: Defer empty response body and close it on error.
-	dgstStr := resp.Header.Get(DigestHeader)
-	if dgstStr == "" {
-		return nil, ocispec.Descriptor{}, errors.New("digest header cannot be empty")
+	return nil, ocispec.Descriptor{}, errors.New("could not perform request")
+}
+
+func getBearerToken(ctx context.Context, wwwAuth string, client *http.Client) (string, error) {
+	if !strings.HasPrefix(wwwAuth, "Bearer ") {
+		return "", errors.New("unsupported auth scheme")
 	}
-	dgst, err := digest.Parse(dgstStr)
+
+	params := map[string]string{}
+	for _, part := range strings.Split(wwwAuth[len("Bearer "):], ",") {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(kv) == 2 {
+			params[kv[0]] = strings.Trim(kv[1], `"`)
+		}
+	}
+	authURL, err := url.Parse(params["realm"])
 	if err != nil {
-		return nil, ocispec.Descriptor{}, err
+		return "", err
 	}
-	mt := resp.Header.Get(ContentTypeHeader)
-	if mt == "" {
-		return nil, ocispec.Descriptor{}, errors.New("content type header cannot be empty")
+	q := authURL.Query()
+	if service, ok := params["service"]; ok {
+		q.Set("service", service)
 	}
-	cl := resp.Header.Get(ContentLengthHeader)
-	if cl == "" {
-		return nil, ocispec.Descriptor{}, errors.New("content length header cannot be empty")
+	if scope, ok := params["scope"]; ok {
+		q.Set("scope", scope)
 	}
-	size, err := strconv.ParseInt(cl, 10, 64)
+	authURL.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, authURL.String(), nil)
 	if err != nil {
-		return nil, ocispec.Descriptor{}, err
+		return "", err
 	}
-	desc := ocispec.Descriptor{
-		Digest:    dgst,
-		MediaType: mt,
-		Size:      size,
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
 	}
-	return resp.Body, desc, nil
+	err = CheckResponseStatus(resp, http.StatusOK)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	tokenResp := struct {
+		Token string `json:"token"`
+	}{}
+	err = json.Unmarshal(b, &tokenResp)
+	if err != nil {
+		return "", err
+	}
+	return tokenResp.Token, nil
 }
