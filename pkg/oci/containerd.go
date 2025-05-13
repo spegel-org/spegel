@@ -555,6 +555,7 @@ func templateHosts(mirroredRegistry url.URL, mirrorTargets []url.URL, capabiliti
 {{ range .MirrorTargets }}
 [host.'{{ .String }}']
 capabilities = {{ $.Capabilities }}
+dial_timeout = '200ms'
 {{- if $authorization }}
 [host.'{{ .String }}'.header]
 Authorization = '{{ $authorization }}'

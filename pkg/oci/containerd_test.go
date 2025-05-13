@@ -333,12 +333,15 @@ func TestMirrorConfiguration(t *testing.T) {
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
 
 [host.'http://127.0.0.2:5000']
 capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
 
 [host.'http://127.0.0.1:5001']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -349,7 +352,8 @@ capabilities = ['pull', 'resolve']`,
 			prependExisting: false,
 			expectedFiles: map[string]string{
 				"_default/hosts.toml": `[host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -362,11 +366,13 @@ capabilities = ['pull', 'resolve']`,
 				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull']`,
+capabilities = ['pull']
+dial_timeout = '200ms'`,
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull']`,
+capabilities = ['pull']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -380,11 +386,13 @@ capabilities = ['pull']`,
 				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -398,11 +406,13 @@ capabilities = ['pull', 'resolve']`,
 				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -422,11 +432,13 @@ capabilities = ['pull', 'resolve']`,
 				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -448,11 +460,13 @@ capabilities = ['pull', 'resolve']`,
 				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -495,6 +509,7 @@ client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
 
 [host.'http://example.com:30020']
 capabilities = ['pull', 'resolve']
@@ -510,7 +525,8 @@ client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -552,11 +568,13 @@ client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
 				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
-capabilities = ['pull', 'resolve']`,
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
 			},
 		},
 		{
@@ -572,11 +590,13 @@ capabilities = ['pull', 'resolve']`,
 
 [host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
 [host.'http://127.0.0.1:5000'.header]
 Authorization = 'Basic aGVsbG86d29ybGQ='
 
 [host.'http://127.0.0.1:5001']
 capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
 [host.'http://127.0.0.1:5001'.header]
 Authorization = 'Basic aGVsbG86d29ybGQ='`,
 			},
