@@ -1,4 +1,53 @@
 {
+  "__inputs": [
+    {
+      "name": "DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS",
+      "label": "dev-central-observability-prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__elements": {},
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "11.5.2"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "text",
+      "name": "Text",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -25,7 +74,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 16690,
+  "id": null,
   "links": [],
   "panels": [
     {
@@ -38,7 +87,6 @@
       },
       "id": 24,
       "panels": [],
-      "title": "",
       "type": "row"
     },
     {
@@ -94,7 +142,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "count(spegel_advertised_keys{instance=~\"$instance\"})",
@@ -160,7 +208,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_node_name{job=\"kubelet\"})",
@@ -223,7 +271,8 @@
       "targets": [
         {
           "datasource": {
-            "uid": "$datasource"
+            "type": "prometheus",
+            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_running_containers)",
@@ -290,7 +339,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_running_pods)",
@@ -362,7 +411,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -379,10 +428,6 @@
       "type": "stat"
     },
     {
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
       "gridPos": {
         "h": 4,
         "w": 3,
@@ -415,7 +460,6 @@
       "id": 9,
       "panels": [],
       "repeat": "datasource",
-      "title": "",
       "type": "row"
     },
     {
@@ -504,7 +548,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -531,7 +575,6 @@
           "refId": "B"
         }
       ],
-      "title": "",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -570,7 +613,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
       },
       "description": "",
       "fieldConfig": {
@@ -675,7 +718,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "$datasource"
+        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -839,7 +882,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
       },
       "description": "",
       "fieldConfig": {
@@ -954,7 +997,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1053,7 +1096,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "$datasource"
+        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1151,17 +1194,13 @@
       "type": "timeseries"
     }
   ],
-  "preload": false,
   "refresh": "30s",
   "schemaVersion": 40,
   "tags": [],
   "templating": {
     "list": [
       {
-        "current": {
-          "text": "hub-devops-observability-prometheus",
-          "value": "P3D5ADE37875AD284"
-        },
+        "current": {},
         "includeAll": false,
         "label": "Data Source",
         "name": "datasource",
@@ -1192,13 +1231,10 @@
         "type": "custom"
       },
       {
-        "current": {
-          "text": "spegel-devops-hub-26b8d",
-          "value": "spegel-devops-hub-26b8d"
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
         },
         "definition": "label_values(spegel_advertised_images,pod)",
         "description": "",
@@ -1217,10 +1253,7 @@
       },
       {
         "allowCustomValue": false,
-        "current": {
-          "text": "spegel-devops-hub",
-          "value": "spegel-devops-hub"
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
@@ -1240,15 +1273,10 @@
         "type": "query"
       },
       {
-        "current": {
-          "text": "All",
-          "value": [
-            "$__all"
-          ]
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
         },
         "definition": "label_values(spegel_advertised_keys{job=\"$job\"},instance)",
         "includeAll": true,
