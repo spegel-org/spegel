@@ -206,35 +206,79 @@ func TestBackupConfig(t *testing.T) {
 	require.Len(t, files, 1)
 }
 
+func TestParseContentRegistries(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		labels   map[string]string
+		expected []string
+	}{
+		{
+			name:     "no labels",
+			labels:   map[string]string{},
+			expected: []string{},
+		},
+		{
+			name: "one matching",
+			labels: map[string]string{
+				"containerd.io/distribution.source.docker.io": "library/alpine",
+			},
+			expected: []string{"docker.io"},
+		},
+		{
+			name: "multiple matching",
+			labels: map[string]string{
+				"containerd.io/distribution.source.example.com": "foo",
+				"containerd.io/distribution.source.ghcr.io":     "spegel-org/spegel",
+			},
+			expected: []string{"ghcr.io", "example.com"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(t.Name(), func(t *testing.T) {
+			t.Parallel()
+
+			registries := parseContentRegistries(tt.labels)
+			require.ElementsMatch(t, tt.expected, registries)
+		})
+	}
+}
+
 func TestCreateFilter(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                string
-		expectedListFilter  string
-		expectedEventFilter string
-		registries          []string
+		name                  string
+		expectedImageFilter   string
+		expectedEventFilter   string
+		expectedContentFilter string
+		registries            []string
 	}{
 		{
-			name:                "with registry filtering",
-			registries:          []string{"https://docker.io", "https://gcr.io"},
-			expectedListFilter:  `name~="^(docker\\.io|gcr\\.io)/"`,
-			expectedEventFilter: `topic~="/images/create|/images/update|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
+			name:                  "with registry filtering",
+			registries:            []string{"https://docker.io", "https://gcr.io"},
+			expectedImageFilter:   `name~="^(docker\\.io|gcr\\.io)/"`,
+			expectedEventFilter:   `topic~="/images/create|/images/update|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
+			expectedContentFilter: `labels."containerd.io/distribution.source.docker.io"~="^." labels."containerd.io/distribution.source.gcr.io"~="^."`,
 		},
 		{
-			name:                "without registry filtering",
-			registries:          []string{},
-			expectedListFilter:  `name~="^.+/"`,
-			expectedEventFilter: `topic~="/images/create|/images/update|/images/delete",event.name~="^.+/"`,
+			name:                  "without registry filtering",
+			registries:            []string{},
+			expectedImageFilter:   `name~="^.+/"`,
+			expectedEventFilter:   `topic~="/images/create|/images/update|/images/delete",event.name~="^.+/"`,
+			expectedContentFilter: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			listFilter, eventFilter := createFilters(stringListToUrlList(t, tt.registries))
-			require.Equal(t, tt.expectedListFilter, listFilter)
+			imageFilter, eventFilter, contentFilter := createFilters(stringListToUrlList(t, tt.registries))
+			require.Equal(t, tt.expectedImageFilter, imageFilter)
 			require.Equal(t, tt.expectedEventFilter, eventFilter)
+			require.Equal(t, tt.expectedContentFilter, contentFilter)
 		})
 	}
 }

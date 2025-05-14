@@ -58,6 +58,17 @@ func (m *Memory) Resolve(ctx context.Context, ref string) (digest.Digest, error)
 	return dgst, nil
 }
 
+func (m *Memory) ListContents(ctx context.Context) ([]Content, error) {
+	m.mx.RLock()
+	defer m.mx.RUnlock()
+
+	contents := []Content{}
+	for k := range m.blobs {
+		contents = append(contents, Content{Digest: k})
+	}
+	return contents, nil
+}
+
 func (m *Memory) Size(ctx context.Context, dgst digest.Digest) (int64, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()

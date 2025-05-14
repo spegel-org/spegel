@@ -31,8 +31,9 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resol
 		case <-ctx.Done():
 			return nil
 		case <-tickerCh:
-			log.Info("running scheduled image state update")
-			if err := all(ctx, ociStore, router, resolveLatestTag); err != nil {
+			log.Info("running tick state update")
+			err := tick(ctx, ociStore, router, resolveLatestTag)
+			if err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
 			}
@@ -54,41 +55,61 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resol
 	}
 }
 
-func all(ctx context.Context, ociStore oci.Store, router routing.Router, resolveLatestTag bool) error {
-	log := logr.FromContextOrDiscard(ctx).V(4)
+func tick(ctx context.Context, ociStore oci.Store, router routing.Router, resolveLatest bool) error {
+	advertisedImages := map[string]float64{}
+	advertisedImageDigests := map[string]float64{}
+	advertisedImageTags := map[string]float64{}
+	advertisedKeys := map[string]float64{}
+
 	imgs, err := ociStore.ListImages(ctx)
 	if err != nil {
 		return err
 	}
-
-	// TODO: Update metrics on subscribed events. This will require keeping state in memory to know about key count changes.
-	metrics.AdvertisedKeys.Reset()
-	metrics.AdvertisedImages.Reset()
-	metrics.AdvertisedImageTags.Reset()
-	metrics.AdvertisedImageDigests.Reset()
-	errs := []error{}
-	targets := map[string]any{}
 	for _, img := range imgs {
-		_, skipDigests := targets[img.Digest.String()]
-		// Handle the list re-sync as update events; this will also prevent the
-		// update function from setting metrics values.
-		event := oci.ImageEvent{Image: img, Type: oci.UpdateEvent}
-		log.Info("sync image event", "image", event.Image.String(), "type", event.Type)
-		keyTotal, err := update(ctx, ociStore, router, event, skipDigests, resolveLatestTag)
-		if err != nil {
-			errs = append(errs, err)
+		advertisedImages[img.Registry] += 1
+		advertisedImageDigests[img.Registry] += 1
+		if !resolveLatest && img.IsLatestTag() {
 			continue
 		}
-		targets[img.Digest.String()] = nil
-		metrics.AdvertisedKeys.WithLabelValues(img.Registry).Add(float64(keyTotal))
-		metrics.AdvertisedImages.WithLabelValues(img.Registry).Add(1)
-		if img.Tag == "" {
-			metrics.AdvertisedImageDigests.WithLabelValues(event.Image.Registry).Add(1)
-		} else {
-			metrics.AdvertisedImageTags.WithLabelValues(event.Image.Registry).Add(1)
+		tagName, ok := img.TagName()
+		if !ok {
+			continue
+		}
+		err := router.Advertise(ctx, []string{tagName})
+		if err != nil {
+			return err
+		}
+		advertisedImageTags[img.Registry] += 1
+		advertisedKeys[img.Registry] += 1
+	}
+
+	contents, err := ociStore.ListContents(ctx)
+	if err != nil {
+		return err
+	}
+	for _, content := range contents {
+		err := router.Advertise(ctx, []string{content.Digest.String()})
+		if err != nil {
+			return err
+		}
+		for _, registry := range content.Registires {
+			advertisedKeys[registry] += 1
 		}
 	}
-	return errors.Join(errs...)
+
+	for k, v := range advertisedImages {
+		metrics.AdvertisedImages.WithLabelValues(k).Set(v)
+	}
+	for k, v := range advertisedImageDigests {
+		metrics.AdvertisedImageDigests.WithLabelValues(k).Set(v)
+	}
+	for k, v := range advertisedImageTags {
+		metrics.AdvertisedImageTags.WithLabelValues(k).Set(v)
+	}
+	for k, v := range advertisedKeys {
+		metrics.AdvertisedKeys.WithLabelValues(k).Set(v)
+	}
+	return nil
 }
 
 func update(ctx context.Context, ociStore oci.Store, router routing.Router, event oci.ImageEvent, skipDigests, resolveLatestTag bool) (int, error) {
