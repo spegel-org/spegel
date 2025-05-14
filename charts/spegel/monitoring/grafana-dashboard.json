@@ -1,8 +1,8 @@
 {
   "__inputs": [
     {
-      "name": "DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS",
-      "label": "dev-central-observability-prometheus",
+      "name": "datasource",
+      "label": "datasource",
       "description": "",
       "type": "datasource",
       "pluginId": "prometheus",
@@ -142,7 +142,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "count(spegel_advertised_keys{instance=~\"$instance\"})",
@@ -208,7 +208,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_node_name{job=\"kubelet\"})",
@@ -272,7 +272,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_running_containers)",
@@ -339,7 +339,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_running_pods)",
@@ -411,7 +411,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -548,7 +548,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -613,7 +613,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -718,7 +718,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -882,7 +882,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+        "uid": "${datasource}"
       },
       "description": "",
       "fieldConfig": {
@@ -997,7 +997,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1096,7 +1096,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1234,7 +1234,7 @@
         "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+          "uid": "${datasource}"
         },
         "definition": "label_values(spegel_advertised_images,pod)",
         "description": "",
@@ -1276,7 +1276,7 @@
         "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_DEV-CENTRAL-OBSERVABILITY-PROMETHEUS}"
+          "uid": "${datasource}"
         },
         "definition": "label_values(spegel_advertised_keys{job=\"$job\"},instance)",
         "includeAll": true,
