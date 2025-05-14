@@ -25,7 +25,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
+  "id": 16690,
   "links": [],
   "panels": [
     {
@@ -89,7 +89,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -155,7 +155,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -219,7 +219,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -285,7 +285,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -357,7 +357,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -366,7 +366,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(rate(http_request_duration_seconds_bucket{job=\"spegel\"}[$__interval]))",
+          "expr": "max(rate(http_request_duration_seconds_bucket{job=\"$job\"}[$__interval]))",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -399,7 +399,7 @@
         "content": "<br>\n<div style=\"text-align: center;\"><a href=\"https://github.com/XenitAB/spegel\" target=\"_blank\">Spegel at GitHub</a> </div>\n\n",
         "mode": "html"
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "title": "Github link",
       "transparent": true,
       "type": "text"
@@ -499,7 +499,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -508,7 +508,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_images{job=~\"spegel\",instance=~\"$instance\"}",
+          "expr": "spegel_advertised_images{job=~\"$job\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -522,7 +522,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_keys{job=~\"spegel\",instance=~\"$instance\"} ",
+          "expr": "spegel_advertised_keys{job=~\"$job\",instance=~\"$instance\"} ",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -646,11 +646,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -659,7 +660,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_images{job=~\"spegel\",instance=~\"$instance\"}",
+          "expr": "spegel_advertised_images{job=~\"$job\",instance=~\"$instance\"}",
           "format": "time_series",
           "instant": false,
           "legendFormat": "{{ instance }}",
@@ -808,11 +809,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -910,11 +912,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -923,7 +926,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_keys{job=~\"spegel\",instance=~\"$instance\"} ",
+          "expr": "spegel_advertised_keys{job=~\"$job\",instance=~\"$instance\"} ",
           "format": "time_series",
           "instant": false,
           "legendFormat": "{{ instance }}",
@@ -1024,11 +1027,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -1122,11 +1126,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -1153,7 +1158,10 @@
   "templating": {
     "list": [
       {
-        "current": null,
+        "current": {
+          "text": "hub-devops-observability-prometheus",
+          "value": "P3D5ADE37875AD284"
+        },
         "includeAll": false,
         "label": "Data Source",
         "name": "datasource",
@@ -1184,7 +1192,10 @@
         "type": "custom"
       },
       {
-        "current": {},
+        "current": {
+          "text": "spegel-devops-hub-26b8d",
+          "value": "spegel-devops-hub-26b8d"
+        },
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
@@ -1205,12 +1216,41 @@
         "type": "query"
       },
       {
-        "current": {},
+        "allowCustomValue": false,
+        "current": {
+          "text": "spegel-devops-hub",
+          "value": "spegel-devops-hub"
+        },
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(spegel_advertised_keys{job=\"spegel\"},instance)",
+        "definition": "label_values(spegel_advertised_keys,job)",
+        "hide": 2,
+        "label": "job",
+        "name": "job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(spegel_advertised_keys,job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(spegel_advertised_keys{job=\"$job\"},instance)",
         "includeAll": true,
         "label": "instance",
         "multi": true,
@@ -1218,7 +1258,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(spegel_advertised_keys{job=\"spegel\"},instance)",
+          "query": "label_values(spegel_advertised_keys{job=\"$job\"},instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
@@ -1235,7 +1275,6 @@
   "timezone": "",
   "title": "Spegel stateless cluster local OCI registry mirror",
   "uid": "1iY4QMJVk-psee",
-  "version": 1,
-  "weekStart": "",
-  "gnetId": 18089
+  "version": 4,
+  "weekStart": ""
 }
