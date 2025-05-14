@@ -30,6 +30,11 @@ type ImageEvent struct {
 	Type  EventType
 }
 
+type Content struct {
+	Digest     digest.Digest
+	Registires []string
+}
+
 type Store interface {
 	// Name returns the name of the store implementation.
 	Name() string
@@ -46,6 +51,9 @@ type Store interface {
 	// Resolve returns the digest for the tagged image name reference.
 	// The ref is expected to be in the format `registry/name:tag`.
 	Resolve(ctx context.Context, ref string) (digest.Digest, error)
+
+	// ListContents returns a list of all the contents.
+	ListContents(ctx context.Context) ([]Content, error)
 
 	// Size returns the content byte size for the given digest.
 	// Will return ErrNotFound if the digest cannot be found.

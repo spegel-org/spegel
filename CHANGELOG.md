@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#871](https://github.com/spegel-org/spegel/pull/871) Implement OCI client and refactor debug web pulling.
 - [#873](https://github.com/spegel-org/spegel/pull/873) Refactor web to use internal mux router.
 - [#875](https://github.com/spegel-org/spegel/pull/875) Change debug unit formatting and add totals.
+- [#880](https://github.com/spegel-org/spegel/pull/880) Refactor store advertisement to list content.
 
 ### Deprecated
 

@@ -18,6 +18,7 @@ import (
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/pkg/labels"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
@@ -40,8 +41,9 @@ type Containerd struct {
 	contentPath        string
 	client             *client.Client
 	clientGetter       func() (*client.Client, error)
-	listFilter         string
+	imageFilter        string
 	eventFilter        string
+	contentFilter      string
 	registryConfigPath string
 }
 
@@ -54,13 +56,14 @@ func WithContentPath(path string) Option {
 }
 
 func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistries []url.URL, opts ...Option) (*Containerd, error) {
-	listFilter, eventFilter := createFilters(mirroredRegistries)
+	imageFilter, eventFilter, contentFilter := createFilters(mirroredRegistries)
 	c := &Containerd{
 		clientGetter: func() (*client.Client, error) {
 			return client.New(sock, client.WithDefaultNamespace(namespace))
 		},
-		listFilter:         listFilter,
+		imageFilter:        imageFilter,
 		eventFilter:        eventFilter,
+		contentFilter:      contentFilter,
 		registryConfigPath: registryConfigPath,
 	}
 	for _, opt := range opts {
@@ -224,7 +227,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	cImgs, err := client.ListImages(ctx, c.listFilter)
+	cImgs, err := client.ListImages(ctx, c.imageFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -249,6 +252,27 @@ func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, er
 		return "", err
 	}
 	return cImg.Target().Digest, nil
+}
+
+func (c *Containerd) ListContents(ctx context.Context) ([]Content, error) {
+	client, err := c.Client()
+	if err != nil {
+		return nil, err
+	}
+	contents := []Content{}
+	err = client.ContentStore().Walk(ctx, func(i content.Info) error {
+		registries := parseContentRegistries(i.Labels)
+		content := Content{
+			Digest:     i.Digest,
+			Registires: registries,
+		}
+		contents = append(contents, content)
+		return nil
+	}, c.contentFilter)
+	if err != nil {
+		return nil, err
+	}
+	return contents, nil
 }
 
 func (c *Containerd) Size(ctx context.Context, dgst digest.Digest) (int64, error) {
@@ -317,6 +341,17 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSe
 	}, nil
 }
 
+func parseContentRegistries(l map[string]string) []string {
+	registries := []string{}
+	for k := range l {
+		if !strings.HasPrefix(k, labels.LabelDistributionSource) {
+			continue
+		}
+		registries = append(registries, strings.TrimPrefix(k, labels.LabelDistributionSource+"."))
+	}
+	return registries
+}
+
 func getEventImage(e typeurl.Any) (string, EventType, error) {
 	if e == nil {
 		return "", "", errors.New("any cannot be nil")
@@ -337,19 +372,23 @@ func getEventImage(e typeurl.Any) (string, EventType, error) {
 	}
 }
 
-func createFilters(mirroredRegistries []url.URL) (string, string) {
+func createFilters(mirroredRegistries []url.URL) (string, string, string) {
 	registryHosts := []string{}
 	for _, registry := range mirroredRegistries {
 		registryHosts = append(registryHosts, strings.ReplaceAll(registry.Host, `.`, `\\.`))
 	}
-	listFilter := fmt.Sprintf(`name~="^(%s)/"`, strings.Join(registryHosts, "|"))
+	imageFilter := fmt.Sprintf(`name~="^(%s)/"`, strings.Join(registryHosts, "|"))
 	if len(registryHosts) == 0 {
 		// Filter images that do not have a registry in it's reference,
 		// as we cant mirror images without registries.
-		listFilter = `name~="^.+/"`
+		imageFilter = `name~="^.+/"`
 	}
-	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update|/images/delete",event.%s`, listFilter)
-	return listFilter, eventFilter
+	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update|/images/delete",event.%s`, imageFilter)
+	contentFilters := []string{}
+	for _, registry := range mirroredRegistries {
+		contentFilters = append(contentFilters, fmt.Sprintf(`labels."%s.%s"~="^."`, labels.LabelDistributionSource, registry.Host))
+	}
+	return imageFilter, eventFilter, strings.Join(contentFilters, " ")
 }
 
 // Refer to containerd registry configuration documentation for more information about required configuration.
