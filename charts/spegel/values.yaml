@@ -136,6 +136,8 @@ basicAuthSecretName: ""
 spegel:
   # -- Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR.
   logLevel: "INFO"
+  # -- Path to persist data on node. Empty string disables persistence or set "/var/lib/spegel" to persist data.
+  dataDir: ""
   # -- Registries for which mirror configuration will be created. Empty means all registires will be mirrored.
   mirroredRegistries: []
     # - https://docker.io
