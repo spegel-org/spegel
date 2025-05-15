@@ -184,14 +184,14 @@ func TestOCIClient(t *testing.T) {
 			}
 
 			identifiersTests := []struct {
-				imageName    string
-				imageDigest  string
-				expectedKeys []string
+				imageName     string
+				imageDigest   string
+				expectedDgsts []digest.Digest
 			}{
 				{
 					imageName:   "ghcr.io/spegel-org/spegel:v0.0.8-with-media-type",
 					imageDigest: "sha256:9506c8e7a2d0a098d43cadfd7ecdc3c91697e8188d3a1245943b669f717747b4",
-					expectedKeys: []string{
+					expectedDgsts: []digest.Digest{
 						"sha256:9506c8e7a2d0a098d43cadfd7ecdc3c91697e8188d3a1245943b669f717747b4",
 						"sha256:44cb2cf712c060f69df7310e99339c1eb51a085446f1bb6d44469acff35b4355",
 						"sha256:d715ba0d85ee7d37da627d0679652680ed2cb23dde6120f25143a0b8079ee47e",
@@ -237,7 +237,7 @@ func TestOCIClient(t *testing.T) {
 				{
 					imageName:   "ghcr.io/spegel-org/spegel:v0.0.8-without-media-type",
 					imageDigest: "sha256:d8df04365d06181f037251de953aca85cc16457581a8fc168f4957c978e1008b",
-					expectedKeys: []string{
+					expectedDgsts: []digest.Digest{
 						"sha256:d8df04365d06181f037251de953aca85cc16457581a8fc168f4957c978e1008b",
 						"sha256:44cb2cf712c060f69df7310e99339c1eb51a085446f1bb6d44469acff35b4355",
 						"sha256:d715ba0d85ee7d37da627d0679652680ed2cb23dde6120f25143a0b8079ee47e",
@@ -287,9 +287,9 @@ func TestOCIClient(t *testing.T) {
 
 					img, err := ParseImageRequireDigest(tt.imageName, digest.Digest(tt.imageDigest))
 					require.NoError(t, err)
-					keys, err := WalkImage(ctx, ociStore, img)
+					dgsts, err := WalkImage(ctx, ociStore, img)
 					require.NoError(t, err)
-					require.Equal(t, tt.expectedKeys, keys)
+					require.Equal(t, tt.expectedDgsts, dgsts)
 				})
 			}
 		})

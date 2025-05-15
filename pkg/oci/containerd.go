@@ -18,6 +18,7 @@ import (
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/core/events"
 	"github.com/containerd/containerd/v2/pkg/labels"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
@@ -174,52 +175,42 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", *cfg.Registry.ConfigPath, configPath)
 }
 
-func (c *Containerd) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error) {
-	imgCh := make(chan ImageEvent)
-	errCh := make(chan error)
+func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	client, err := c.Client()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+	log := logr.FromContextOrDiscard(ctx)
+
+	ctx, cancel := context.WithCancel(ctx)
+	eventCh := make(chan OCIEvent)
 	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, c.eventFilter)
 	go func() {
-		for envelope := range envelopeCh {
-			var img Image
-			imageName, eventType, err := getEventImage(envelope.Event)
-			if err != nil {
-				errCh <- err
-				continue
-			}
-			switch eventType {
-			case CreateEvent, UpdateEvent:
-				cImg, err := client.GetImage(ctx, imageName)
+		defer close(eventCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case envelope := <-envelopeCh:
+				events, err := c.convertEvent(ctx, *envelope)
 				if err != nil {
-					errCh <- err
+					log.Error(err, "error when handling event")
 					continue
 				}
-				img, err = ParseImageRequireDigest(cImg.Name(), cImg.Target().Digest)
-				if err != nil {
-					errCh <- err
-					continue
-				}
-			case DeleteEvent:
-				img, err = ParseImageRequireDigest(imageName, "")
-				if err != nil {
-					errCh <- err
-					continue
+				for _, event := range events {
+					eventCh <- event
 				}
 			}
-			imgCh <- ImageEvent{Image: img, Type: eventType}
 		}
-		close(imgCh)
 	}()
 	go func() {
+		// Required so that the event channel closes in case Containerd is restarted.
+		defer cancel()
 		for err := range cErrCh {
-			errCh <- err
+			log.Error(err, "containerd event error")
 		}
-		close(errCh)
 	}()
-	return imgCh, errCh, nil
+	return eventCh, nil
 }
 
 func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
@@ -341,6 +332,49 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSe
 	}, nil
 }
 
+func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope) ([]OCIEvent, error) {
+	if envelope.Event == nil {
+		return nil, errors.New("envelope event cannot be nil")
+	}
+	evt, err := typeurl.UnmarshalAny(envelope.Event)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal envelope event: %w", err)
+	}
+	switch e := evt.(type) {
+	case *eventtypes.ImageCreate:
+		// Containerd creates an image create event for image config which we ignore.
+		if err := digest.Digest(e.GetName()).Validate(); err == nil {
+			return nil, nil
+		}
+		img, err := ParseImage(e.GetName())
+		if err != nil {
+			return nil, err
+		}
+		// Pull by tag creates an event only for the tag. We dont get content to avoid advertising twice.
+		if img.Digest == "" {
+			return []OCIEvent{{Type: CreateEvent, Key: e.GetName()}}, nil
+		}
+		// Walk the image to return events for all of the layers.
+		dgsts, err := WalkImage(ctx, c, img)
+		if err != nil {
+			return nil, fmt.Errorf("could not get digests for image %s: %w", img.String(), err)
+		}
+		events := []OCIEvent{}
+		for _, dgst := range dgsts {
+			events = append(events, OCIEvent{Type: CreateEvent, Key: dgst.String()})
+		}
+		return events, nil
+	case *eventtypes.ImageDelete:
+		// Ignore delete event created for image config.
+		if err := digest.Digest(e.GetName()).Validate(); err == nil {
+			return nil, nil
+		}
+		return []OCIEvent{{Type: DeleteEvent, Key: e.GetName()}}, nil
+	default:
+		return nil, errors.New("unsupported event type")
+	}
+}
+
 func parseContentRegistries(l map[string]string) []string {
 	registries := []string{}
 	for k := range l {
@@ -350,26 +384,6 @@ func parseContentRegistries(l map[string]string) []string {
 		registries = append(registries, strings.TrimPrefix(k, labels.LabelDistributionSource+"."))
 	}
 	return registries
-}
-
-func getEventImage(e typeurl.Any) (string, EventType, error) {
-	if e == nil {
-		return "", "", errors.New("any cannot be nil")
-	}
-	evt, err := typeurl.UnmarshalAny(e)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to unmarshal any: %w", err)
-	}
-	switch e := evt.(type) {
-	case *eventtypes.ImageCreate:
-		return e.Name, CreateEvent, nil
-	case *eventtypes.ImageUpdate:
-		return e.Name, UpdateEvent, nil
-	case *eventtypes.ImageDelete:
-		return e.Name, DeleteEvent, nil
-	default:
-		return "", "", errors.New("unsupported event type")
-	}
 }
 
 func createFilters(mirroredRegistries []url.URL) (string, string, string) {
@@ -383,7 +397,7 @@ func createFilters(mirroredRegistries []url.URL) (string, string, string) {
 		// as we cant mirror images without registries.
 		imageFilter = `name~="^.+/"`
 	}
-	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/update|/images/delete",event.%s`, imageFilter)
+	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/delete",event.%s`, imageFilter)
 	contentFilters := []string{}
 	for _, registry := range mirroredRegistries {
 		contentFilters = append(contentFilters, fmt.Sprintf(`labels."%s.%s"~="^."`, labels.LabelDistributionSource, registry.Host))
