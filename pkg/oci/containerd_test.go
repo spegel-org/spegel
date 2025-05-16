@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/containerd/containerd/v2/pkg/filters"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -26,47 +27,6 @@ func TestNewContainerd(t *testing.T) {
 	c, err = NewContainerd("socket", "namespace", "foo", nil, WithContentPath("local"))
 	require.NoError(t, err)
 	require.Equal(t, "local", c.contentPath)
-}
-
-func TestCanVerifyContainerdConfiguration(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		version  string
-		expected bool
-	}{
-		{
-			version:  "v2.0.2",
-			expected: false,
-		},
-		{
-			version:  "2.1.4",
-			expected: false,
-		},
-		{
-			version:  "v1.7.27",
-			expected: true,
-		},
-		{
-			version:  "1.6.0",
-			expected: true,
-		},
-	}
-	for _, tt := range tests {
-		// Testing with a suffix is important as some Linux distributions will modify the version
-		// with a non Semver compliant modification. Even if the version is supposed to comply with
-		// semver that may not always be the case.
-		for _, suffix := range []string{"", "~ds1"} {
-			version := tt.version + suffix
-			t.Run(version, func(t *testing.T) {
-				t.Parallel()
-
-				ok, err := canVerifyContainerdConfiguration(tt.version)
-				require.NoError(t, err)
-				require.Equal(t, tt.expected, ok)
-			})
-		}
-	}
 }
 
 func TestVerifyStatusResponse(t *testing.T) {
@@ -244,29 +204,79 @@ func TestParseContentRegistries(t *testing.T) {
 	}
 }
 
+func TestFeaturesForVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		version          string
+		expectedString   string
+		expectedFeatures []Feature
+	}{
+		{
+			version:          "v2.0.2",
+			expectedFeatures: []Feature{},
+			expectedString:   "",
+		},
+		{
+			version:          "2.1.0",
+			expectedFeatures: []Feature{FeatureContentEvent},
+			expectedString:   "ContentEvent",
+		},
+		{
+			version:          "v1.7.27",
+			expectedFeatures: []Feature{FeatureConfigCheck},
+			expectedString:   "ConfigCheck",
+		},
+		{
+			version:          "1.6.0",
+			expectedFeatures: []Feature{FeatureConfigCheck},
+			expectedString:   "ConfigCheck",
+		},
+	}
+	for _, tt := range tests {
+		// Testing with a suffix is important as some Linux distributions will modify the version
+		// with a non Semver compliant modification. Even if the version is supposed to comply with
+		// semver that may not always be the case.
+		for _, suffix := range []string{"", "~ds1"} {
+			version := tt.version + suffix
+			t.Run(version, func(t *testing.T) {
+				t.Parallel()
+
+				feats, err := featuresForVersion(tt.version)
+				require.NoError(t, err)
+				for _, feat := range tt.expectedFeatures {
+					ok := feats.Has(feat)
+					require.True(t, ok)
+				}
+				require.Equal(t, tt.expectedString, feats.String())
+			})
+		}
+	}
+}
+
 func TestCreateFilter(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name                  string
-		expectedImageFilter   string
-		expectedEventFilter   string
-		expectedContentFilter string
+		expectedImageFilter   []string
+		expectedEventFilter   []string
+		expectedContentFilter []string
 		registries            []string
 	}{
 		{
 			name:                  "with registry filtering",
 			registries:            []string{"https://docker.io", "https://gcr.io"},
-			expectedImageFilter:   `name~="^(docker\\.io|gcr\\.io)/"`,
-			expectedEventFilter:   `topic~="/images/create|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
-			expectedContentFilter: `labels."containerd.io/distribution.source.docker.io"~="^." labels."containerd.io/distribution.source.gcr.io"~="^."`,
+			expectedImageFilter:   []string{`name~="^(docker\\.io|gcr\\.io)/"`},
+			expectedEventFilter:   []string{`topic~="/images/create|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`, `topic~="/content/create"`},
+			expectedContentFilter: []string{`labels."containerd.io/distribution.source.docker.io"~="^."`, `labels."containerd.io/distribution.source.gcr.io"~="^."`},
 		},
 		{
 			name:                  "without registry filtering",
 			registries:            []string{},
-			expectedImageFilter:   `name~="^.+/"`,
-			expectedEventFilter:   `topic~="/images/create|/images/delete",event.name~="^.+/"`,
-			expectedContentFilter: "",
+			expectedImageFilter:   []string{`name~="^.+/"`},
+			expectedEventFilter:   []string{`topic~="/images/create|/images/delete",event.name~="^.+/"`, `topic~="/content/create"`},
+			expectedContentFilter: []string{},
 		},
 	}
 	for _, tt := range tests {
@@ -274,9 +284,16 @@ func TestCreateFilter(t *testing.T) {
 			t.Parallel()
 
 			imageFilter, eventFilter, contentFilter := createFilters(stringListToUrlList(t, tt.registries))
+
 			require.Equal(t, tt.expectedImageFilter, imageFilter)
+			_, err := filters.ParseAll(imageFilter...)
+			require.NoError(t, err)
 			require.Equal(t, tt.expectedEventFilter, eventFilter)
+			_, err = filters.ParseAll(eventFilter...)
+			require.NoError(t, err)
 			require.Equal(t, tt.expectedContentFilter, contentFilter)
+			_, err = filters.ParseAll(contentFilter...)
+			require.NoError(t, err)
 		})
 	}
 }

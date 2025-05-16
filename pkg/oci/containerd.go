@@ -19,6 +19,7 @@ import (
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/events"
+	"github.com/containerd/containerd/v2/pkg/filters"
 	"github.com/containerd/containerd/v2/pkg/labels"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
@@ -36,16 +37,43 @@ const (
 	backupDir = "_backup"
 )
 
+type Feature uint32
+
+const (
+	FeatureConfigCheck Feature = 1 << iota
+	FeatureContentEvent
+)
+
+func (f *Feature) Set(feat Feature) {
+	*f |= feat
+}
+
+func (f Feature) Has(feat Feature) bool {
+	return f&feat != 0
+}
+
+func (f Feature) String() string {
+	feats := []string{}
+	if f.Has(FeatureConfigCheck) {
+		feats = append(feats, "ConfigCheck")
+	}
+	if f.Has(FeatureContentEvent) {
+		feats = append(feats, "ContentEvent")
+	}
+	return strings.Join(feats, "|")
+}
+
 var _ Store = &Containerd{}
 
 type Containerd struct {
 	contentPath        string
+	registryConfigPath string
 	client             *client.Client
 	clientGetter       func() (*client.Client, error)
-	imageFilter        string
-	eventFilter        string
-	contentFilter      string
-	registryConfigPath string
+	features           *Feature
+	imageFilter        []string
+	eventFilter        []string
+	contentFilter      []string
 }
 
 type Option func(*Containerd)
@@ -99,24 +127,19 @@ func (c *Containerd) Verify(ctx context.Context) error {
 		return errors.New("could not reach Containerd service")
 	}
 
+	feats, err := c.Features(ctx)
+	if err != nil {
+		return err
+	}
+	if !feats.Has(FeatureConfigCheck) {
+		log.Info("skipping verification of Containerd configuration")
+		return nil
+	}
 	grpcConn, ok := client.Conn().(*grpc.ClientConn)
 	if !ok {
 		return errors.New("client connection is not grpc")
 	}
 	srv := runtimeapi.NewRuntimeServiceClient(grpcConn)
-	versionResp, err := srv.Version(ctx, &runtimeapi.VersionRequest{})
-	if err != nil {
-		return err
-	}
-	ok, err = canVerifyContainerdConfiguration(versionResp.RuntimeVersion)
-	if err != nil {
-		return fmt.Errorf("could not check Containerd version %s: %w", versionResp.RuntimeVersion, err)
-	}
-	if !ok {
-		log.Info("skipping verification of Containerd configuration", "version", versionResp.RuntimeVersion)
-		return nil
-	}
-
 	statusResp, err := srv.Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
 	if err != nil {
 		return err
@@ -128,12 +151,47 @@ func (c *Containerd) Verify(ctx context.Context) error {
 	return nil
 }
 
-func canVerifyContainerdConfiguration(version string) (bool, error) {
+func (c *Containerd) Features(ctx context.Context) (Feature, error) {
+	if c.features != nil {
+		return *c.features, nil
+	}
+
+	log := logr.FromContextOrDiscard(ctx)
+	client, err := c.Client()
+	if err != nil {
+		return 0, err
+	}
+	grpcConn, ok := client.Conn().(*grpc.ClientConn)
+	if !ok {
+		return 0, errors.New("client connection is not grpc")
+	}
+	srv := runtimeapi.NewRuntimeServiceClient(grpcConn)
+	versionResp, err := srv.Version(ctx, &runtimeapi.VersionRequest{})
+	if err != nil {
+		return 0, err
+	}
+	feats, err := featuresForVersion(versionResp.RuntimeVersion)
+	if err != nil {
+		return 0, err
+	}
+	log.Info("setting features for Containerd version", "features", feats.String(), "version", versionResp.String())
+	c.features = &feats
+	return feats, nil
+}
+
+func featuresForVersion(version string) (Feature, error) {
 	v, err := utilversion.Parse(version)
 	if err != nil {
-		return false, err
+		return 0, fmt.Errorf("could not parse version %s: %w", version, err)
 	}
-	return v.LessThan(utilversion.MustParse("2.0")), nil
+	feats := Feature(0)
+	if v.LessThan(utilversion.MustParse("2.0")) {
+		feats.Set(FeatureConfigCheck)
+	}
+	if v.AtLeast(utilversion.MustParse("2.1")) {
+		feats.Set(FeatureContentEvent)
+	}
+	return feats, nil
 }
 
 func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) error {
@@ -184,7 +242,7 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	eventCh := make(chan OCIEvent)
-	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, c.eventFilter)
+	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, c.eventFilter...)
 	go func() {
 		defer close(eventCh)
 		for {
@@ -218,7 +276,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	cImgs, err := client.ListImages(ctx, c.imageFilter)
+	cImgs, err := client.ListImages(ctx, c.imageFilter...)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +317,7 @@ func (c *Containerd) ListContents(ctx context.Context) ([]Content, error) {
 		}
 		contents = append(contents, content)
 		return nil
-	}, c.contentFilter)
+	}, c.contentFilter...)
 	if err != nil {
 		return nil, err
 	}
@@ -333,6 +391,11 @@ func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSe
 }
 
 func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope) ([]OCIEvent, error) {
+	client, err := c.Client()
+	if err != nil {
+		return nil, err
+	}
+
 	if envelope.Event == nil {
 		return nil, errors.New("envelope event cannot be nil")
 	}
@@ -341,11 +404,24 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 		return nil, fmt.Errorf("failed to unmarshal envelope event: %w", err)
 	}
 	switch e := evt.(type) {
-	case *eventtypes.ImageCreate:
-		// Containerd creates an image create event for image config which we ignore.
-		if err := digest.Digest(e.GetName()).Validate(); err == nil {
+	case *eventtypes.ContentCreate:
+		filter, err := filters.ParseAll(c.contentFilter...)
+		if err != nil {
+			return nil, err
+		}
+		dgst, err := digest.Parse(e.GetDigest())
+		if err != nil {
+			return nil, err
+		}
+		info, err := client.ContentStore().Info(ctx, dgst)
+		if err != nil {
+			return nil, err
+		}
+		if filter.Match(content.AdaptInfo(info)) {
 			return nil, nil
 		}
+		return []OCIEvent{{Type: CreateEvent, Key: e.GetDigest()}}, nil
+	case *eventtypes.ImageCreate:
 		img, err := ParseImage(e.GetName())
 		if err != nil {
 			return nil, err
@@ -354,7 +430,14 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 		if img.Digest == "" {
 			return []OCIEvent{{Type: CreateEvent, Key: e.GetName()}}, nil
 		}
-		// Walk the image to return events for all of the layers.
+		// If Containerd supports content events we can skip walking the image.
+		feats, err := c.Features(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if feats.Has(FeatureContentEvent) {
+			return nil, nil
+		}
 		dgsts, err := WalkImage(ctx, c, img)
 		if err != nil {
 			return nil, fmt.Errorf("could not get digests for image %s: %w", img.String(), err)
@@ -365,10 +448,6 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 		}
 		return events, nil
 	case *eventtypes.ImageDelete:
-		// Ignore delete event created for image config.
-		if err := digest.Digest(e.GetName()).Validate(); err == nil {
-			return nil, nil
-		}
 		return []OCIEvent{{Type: DeleteEvent, Key: e.GetName()}}, nil
 	default:
 		return nil, errors.New("unsupported event type")
@@ -386,7 +465,7 @@ func parseContentRegistries(l map[string]string) []string {
 	return registries
 }
 
-func createFilters(mirroredRegistries []url.URL) (string, string, string) {
+func createFilters(mirroredRegistries []url.URL) ([]string, []string, []string) {
 	registryHosts := []string{}
 	for _, registry := range mirroredRegistries {
 		registryHosts = append(registryHosts, strings.ReplaceAll(registry.Host, `.`, `\\.`))
@@ -402,7 +481,7 @@ func createFilters(mirroredRegistries []url.URL) (string, string, string) {
 	for _, registry := range mirroredRegistries {
 		contentFilters = append(contentFilters, fmt.Sprintf(`labels."%s.%s"~="^."`, labels.LabelDistributionSource, registry.Host))
 	}
-	return imageFilter, eventFilter, strings.Join(contentFilters, " ")
+	return []string{imageFilter}, []string{eventFilter, `topic~="/content/create"`}, contentFilters
 }
 
 // Refer to containerd registry configuration documentation for more information about required configuration.
