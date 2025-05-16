@@ -36,8 +36,8 @@ func (m *Memory) Verify(ctx context.Context) error {
 	return nil
 }
 
-func (m *Memory) Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error) {
-	return nil, nil, nil
+func (m *Memory) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
+	return nil, nil
 }
 
 func (m *Memory) ListImages(ctx context.Context) ([]Image, error) {

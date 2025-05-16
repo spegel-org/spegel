@@ -21,13 +21,12 @@ type EventType string
 
 const (
 	CreateEvent EventType = "CREATE"
-	UpdateEvent EventType = "UPDATE"
 	DeleteEvent EventType = "DELETE"
 )
 
-type ImageEvent struct {
-	Image Image
-	Type  EventType
+type OCIEvent struct {
+	Type EventType
+	Key  string
 }
 
 type Content struct {
@@ -43,7 +42,7 @@ type Store interface {
 	Verify(ctx context.Context) error
 
 	// Subscribe will notify for any image events ocuring in the store backend.
-	Subscribe(ctx context.Context) (<-chan ImageEvent, <-chan error, error)
+	Subscribe(ctx context.Context) (<-chan OCIEvent, error)
 
 	// ListImages returns a list of all local images.
 	ListImages(ctx context.Context) ([]Image, error)
@@ -102,14 +101,14 @@ func DetermineMediaType(b []byte) (string, error) {
 	return "", errors.New("not able to determine media type")
 }
 
-func WalkImage(ctx context.Context, store Store, img Image) ([]string, error) {
-	keys := []string{}
+func WalkImage(ctx context.Context, store Store, img Image) ([]digest.Digest, error) {
+	dgsts := []digest.Digest{}
 	err := walk(ctx, []digest.Digest{img.Digest}, func(dgst digest.Digest) ([]digest.Digest, error) {
 		b, mt, err := store.GetManifest(ctx, dgst)
 		if err != nil {
 			return nil, err
 		}
-		keys = append(keys, dgst.String())
+		dgsts = append(dgsts, dgst)
 		switch mt {
 		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 			var idx ocispec.Index
@@ -137,9 +136,9 @@ func WalkImage(ctx context.Context, store Store, img Image) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			keys = append(keys, manifest.Config.Digest.String())
+			dgsts = append(dgsts, manifest.Config.Digest)
 			for _, layer := range manifest.Layers {
-				keys = append(keys, layer.Digest.String())
+				dgsts = append(dgsts, layer.Digest)
 			}
 			return nil, nil
 		default:
@@ -149,10 +148,10 @@ func WalkImage(ctx context.Context, store Store, img Image) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk image manifests: %w", err)
 	}
-	if len(keys) == 0 {
+	if len(dgsts) == 0 {
 		return nil, errors.New("no image digests found")
 	}
-	return keys, nil
+	return dgsts, nil
 }
 
 func walk(ctx context.Context, dgsts []digest.Digest, handler func(dgst digest.Digest) ([]digest.Digest, error)) error {

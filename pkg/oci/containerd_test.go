@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	eventtypes "github.com/containerd/containerd/api/events"
-	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -260,14 +258,14 @@ func TestCreateFilter(t *testing.T) {
 			name:                  "with registry filtering",
 			registries:            []string{"https://docker.io", "https://gcr.io"},
 			expectedImageFilter:   `name~="^(docker\\.io|gcr\\.io)/"`,
-			expectedEventFilter:   `topic~="/images/create|/images/update|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
+			expectedEventFilter:   `topic~="/images/create|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`,
 			expectedContentFilter: `labels."containerd.io/distribution.source.docker.io"~="^." labels."containerd.io/distribution.source.gcr.io"~="^."`,
 		},
 		{
 			name:                  "without registry filtering",
 			registries:            []string{},
 			expectedImageFilter:   `name~="^.+/"`,
-			expectedEventFilter:   `topic~="/images/create|/images/update|/images/delete",event.name~="^.+/"`,
+			expectedEventFilter:   `topic~="/images/create|/images/delete",event.name~="^.+/"`,
 			expectedContentFilter: "",
 		},
 	}
@@ -279,74 +277,6 @@ func TestCreateFilter(t *testing.T) {
 			require.Equal(t, tt.expectedImageFilter, imageFilter)
 			require.Equal(t, tt.expectedEventFilter, eventFilter)
 			require.Equal(t, tt.expectedContentFilter, contentFilter)
-		})
-	}
-}
-
-func TestGetEventImage(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name              string
-		data              any
-		expectedErr       string
-		expectedName      string
-		expectedEventType EventType
-	}{
-		{
-			name:        "type url is nil",
-			data:        nil,
-			expectedErr: "any cannot be nil",
-		},
-		{
-			name:        "unknown event",
-			data:        &eventtypes.ContainerCreate{},
-			expectedErr: "unsupported event type",
-		},
-		{
-			name: "create event",
-			data: &eventtypes.ImageCreate{
-				Name: "create",
-			},
-			expectedName:      "create",
-			expectedEventType: CreateEvent,
-		},
-		{
-			name: "update event",
-			data: &eventtypes.ImageUpdate{
-				Name: "update",
-			},
-			expectedName:      "update",
-			expectedEventType: UpdateEvent,
-		},
-		{
-			name: "delete event",
-			data: &eventtypes.ImageDelete{
-				Name: "delete",
-			},
-			expectedName:      "delete",
-			expectedEventType: DeleteEvent,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var e typeurl.Any
-			var err error
-			if tt.data != nil {
-				e, err = typeurl.MarshalAny(tt.data)
-				require.NoError(t, err)
-			}
-
-			name, event, err := getEventImage(e)
-			if tt.expectedErr != "" {
-				require.EqualError(t, err, tt.expectedErr)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, tt.expectedName, name)
-			require.Equal(t, tt.expectedEventType, event)
 		})
 	}
 }
