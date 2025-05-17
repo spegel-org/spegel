@@ -87,6 +87,7 @@ spec:
           - --registry-addr=:{{ .Values.service.registry.port }}
           - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
+          - --data-dir={{ .Values.spegel.dataDir | quote }}
           {{- with .Values.spegel.mirroredRegistries }}
           - --mirrored-registries
           {{- range . }}
@@ -149,6 +150,10 @@ spec:
             mountPath: "/etc/secrets/basic-auth"
             readOnly: true
           {{- end }}
+          {{- if .Values.spegel.dataDir }}
+          - name: data-dir
+            mountPath: {{ .Values.spegel.dataDir }}
+          {{- end }}
           - name: containerd-sock
             mountPath: {{ .Values.spegel.containerdSock }}
           {{- with .Values.spegel.containerdContentPath }}
@@ -163,6 +168,12 @@ spec:
         - name: basic-auth
           secret:
             secretName: {{ . }}
+        {{- end }}
+        {{- if .Values.spegel.dataDir }}
+        - name: data-dir
+          hostPath:
+            path: {{ .Values.spegel.dataDir }}
+            type: DirectoryOrCreate
         {{- end }}
         - name: containerd-sock
           hostPath:
