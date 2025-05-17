@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#875](https://github.com/spegel-org/spegel/pull/875) Change debug unit formatting and add totals.
 - [#880](https://github.com/spegel-org/spegel/pull/880) Refactor store advertisement to list content.
 - [#888](https://github.com/spegel-org/spegel/pull/888) Refactor OCI events to support content events.
+- [#890](https://github.com/spegel-org/spegel/pull/890) Refactor Containerd options to use config struct.
 
 ### Deprecated
 
