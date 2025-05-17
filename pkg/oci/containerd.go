@@ -63,6 +63,31 @@ func (f Feature) String() string {
 	return strings.Join(feats, "|")
 }
 
+type ContainerdConfig struct {
+	ContentPath string
+}
+
+func (cfg *ContainerdConfig) Apply(opts ...ContainerdOption) error {
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type ContainerdOption func(*ContainerdConfig) error
+
+func WithContentPath(path string) ContainerdOption {
+	return func(c *ContainerdConfig) error {
+		c.ContentPath = path
+		return nil
+	}
+}
+
 var _ Store = &Containerd{}
 
 type Containerd struct {
@@ -76,17 +101,16 @@ type Containerd struct {
 	contentFilter      []string
 }
 
-type Option func(*Containerd)
-
-func WithContentPath(path string) Option {
-	return func(c *Containerd) {
-		c.contentPath = path
+func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistries []url.URL, opts ...ContainerdOption) (*Containerd, error) {
+	cfg := &ContainerdConfig{}
+	err := cfg.Apply(opts...)
+	if err != nil {
+		return nil, err
 	}
-}
 
-func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistries []url.URL, opts ...Option) (*Containerd, error) {
 	imageFilter, eventFilter, contentFilter := createFilters(mirroredRegistries)
 	c := &Containerd{
+		contentPath: cfg.ContentPath,
 		clientGetter: func() (*client.Client, error) {
 			return client.New(sock, client.WithDefaultNamespace(namespace))
 		},
@@ -94,9 +118,6 @@ func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistrie
 		eventFilter:        eventFilter,
 		contentFilter:      contentFilter,
 		registryConfigPath: registryConfigPath,
-	}
-	for _, opt := range opts {
-		opt(c)
 	}
 	return c, nil
 }
