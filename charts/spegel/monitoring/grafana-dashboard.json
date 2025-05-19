@@ -1,4 +1,53 @@
 {
+  "__inputs": [
+    {
+      "name": "datasource",
+      "label": "datasource",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__elements": {},
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "11.5.2"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "text",
+      "name": "Text",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -38,7 +87,6 @@
       },
       "id": 24,
       "panels": [],
-      "title": "",
       "type": "row"
     },
     {
@@ -89,7 +137,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -155,7 +203,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -219,11 +267,12 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
-            "uid": "$datasource"
+            "type": "prometheus",
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_running_containers)",
@@ -285,7 +334,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -357,7 +406,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -366,7 +415,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(rate(http_request_duration_seconds_bucket{job=\"spegel\"}[$__interval]))",
+          "expr": "max(rate(http_request_duration_seconds_bucket{job=\"$job\"}[$__interval]))",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -379,10 +428,6 @@
       "type": "stat"
     },
     {
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
       "gridPos": {
         "h": 4,
         "w": 3,
@@ -399,7 +444,7 @@
         "content": "<br>\n<div style=\"text-align: center;\"><a href=\"https://github.com/XenitAB/spegel\" target=\"_blank\">Spegel at GitHub</a> </div>\n\n",
         "mode": "html"
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "title": "Github link",
       "transparent": true,
       "type": "text"
@@ -415,7 +460,6 @@
       "id": 9,
       "panels": [],
       "repeat": "datasource",
-      "title": "",
       "type": "row"
     },
     {
@@ -499,7 +543,7 @@
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -508,7 +552,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_images{job=~\"spegel\",instance=~\"$instance\"}",
+          "expr": "spegel_advertised_images{job=~\"$job\",instance=~\"$instance\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -522,7 +566,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_keys{job=~\"spegel\",instance=~\"$instance\"} ",
+          "expr": "spegel_advertised_keys{job=~\"$job\",instance=~\"$instance\"} ",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -531,7 +575,6 @@
           "refId": "B"
         }
       ],
-      "title": "",
       "transformations": [
         {
           "id": "filterFieldsByName",
@@ -646,11 +689,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -659,7 +703,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_images{job=~\"spegel\",instance=~\"$instance\"}",
+          "expr": "spegel_advertised_images{job=~\"$job\",instance=~\"$instance\"}",
           "format": "time_series",
           "instant": false,
           "legendFormat": "{{ instance }}",
@@ -674,7 +718,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "$datasource"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -808,11 +852,12 @@
           "showLegend": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -910,11 +955,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -923,7 +969,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_keys{job=~\"spegel\",instance=~\"$instance\"} ",
+          "expr": "spegel_advertised_keys{job=~\"$job\",instance=~\"$instance\"} ",
           "format": "time_series",
           "instant": false,
           "legendFormat": "{{ instance }}",
@@ -1024,11 +1070,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -1049,7 +1096,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "$datasource"
+        "uid": "${datasource}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1122,11 +1169,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.3.0",
+      "pluginVersion": "11.5.2",
       "targets": [
         {
           "datasource": {
@@ -1146,14 +1194,13 @@
       "type": "timeseries"
     }
   ],
-  "preload": false,
   "refresh": "30s",
   "schemaVersion": 40,
   "tags": [],
   "templating": {
     "list": [
       {
-        "current": null,
+        "current": {},
         "includeAll": false,
         "label": "Data Source",
         "name": "datasource",
@@ -1205,12 +1252,33 @@
         "type": "query"
       },
       {
+        "allowCustomValue": false,
         "current": {},
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(spegel_advertised_keys{job=\"spegel\"},instance)",
+        "definition": "label_values(spegel_advertised_keys,job)",
+        "hide": 2,
+        "label": "job",
+        "name": "job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(spegel_advertised_keys,job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(spegel_advertised_keys{job=\"$job\"},instance)",
         "includeAll": true,
         "label": "instance",
         "multi": true,
@@ -1218,7 +1286,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(spegel_advertised_keys{job=\"spegel\"},instance)",
+          "query": "label_values(spegel_advertised_keys{job=\"$job\"},instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
@@ -1235,7 +1303,7 @@
   "timezone": "",
   "title": "Spegel stateless cluster local OCI registry mirror",
   "uid": "1iY4QMJVk-psee",
-  "version": 1,
-  "weekStart": "",
-  "gnetId": 18089
+  "gnetId": 18089,
+  "version": 4,
+  "weekStart": ""
 }
