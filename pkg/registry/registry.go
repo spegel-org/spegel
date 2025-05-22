@@ -1,13 +1,10 @@
 package registry
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/netip"
-	"net/url"
 	"path"
 	"strconv"
 	"sync"
@@ -15,6 +12,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/spegel-org/spegel/internal/ocifs"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -235,8 +233,6 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
-	log := r.log.WithValues("ref", dist.Reference(), "path", req.URL.Path)
-
 	defer func() {
 		cacheType := "hit"
 		if rw.Status() != http.StatusOK {
@@ -251,44 +247,31 @@ func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist
 		return
 	}
 
-	// Resolve mirror with the requested reference
-	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
-	defer cancel()
-	resolveCtx = logr.NewContext(resolveCtx, log)
-	peerCh, err := r.router.Resolve(resolveCtx, dist.Reference(), r.resolveRetries)
+	forwardScheme := "http"
+	if req.TLS != nil {
+		forwardScheme = "https"
+	}
+	f, err := ocifs.NewRoutedFile(logr.NewContext(req.Context(), r.log), r.router, dist, req.Method, forwardScheme, r.resolveTimeout, r.resolveRetries)
 	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("error occurred when attempting to resolve mirrors: %w", err))
+		rw.WriteError(http.StatusNotFound, err)
 		return
 	}
+	defer f.Close()
 
-	mirrorAttempts := 0
-	for {
-		select {
-		case <-req.Context().Done():
-			// Request has been closed by server or client. No use continuing.
-			rw.WriteError(http.StatusNotFound, fmt.Errorf("mirroring for image component %s has been cancelled: %w", dist.Reference(), resolveCtx.Err()))
-			return
-		case peer, ok := <-peerCh:
-			// Channel closed means no more mirrors will be received and max retries has been reached.
-			if !ok {
-				err = fmt.Errorf("mirror with image component %s could not be found", dist.Reference())
-				if mirrorAttempts > 0 {
-					err = errors.Join(err, fmt.Errorf("requests to %d mirrors failed, all attempts have been exhausted or timeout has been reached", mirrorAttempts))
-				}
-				rw.WriteError(http.StatusNotFound, err)
-				return
-			}
+	desc, err := f.Descriptor()
+	if err != nil {
+		rw.WriteError(http.StatusNotFound, err)
+		return
+	}
+	oci.WriteDescriptorToHeader(desc, rw.Header())
 
-			mirrorAttempts++
-
-			err := forwardRequest(r.client, r.bufferPool, req, rw, peer)
-			if err != nil {
-				log.Error(err, "request to mirror failed", "attempt", mirrorAttempts, "path", req.URL.Path, "mirror", peer)
-				continue
-			}
-			log.V(4).Info("mirrored request", "path", req.URL.Path, "mirror", peer)
-			return
-		}
+	//nolint: errcheck // Ignore
+	buf := r.bufferPool.Get().(*[]byte)
+	defer r.bufferPool.Put(buf)
+	_, err = io.CopyBuffer(rw, f, *buf)
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
 	}
 }
 
@@ -341,59 +324,4 @@ func (r *Registry) handleBlob(rw httpx.ResponseWriter, req *http.Request, dist o
 	defer rc.Close()
 
 	http.ServeContent(rw, req, "", time.Time{}, rc)
-}
-
-func forwardRequest(client *http.Client, bufferPool *sync.Pool, req *http.Request, rw http.ResponseWriter, addrPort netip.AddrPort) error {
-	// Do request to mirror.
-	forwardScheme := "http"
-	if req.TLS != nil {
-		forwardScheme = "https"
-	}
-	u := &url.URL{
-		Scheme:   forwardScheme,
-		Host:     addrPort.String(),
-		Path:     req.URL.Path,
-		RawQuery: req.URL.RawQuery,
-	}
-	forwardReq, err := http.NewRequestWithContext(req.Context(), req.Method, u.String(), nil)
-	if err != nil {
-		return err
-	}
-	copyHeader(forwardReq.Header, req.Header)
-	forwardResp, err := client.Do(forwardReq)
-	if err != nil {
-		return err
-	}
-	defer forwardResp.Body.Close()
-
-	// Clear body and try next if non 200 response.
-	//nolint:staticcheck // Keep things readable.
-	if !(forwardResp.StatusCode == http.StatusOK || forwardResp.StatusCode == http.StatusPartialContent) {
-		_, err = io.Copy(io.Discard, forwardResp.Body)
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("expected mirror to respond with 200 OK but received: %s", forwardResp.Status)
-	}
-
-	// TODO (phillebaba): Is it possible to retry if copy fails half way through?
-	// Copy forward response to response writer.
-	copyHeader(rw.Header(), forwardResp.Header)
-	rw.WriteHeader(http.StatusOK)
-	//nolint: errcheck // Ignore
-	buf := bufferPool.Get().(*[]byte)
-	defer bufferPool.Put(buf)
-	_, err = io.CopyBuffer(rw, forwardResp.Body, *buf)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func copyHeader(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
 }

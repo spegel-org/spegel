@@ -6,12 +6,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	tlog "github.com/go-logr/logr/testing"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
@@ -143,7 +147,6 @@ func TestMirrorHandler(t *testing.T) {
 
 	badSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Header().Set("foo", "bar")
 		if r.Method == http.MethodGet {
 			//nolint:errcheck // ignore
 			w.Write([]byte("hello world"))
@@ -154,10 +157,14 @@ func TestMirrorHandler(t *testing.T) {
 	})
 	badAddrPort := netip.MustParseAddrPort(badSvr.Listener.Addr().String())
 	goodSvr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("foo", "bar")
+		w.Header().Set(httpx.HeaderContentLength, "0")
+		w.Header().Set(httpx.HeaderContentType, "application/octet-stream")
+		w.Header().Set(oci.HeaderDockerDigest, ocispec.DescriptorEmptyJSON.Digest.String())
 		if r.Method == http.MethodGet {
+			b := []byte("hello world")
+			w.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(int64(len(b)), 10))
 			//nolint:errcheck // ignore
-			w.Write([]byte("hello world"))
+			w.Write(b)
 		}
 	}))
 	t.Cleanup(func() {
@@ -177,50 +184,44 @@ func TestMirrorHandler(t *testing.T) {
 		"sha256:11242d2a347bf8ab30b9f92d5ca219bbbedf95df5a8b74631194561497c1fae8": {badAddrPort, badAddrPort, goodAddrPort},
 	}
 	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
-	reg, err := NewRegistry(oci.NewMemory(), router)
+	reg, err := NewRegistry(oci.NewMemory(), router, WithLogger(tlog.NewTestLogger(t)))
 	require.NoError(t, err)
 
 	tests := []struct {
-		expectedHeaders map[string][]string
-		name            string
-		key             string
-		expectedBody    string
-		expectedStatus  int
+		name           string
+		key            string
+		expectedBody   string
+		expectedStatus int
 	}{
 		{
-			name:            "request should timeout when no peers exists",
-			key:             "no-peers",
-			expectedStatus:  http.StatusNotFound,
-			expectedBody:    "",
-			expectedHeaders: nil,
+			name:           "request should timeout when no peers exists",
+			key:            "no-peers",
+			expectedStatus: http.StatusNotFound,
+			expectedBody:   "",
 		},
 		{
-			name:            "request should not timeout and give 404 if all peers fail",
-			key:             "sha256:c3e30fbcf3b231356a1efbd30a8ccec75134a7a8b45217ede97f4ff483540b04",
-			expectedStatus:  http.StatusNotFound,
-			expectedBody:    "",
-			expectedHeaders: nil,
+			name:           "request should not timeout and give 404 if all peers fail",
+			key:            "sha256:c3e30fbcf3b231356a1efbd30a8ccec75134a7a8b45217ede97f4ff483540b04",
+			expectedStatus: http.StatusNotFound,
+			expectedBody:   "",
 		},
 		{
-			name:            "request should work when first peer responds",
-			key:             "sha256:3b8a55c543ccc7ae01c47b1d35af5826a6439a9b91ab0ca96de9967759279896",
-			expectedStatus:  http.StatusOK,
-			expectedBody:    "hello world",
-			expectedHeaders: map[string][]string{"foo": {"bar"}},
+			name:           "request should work when first peer responds",
+			key:            "sha256:3b8a55c543ccc7ae01c47b1d35af5826a6439a9b91ab0ca96de9967759279896",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "hello world",
 		},
 		{
-			name:            "second peer should respond when first gives error",
-			key:             "sha256:a0daab85ec30e2809a38c32fa676515aba22f481c56fda28637ae964ff398e3d",
-			expectedStatus:  http.StatusOK,
-			expectedBody:    "hello world",
-			expectedHeaders: map[string][]string{"foo": {"bar"}},
+			name:           "second peer should respond when first gives error",
+			key:            "sha256:a0daab85ec30e2809a38c32fa676515aba22f481c56fda28637ae964ff398e3d",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "hello world",
 		},
 		{
-			name:            "last peer should respond when two first fail",
-			key:             "sha256:11242d2a347bf8ab30b9f92d5ca219bbbedf95df5a8b74631194561497c1fae8",
-			expectedStatus:  http.StatusOK,
-			expectedBody:    "hello world",
-			expectedHeaders: map[string][]string{"foo": {"bar"}},
+			name:           "last peer should respond when two first fail",
+			key:            "sha256:11242d2a347bf8ab30b9f92d5ca219bbbedf95df5a8b74631194561497c1fae8",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "hello world",
 		},
 	}
 	for _, tt := range tests {
@@ -247,26 +248,7 @@ func TestMirrorHandler(t *testing.T) {
 				if method == http.MethodHead {
 					require.Empty(t, b)
 				}
-
-				if tt.expectedHeaders == nil {
-					require.Empty(t, resp.Header)
-				}
-				for k, v := range tt.expectedHeaders {
-					require.Equal(t, v, resp.Header.Values(k))
-				}
 			})
 		}
 	}
-}
-
-func TestCopyHeader(t *testing.T) {
-	t.Parallel()
-
-	src := http.Header{
-		"foo": []string{"2", "1"},
-	}
-	dst := http.Header{}
-	copyHeader(dst, src)
-
-	require.Equal(t, []string{"2", "1"}, dst.Values("foo"))
 }
