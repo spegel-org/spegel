@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#869](https://github.com/spegel-org/spegel/pull/869) Fix request logging for redirects and not found pages.
 - [#872](https://github.com/spegel-org/spegel/pull/872) Allow returning libp2p crypto priv key in linter.
+- [#894](https://github.com/spegel-org/spegel/pull/894) Update Kind to v0.29.0 and Fix Containerd v2 support.
 
 ### Security
 
