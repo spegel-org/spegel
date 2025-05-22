@@ -367,7 +367,8 @@ func forwardRequest(client *http.Client, bufferPool *sync.Pool, req *http.Reques
 	defer forwardResp.Body.Close()
 
 	// Clear body and try next if non 200 response.
-	if forwardResp.StatusCode != http.StatusOK {
+	//nolint:staticcheck // Keep things readable.
+	if !(forwardResp.StatusCode == http.StatusOK || forwardResp.StatusCode == http.StatusPartialContent) {
 		_, err = io.Copy(io.Discard, forwardResp.Body)
 		if err != nil {
 			return err
