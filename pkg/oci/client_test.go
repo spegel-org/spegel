@@ -10,6 +10,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,9 +73,9 @@ func TestPull(t *testing.T) {
 			return
 		}
 
-		rw.Header().Set(ContentTypeHeader, mt)
+		rw.Header().Set(httpx.HeaderContentType, mt)
 		dgst := digest.SHA256.FromBytes(b)
-		rw.Header().Set(DigestHeader, dgst.String())
+		rw.Header().Set(HeaderDockerDigest, dgst.String())
 		rw.WriteHeader(http.StatusOK)
 
 		//nolint: errcheck // Ignore error.

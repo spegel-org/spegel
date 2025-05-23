@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,37 +16,13 @@ import (
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+
+	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
 const (
-	DigestHeader        = "Docker-Content-Digest"
-	ContentTypeHeader   = "Content-Type"
-	ContentLengthHeader = "Content-Length"
+	HeaderDockerDigest = "Docker-Content-Digest"
 )
-
-type StatusError struct {
-	Content    string
-	StatusCode int
-}
-
-func (e *StatusError) Error() string {
-	return fmt.Sprintf("unexpected status code %d with body %s", e.StatusCode, e.Content)
-}
-
-func CheckResponseStatus(resp *http.Response, expected ...int) error {
-	if slices.Contains(expected, resp.StatusCode) {
-		return nil
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	return &StatusError{
-		StatusCode: resp.StatusCode,
-		Content:    string(b),
-	}
-}
 
 type Client struct {
 	hc *http.Client
@@ -226,13 +200,13 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 			c.tc.Store(tcKey, token)
 			continue
 		}
-		err = CheckResponseStatus(resp, http.StatusOK)
+		err = httpx.CheckResponseStatus(resp, http.StatusOK, http.StatusPartialContent)
 		if err != nil {
 			return nil, ocispec.Descriptor{}, err
 		}
 
 		dgst := dist.Digest
-		dgstStr := resp.Header.Get(DigestHeader)
+		dgstStr := resp.Header.Get(HeaderDockerDigest)
 		if dgstStr != "" {
 			dgst, err = digest.Parse(dgstStr)
 			if err != nil {
@@ -242,11 +216,11 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		if dgst == "" {
 			return nil, ocispec.Descriptor{}, errors.New("digest cannot be empty")
 		}
-		mt := resp.Header.Get(ContentTypeHeader)
+		mt := resp.Header.Get(httpx.HeaderContentType)
 		if mt == "" {
 			return nil, ocispec.Descriptor{}, errors.New("content type header cannot be empty")
 		}
-		cl := resp.Header.Get(ContentLengthHeader)
+		cl := resp.Header.Get(httpx.HeaderContentLength)
 		if cl == "" {
 			return nil, ocispec.Descriptor{}, errors.New("content length header cannot be empty")
 		}
@@ -297,7 +271,7 @@ func getBearerToken(ctx context.Context, wwwAuth string, client *http.Client) (s
 	if err != nil {
 		return "", err
 	}
-	err = CheckResponseStatus(resp, http.StatusOK)
+	err = httpx.CheckResponseStatus(resp, http.StatusOK)
 	if err != nil {
 		return "", err
 	}

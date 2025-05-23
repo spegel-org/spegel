@@ -3,7 +3,7 @@ package metrics
 import (
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/spegel-org/spegel/pkg/mux"
+	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
 var (
@@ -50,5 +50,5 @@ func Register() {
 	DefaultRegisterer.MustRegister(AdvertisedImageTags)
 	DefaultRegisterer.MustRegister(AdvertisedImageDigests)
 	DefaultRegisterer.MustRegister(AdvertisedKeys)
-	mux.RegisterMetrics(DefaultRegisterer)
+	httpx.RegisterMetrics(DefaultRegisterer)
 }

@@ -15,14 +15,14 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
-	"github.com/spegel-org/spegel/pkg/mux"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
 const (
-	MirroredHeaderKey = "X-Spegel-Mirrored"
+	HeaderSpegelMirrored = "X-Spegel-Mirrored"
 )
 
 type RegistryConfig struct {
@@ -149,7 +149,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 }
 
 func (r *Registry) Server(addr string) (*http.Server, error) {
-	m := mux.NewServeMux(r.log)
+	m := httpx.NewServeMux(r.log)
 	m.Handle("GET /healthz", r.readyHandler)
 	m.Handle("GET /v2/", r.registryHandler)
 	m.Handle("HEAD /v2/", r.registryHandler)
@@ -160,7 +160,7 @@ func (r *Registry) Server(addr string) (*http.Server, error) {
 	return srv, nil
 }
 
-func (r *Registry) readyHandler(rw mux.ResponseWriter, req *http.Request) {
+func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
 	rw.SetHandler("ready")
 	ok, err := r.router.Ready(req.Context())
 	if err != nil {
@@ -173,7 +173,7 @@ func (r *Registry) readyHandler(rw mux.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
+func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	rw.SetHandler("registry")
 
 	// Check basic authentication
@@ -200,9 +200,9 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
 	}
 
 	// Request with mirror header are proxied.
-	if req.Header.Get(MirroredHeaderKey) != "true" {
+	if req.Header.Get(HeaderSpegelMirrored) != "true" {
 		// Set mirrored header in request to stop infinite loops
-		req.Header.Set(MirroredHeaderKey, "true")
+		req.Header.Set(HeaderSpegelMirrored, "true")
 
 		// If content is present locally we should skip the mirroring and just serve it.
 		var ociErr error
@@ -234,7 +234,7 @@ func (r *Registry) registryHandler(rw mux.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	log := r.log.WithValues("ref", dist.Reference(), "path", req.URL.Path)
 
 	defer func() {
@@ -292,7 +292,7 @@ func (r *Registry) handleMirror(rw mux.ResponseWriter, req *http.Request, dist o
 	}
 }
 
-func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) handleManifest(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	if dist.Digest == "" {
 		dgst, err := r.ociStore.Resolve(req.Context(), dist.Reference())
 		if err != nil {
@@ -306,9 +306,9 @@ func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, dist
 		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get manifest content for digest %s: %w", dist.Digest.String(), err))
 		return
 	}
-	rw.Header().Set("Content-Type", mediaType)
-	rw.Header().Set("Content-Length", strconv.FormatInt(int64(len(b)), 10))
-	rw.Header().Set("Docker-Content-Digest", dist.Digest.String())
+	rw.Header().Set(httpx.HeaderContentType, mediaType)
+	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(int64(len(b)), 10))
+	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
 	if req.Method == http.MethodHead {
 		return
 	}
@@ -319,16 +319,16 @@ func (r *Registry) handleManifest(rw mux.ResponseWriter, req *http.Request, dist
 	}
 }
 
-func (r *Registry) handleBlob(rw mux.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) handleBlob(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	size, err := r.ociStore.Size(req.Context(), dist.Digest)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine size of blob with digest %s: %w", dist.Digest.String(), err))
 		return
 	}
-	rw.Header().Set("Accept-Ranges", "bytes")
-	rw.Header().Set("Content-Type", "application/octet-stream")
-	rw.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	rw.Header().Set("Docker-Content-Digest", dist.Digest.String())
+	rw.Header().Set(httpx.HeaderAcceptRanges, "bytes")
+	rw.Header().Set(httpx.HeaderContentType, "application/octet-stream")
+	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(size, 10))
+	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
 	if req.Method == http.MethodHead {
 		return
 	}
