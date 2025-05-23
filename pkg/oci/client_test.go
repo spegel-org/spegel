@@ -96,3 +96,38 @@ func TestPull(t *testing.T) {
 
 	require.NotEmpty(t, pullResults)
 }
+
+func TestDescriptorHeader(t *testing.T) {
+	t.Parallel()
+
+	header := http.Header{}
+	desc := ocispec.Descriptor{
+		MediaType: "foo",
+		Size:      909,
+		Digest:    digest.Digest("sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9"),
+	}
+
+	WriteDescriptorToHeader(desc, header)
+	require.Equal(t, "foo", header.Get(httpx.HeaderContentType))
+	require.Equal(t, "909", header.Get(httpx.HeaderContentLength))
+	require.Equal(t, "sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9", header.Get(HeaderDockerDigest))
+	headerDesc, err := DescriptorFromHeader(header)
+	require.NoError(t, err)
+	require.Equal(t, desc, headerDesc)
+
+	header = http.Header{}
+	_, err = DescriptorFromHeader(header)
+	require.EqualError(t, err, "content type cannot be empty")
+	header.Set(httpx.HeaderContentType, "test")
+	_, err = DescriptorFromHeader(header)
+	require.EqualError(t, err, "content length cannot be empty")
+	header.Set(httpx.HeaderContentLength, "wrong")
+	_, err = DescriptorFromHeader(header)
+	require.EqualError(t, err, "strconv.ParseInt: parsing \"wrong\": invalid syntax")
+	header.Set(httpx.HeaderContentLength, "250000")
+	_, err = DescriptorFromHeader(header)
+	require.EqualError(t, err, "invalid checksum digest format")
+	header.Set(HeaderDockerDigest, "foobar")
+	_, err = DescriptorFromHeader(header)
+	require.EqualError(t, err, "invalid checksum digest format")
+}
