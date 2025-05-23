@@ -73,7 +73,7 @@ func TestStatusError(t *testing.T) {
 
 			rec := httptest.NewRecorder()
 			rec.WriteHeader(tt.statusCode)
-			rec.Header().Set("Content-Type", tt.contentType)
+			rec.Header().Set(HeaderContentType, tt.contentType)
 			rec.Body = bytes.NewBufferString(tt.body)
 
 			resp := &http.Response{

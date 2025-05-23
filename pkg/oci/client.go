@@ -205,33 +205,9 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 			return nil, ocispec.Descriptor{}, err
 		}
 
-		dgst := dist.Digest
-		dgstStr := resp.Header.Get(HeaderDockerDigest)
-		if dgstStr != "" {
-			dgst, err = digest.Parse(dgstStr)
-			if err != nil {
-				return nil, ocispec.Descriptor{}, err
-			}
-		}
-		if dgst == "" {
-			return nil, ocispec.Descriptor{}, errors.New("digest cannot be empty")
-		}
-		mt := resp.Header.Get(httpx.HeaderContentType)
-		if mt == "" {
-			return nil, ocispec.Descriptor{}, errors.New("content type header cannot be empty")
-		}
-		cl := resp.Header.Get(httpx.HeaderContentLength)
-		if cl == "" {
-			return nil, ocispec.Descriptor{}, errors.New("content length header cannot be empty")
-		}
-		size, err := strconv.ParseInt(cl, 10, 64)
+		desc, err := DescriptorFromHeader(resp.Header)
 		if err != nil {
 			return nil, ocispec.Descriptor{}, err
-		}
-		desc := ocispec.Descriptor{
-			Digest:    dgst,
-			MediaType: mt,
-			Size:      size,
 		}
 		return resp.Body, desc, nil
 	}
@@ -288,4 +264,35 @@ func getBearerToken(ctx context.Context, wwwAuth string, client *http.Client) (s
 		return "", err
 	}
 	return tokenResp.Token, nil
+}
+
+func DescriptorFromHeader(header http.Header) (ocispec.Descriptor, error) {
+	mediaType := header.Get(httpx.HeaderContentType)
+	if mediaType == "" {
+		return ocispec.Descriptor{}, errors.New("content type cannot be empty")
+	}
+	contentLength := header.Get(httpx.HeaderContentLength)
+	if contentLength == "" {
+		return ocispec.Descriptor{}, errors.New("content length cannot be empty")
+	}
+	size, err := strconv.ParseInt(contentLength, 10, 64)
+	if err != nil {
+		return ocispec.Descriptor{}, err
+	}
+	dgst, err := digest.Parse(header.Get(HeaderDockerDigest))
+	if err != nil {
+		return ocispec.Descriptor{}, err
+	}
+	desc := ocispec.Descriptor{
+		MediaType: mediaType,
+		Size:      size,
+		Digest:    dgst,
+	}
+	return desc, nil
+}
+
+func WriteDescriptorToHeader(desc ocispec.Descriptor, header http.Header) {
+	header.Set(httpx.HeaderContentType, desc.MediaType)
+	header.Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
+	header.Set(HeaderDockerDigest, desc.Digest.String())
 }
