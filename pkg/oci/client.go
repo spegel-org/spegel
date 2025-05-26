@@ -205,6 +205,9 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 			return nil, ocispec.Descriptor{}, err
 		}
 
+		if resp.Header.Get(HeaderDockerDigest) == "" {
+			resp.Header.Set(HeaderDockerDigest, dist.Digest.String())
+		}
 		desc, err := DescriptorFromHeader(resp.Header)
 		if err != nil {
 			return nil, ocispec.Descriptor{}, err
