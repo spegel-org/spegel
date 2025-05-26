@@ -13,7 +13,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/prometheus/common/expfmt"
 
-	"github.com/spegel-org/spegel/pkg/mux"
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
@@ -44,14 +44,14 @@ func NewWeb(router routing.Router) (*Web, error) {
 }
 
 func (w *Web) Handler(log logr.Logger) http.Handler {
-	m := mux.NewServeMux(log)
+	m := httpx.NewServeMux(log)
 	m.Handle("GET /debug/web/", w.indexHandler)
 	m.Handle("GET /debug/web/stats", w.statsHandler)
 	m.Handle("GET /debug/web/measure", w.measureHandler)
 	return m
 }
 
-func (w *Web) indexHandler(rw mux.ResponseWriter, req *http.Request) {
+func (w *Web) indexHandler(rw httpx.ResponseWriter, req *http.Request) {
 	err := w.tmpls.ExecuteTemplate(rw, "index.html", nil)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
@@ -59,7 +59,7 @@ func (w *Web) indexHandler(rw mux.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (w *Web) statsHandler(rw mux.ResponseWriter, req *http.Request) {
+func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	//nolint: errcheck // Ignore error.
 	srvAddr := req.Context().Value(http.LocalAddrContextKey).(net.Addr)
 	resp, err := http.Get(fmt.Sprintf("http://%s/metrics", srvAddr.String()))
@@ -112,7 +112,7 @@ type pullResult struct {
 	Duration   time.Duration
 }
 
-func (w *Web) measureHandler(rw mux.ResponseWriter, req *http.Request) {
+func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	// Parse image name.
 	imgName := req.URL.Query().Get("image")
 	if imgName == "" {

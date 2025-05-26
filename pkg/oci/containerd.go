@@ -438,7 +438,7 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 		if err != nil {
 			return nil, err
 		}
-		if filter.Match(content.AdaptInfo(info)) {
+		if !filter.Match(content.AdaptInfo(info)) {
 			return nil, nil
 		}
 		return []OCIEvent{{Type: CreateEvent, Key: e.GetDigest()}}, nil

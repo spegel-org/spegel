@@ -3,7 +3,6 @@ package cleanup
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spegel-org/spegel/internal/channel"
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 )
 
@@ -135,8 +135,9 @@ func probeIPs(ctx context.Context, client *http.Client, ips []net.IPAddr, port s
 			if err != nil {
 				return err
 			}
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("unexpected status code %s", resp.Status)
+			err = httpx.CheckResponseStatus(resp, http.StatusOK)
+			if err != nil {
+				return err
 			}
 			return nil
 		})

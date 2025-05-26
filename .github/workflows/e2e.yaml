@@ -32,7 +32,7 @@ jobs:
       - name: Setup Kind
         uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 #v1.12.0
         with:
-          version: v0.27.0
+          version: v0.29.0
           install_only: true
       - name: Run e2e
         run: make test-e2e E2E_PROXY_MODE=${{ matrix.proxy-mode }} E2E_IP_FAMILY=${{ matrix.ip-family }}
