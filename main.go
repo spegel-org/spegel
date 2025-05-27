@@ -53,6 +53,7 @@ type RegistryCmd struct {
 	ContainerdSock               string        `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
 	ContainerdNamespace          string        `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
 	ContainerdContentPath        string        `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
+	PersistenceEnabled           bool          `arg:"--persistence-enabled,env:PERSISTENCE_ENABLED" default:"true" help:"Enable data persistence."`
 	DataDir                      string        `arg:"--data-dir,env:DATA_DIR" default:"/var/lib/spegel" help:"Directory where Spegel persists data."`
 	RouterAddr                   string        `arg:"--router-addr,env:ROUTER_ADDR" default:":5001" help:"address to serve router."`
 	RegistryAddr                 string        `arg:"--registry-addr,env:REGISTRY_ADDR" default:":5000" help:"address to server image registry."`
@@ -139,6 +140,12 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	username, password, err := loadBasicAuth()
 	if err != nil {
 		return err
+	}
+
+	// Ensure data persistence can be disabled when using CLI flags only
+	// as setting --data-dir="" does not work (https://github.com/alexflint/go-arg/issues/280)
+	if !args.PersistenceEnabled {
+		args.DataDir = ""
 	}
 
 	// OCI Store
