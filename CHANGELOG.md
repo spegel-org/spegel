@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#889](https://github.com/spegel-org/spegel/pull/889) Add support for content create events.
 
 ### Changed
-
+- [#881](https://github.com/spegel-org/spegel/pull/881) Add Variable for job name in Grafana Dashboard.
 - [#852](https://github.com/spegel-org/spegel/pull/852) Remove use of Afero in Containerd config.
 - [#854](https://github.com/spegel-org/spegel/pull/854) Implement unit tests for cleanup logic.
 - [#860](https://github.com/spegel-org/spegel/pull/860) Update Go to 1.24.2.
