@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -43,7 +44,7 @@ type PullMetric struct {
 	Duration      time.Duration
 }
 
-func (c *Client) Pull(ctx context.Context, img Image, mirror string) ([]PullMetric, error) {
+func (c *Client) Pull(ctx context.Context, img Image, mirror *url.URL) ([]PullMetric, error) {
 	pullMetrics := []PullMetric{}
 
 	queue := []DistributionPath{
@@ -60,7 +61,7 @@ func (c *Client) Pull(ctx context.Context, img Image, mirror string) ([]PullMetr
 		queue = queue[1:]
 
 		start := time.Now()
-		rc, desc, err := c.Get(ctx, dist, mirror)
+		rc, desc, err := c.Get(ctx, dist, mirror, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -134,8 +135,8 @@ func (c *Client) Pull(ctx context.Context, img Image, mirror string) ([]PullMetr
 	return pullMetrics, nil
 }
 
-func (c *Client) Head(ctx context.Context, dist DistributionPath, mirror string) (ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodHead, dist, mirror)
+func (c *Client) Head(ctx context.Context, dist DistributionPath, mirror *url.URL) (ocispec.Descriptor, error) {
+	rc, desc, err := c.fetch(ctx, http.MethodHead, dist, mirror, nil)
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -147,25 +148,22 @@ func (c *Client) Head(ctx context.Context, dist DistributionPath, mirror string)
 	return desc, nil
 }
 
-func (c *Client) Get(ctx context.Context, dist DistributionPath, mirror string) (io.ReadCloser, ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, mirror)
+func (c *Client) Get(ctx context.Context, dist DistributionPath, mirror *url.URL, brr []httpx.ByteRange) (io.ReadCloser, ocispec.Descriptor, error) {
+	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, mirror, brr)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}
 	return rc, desc, nil
 }
 
-func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, mirror string) (io.ReadCloser, ocispec.Descriptor, error) {
+func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, mirror *url.URL, brr []httpx.ByteRange) (io.ReadCloser, ocispec.Descriptor, error) {
 	tcKey := dist.Registry + dist.Name
 
 	u := dist.URL()
-	if mirror != "" {
-		mirrorUrl, err := url.Parse(mirror)
-		if err != nil {
-			return nil, ocispec.Descriptor{}, err
-		}
-		u.Scheme = mirrorUrl.Scheme
-		u.Host = mirrorUrl.Host
+	if mirror != nil {
+		u.Scheme = mirror.Scheme
+		u.Host = mirror.Host
+		u.Path = path.Join(mirror.Path, u.Path)
 	}
 	if u.Host == "docker.io" {
 		u.Host = "registry-1.docker.io"
@@ -181,6 +179,9 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 		req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
 		req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+		if len(brr) > 0 {
+			req.Header.Add(httpx.HeaderRange, httpx.FormatMultipartRangeHeader(brr))
+		}
 		token, ok := c.tc.Load(tcKey)
 		if ok {
 			//nolint: errcheck // We know it will be a string.

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -113,6 +114,11 @@ type pullResult struct {
 }
 
 func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
+	mirror := &url.URL{
+		Scheme: "http",
+		Host:   "localhost:5000",
+	}
+
 	// Parse image name.
 	imgName := req.URL.Query().Get("image")
 	if imgName == "" {
@@ -145,7 +151,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	if len(res.PeerResults) > 0 {
 		// Pull the image and measure performance.
-		pullMetrics, err := w.client.Pull(req.Context(), img, "http://localhost:5000")
+		pullMetrics, err := w.client.Pull(req.Context(), img, mirror)
 		if err != nil {
 			rw.WriteError(http.StatusInternalServerError, err)
 			return
