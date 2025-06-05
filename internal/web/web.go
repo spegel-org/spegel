@@ -23,12 +23,13 @@ import (
 var templatesFS embed.FS
 
 type Web struct {
-	router routing.Router
-	client *oci.Client
-	tmpls  *template.Template
+	router     routing.Router
+	ociClient  *oci.Client
+	httpClient *http.Client
+	tmpls      *template.Template
 }
 
-func NewWeb(router routing.Router) (*Web, error) {
+func NewWeb(router routing.Router, ociClient *oci.Client) (*Web, error) {
 	funcs := template.FuncMap{
 		"formatBytes":    formatBytes,
 		"formatDuration": formatDuration,
@@ -38,9 +39,10 @@ func NewWeb(router routing.Router) (*Web, error) {
 		return nil, err
 	}
 	return &Web{
-		router: router,
-		client: oci.NewClient(),
-		tmpls:  tmpls,
+		router:     router,
+		ociClient:  ociClient,
+		httpClient: httpx.BaseClient(),
+		tmpls:      tmpls,
 	}, nil
 }
 
@@ -63,12 +65,18 @@ func (w *Web) indexHandler(rw httpx.ResponseWriter, req *http.Request) {
 func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	//nolint: errcheck // Ignore error.
 	srvAddr := req.Context().Value(http.LocalAddrContextKey).(net.Addr)
-	resp, err := http.Get(fmt.Sprintf("http://%s/metrics", srvAddr.String()))
+	req, err := http.NewRequestWithContext(req.Context(), http.MethodGet, fmt.Sprintf("http://%s/metrics", srvAddr.String()), nil)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
-	defer resp.Body.Close()
+	resp, err := w.httpClient.Do(req)
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+	defer httpx.DrainAndClose(resp.Body)
+
 	parser := expfmt.TextParser{}
 	metricFamilies, err := parser.TextToMetricFamilies(resp.Body)
 	if err != nil {
@@ -151,7 +159,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	if len(res.PeerResults) > 0 {
 		// Pull the image and measure performance.
-		pullMetrics, err := w.client.Pull(req.Context(), img, mirror)
+		pullMetrics, err := w.ociClient.Pull(req.Context(), img, mirror)
 		if err != nil {
 			rw.WriteError(http.StatusInternalServerError, err)
 			return

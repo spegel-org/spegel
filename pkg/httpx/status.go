@@ -44,7 +44,6 @@ func CheckResponseStatus(resp *http.Response, expectedCodes ...int) error {
 }
 
 func getErrorMessage(resp *http.Response) (string, error) {
-	defer resp.Body.Close()
 	if resp.Request.Method == http.MethodHead {
 		return "", nil
 	}
