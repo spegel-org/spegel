@@ -104,6 +104,8 @@ spec:
           {{- end }}
           - --debug-web-enabled={{ .Values.spegel.debugWebEnabled }}
         env:
+        - name: DATA_DIR
+          value: ""
         {{- if ((.Values.resources).limits).cpu }}
         - name: GOMAXPROCS
           valueFrom:
