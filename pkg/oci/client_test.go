@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"runtime"
 	"testing"
 
@@ -91,7 +92,9 @@ func TestPull(t *testing.T) {
 		Registry:   "example.com",
 	}
 	client := NewClient()
-	pullResults, err := client.Pull(t.Context(), img, srv.URL)
+	mirror, err := url.Parse(srv.URL)
+	require.NoError(t, err)
+	pullResults, err := client.Pull(t.Context(), img, mirror)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, pullResults)
