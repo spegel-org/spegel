@@ -9,11 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.3.0
+
+### Added
+
 - [#877](https://github.com/spegel-org/spegel/pull/877) Add support for www authenticate header.
 - [#878](https://github.com/spegel-org/spegel/pull/878) Add dial timeout configuration in Containerd mirror configuration.
 - [#889](https://github.com/spegel-org/spegel/pull/889) Add support for content create events.
 
 ### Changed
+
 - [#881](https://github.com/spegel-org/spegel/pull/881) Add Variable for job name in Grafana Dashboard.
 - [#852](https://github.com/spegel-org/spegel/pull/852) Remove use of Afero in Containerd config.
 - [#854](https://github.com/spegel-org/spegel/pull/854) Implement unit tests for cleanup logic.
@@ -28,10 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#896](https://github.com/spegel-org/spegel/pull/896) Rename package mux to httpx and refactor http helpers.
 - [#897](https://github.com/spegel-org/spegel/pull/897) Add descriptor to header conversion.
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - [#869](https://github.com/spegel-org/spegel/pull/869) Fix request logging for redirects and not found pages.
@@ -39,8 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#894](https://github.com/spegel-org/spegel/pull/894) Update Kind to v0.29.0 and Fix Containerd v2 support.
 - [#899](https://github.com/spegel-org/spegel/pull/899) Handle situation where digest is missing in reigstry response header.
 - [#902](https://github.com/spegel-org/spegel/pull/902) Disable data dir when running Spegel in Kubernetes.
-
-### Security
 
 ## v0.2.0
 
