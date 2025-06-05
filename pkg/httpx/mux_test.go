@@ -91,7 +91,7 @@ func TestGetClientIP(t *testing.T) {
 			name: "x forwarded for single",
 			request: &http.Request{
 				Header: http.Header{
-					"X-Forwarded-For": []string{"localhost"},
+					HeaderXForwardedFor: []string{"localhost"},
 				},
 			},
 			expected: "localhost",
@@ -100,7 +100,7 @@ func TestGetClientIP(t *testing.T) {
 			name: "x forwarded for multiple",
 			request: &http.Request{
 				Header: http.Header{
-					"X-Forwarded-For": []string{"localhost,127.0.0.1"},
+					HeaderXForwardedFor: []string{"localhost,127.0.0.1"},
 				},
 			},
 			expected: "localhost",
