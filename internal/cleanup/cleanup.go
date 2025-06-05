@@ -63,7 +63,7 @@ func Run(ctx context.Context, addr, configPath string) error {
 func Wait(ctx context.Context, probeEndpoint string, period time.Duration, threshold int) error {
 	log := logr.FromContextOrDiscard(ctx)
 	resolver := &net.Resolver{}
-	client := &http.Client{}
+	httpClient := httpx.BaseClient()
 
 	addr, port, err := net.SplitHostPort(probeEndpoint)
 	if err != nil {
@@ -93,7 +93,7 @@ func Wait(ctx context.Context, probeEndpoint string, period time.Duration, thres
 			}
 
 			log.Info("running probe request", "endpoints", len(ips))
-			err = probeIPs(ctx, client, ips, port)
+			err = probeIPs(ctx, httpClient, ips, port)
 			if err != nil {
 				log.Error(err, "cleanup probe request failed")
 				thresholdCount = 0
