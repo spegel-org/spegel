@@ -79,7 +79,7 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 }
 
 func GetClientIP(req *http.Request) string {
-	forwardedFor := req.Header.Get("X-Forwarded-For")
+	forwardedFor := req.Header.Get(HeaderXForwardedFor)
 	if forwardedFor != "" {
 		comps := strings.Split(forwardedFor, ",")
 		if len(comps) > 1 {

@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- [#906](https://github.com/spegel-org/spegel/pull/906) Replace HTTP header strings with httpx constants.
+
 ### Deprecated
 
 ### Removed

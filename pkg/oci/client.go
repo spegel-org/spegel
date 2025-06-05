@@ -174,18 +174,18 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		if err != nil {
 			return nil, ocispec.Descriptor{}, err
 		}
-		req.Header.Set("User-Agent", "spegel")
-		req.Header.Add("Accept", "application/vnd.oci.image.manifest.v1+json")
-		req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-		req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
-		req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+		req.Header.Set(httpx.HeaderUserAgent, "spegel")
+		req.Header.Add(httpx.HeaderAccept, "application/vnd.oci.image.manifest.v1+json")
+		req.Header.Add(httpx.HeaderAccept, "application/vnd.docker.distribution.manifest.v2+json")
+		req.Header.Add(httpx.HeaderAccept, "application/vnd.oci.image.index.v1+json")
+		req.Header.Add(httpx.HeaderAccept, "application/vnd.docker.distribution.manifest.list.v2+json")
 		if len(brr) > 0 {
 			req.Header.Add(httpx.HeaderRange, httpx.FormatMultipartRangeHeader(brr))
 		}
 		token, ok := c.tc.Load(tcKey)
 		if ok {
 			//nolint: errcheck // We know it will be a string.
-			req.Header.Set("Authorization", "Bearer "+token.(string))
+			req.Header.Set(httpx.HeaderAuthorization, "Bearer "+token.(string))
 		}
 		resp, err := c.hc.Do(req)
 		if err != nil {
@@ -193,7 +193,7 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		}
 		if resp.StatusCode == http.StatusUnauthorized {
 			c.tc.Delete(tcKey)
-			wwwAuth := resp.Header.Get("WWW-Authenticate")
+			wwwAuth := resp.Header.Get(httpx.HeaderWWWAuthenticate)
 			token, err = getBearerToken(ctx, wwwAuth, c.hc)
 			if err != nil {
 				return nil, ocispec.Descriptor{}, err
