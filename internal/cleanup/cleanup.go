@@ -3,7 +3,6 @@ package cleanup
 import (
 	"context"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -130,11 +129,7 @@ func probeIPs(ctx context.Context, client *http.Client, ips []net.IPAddr, port s
 			if err != nil {
 				return err
 			}
-			defer resp.Body.Close()
-			_, err = io.Copy(io.Discard, resp.Body)
-			if err != nil {
-				return err
-			}
+			defer httpx.DrainAndClose(resp.Body)
 			err = httpx.CheckResponseStatus(resp, http.StatusOK)
 			if err != nil {
 				return err

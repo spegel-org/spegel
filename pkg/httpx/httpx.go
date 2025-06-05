@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -40,4 +42,26 @@ func BaseTransport() *http.Transport {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
+}
+
+const (
+	// MaxReadBytes is the maximum amount of bytes read when draining a response or reading error message.
+	MaxReadBytes = 512 * 1024
+)
+
+// DrainAndCloses empties the body buffer before closing the body.
+func DrainAndClose(rc io.ReadCloser) error {
+	errs := []error{}
+	n, err := io.Copy(io.Discard, io.LimitReader(rc, MaxReadBytes+1))
+	if err != nil {
+		errs = append(errs, err)
+	}
+	if n > MaxReadBytes {
+		errs = append(errs, errors.New("reader has more data than max read bytes"))
+	}
+	err = rc.Close()
+	if err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }

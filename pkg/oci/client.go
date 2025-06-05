@@ -63,66 +63,74 @@ func (c *Client) Pull(ctx context.Context, img Image, mirror *url.URL) ([]PullMe
 		queue = queue[1:]
 
 		start := time.Now()
-		rc, desc, err := c.Get(ctx, dist, mirror, nil)
-		if err != nil {
-			return nil, err
-		}
+		desc, err := func() (ocispec.Descriptor, error) {
+			rc, desc, err := c.Get(ctx, dist, mirror, nil)
+			if err != nil {
+				return ocispec.Descriptor{}, err
+			}
+			defer httpx.DrainAndClose(rc)
 
-		switch dist.Kind {
-		case DistributionKindBlob:
-			_, copyErr := io.Copy(io.Discard, rc)
-			closeErr := rc.Close()
-			err := errors.Join(copyErr, closeErr)
-			if err != nil {
-				return nil, err
-			}
-		case DistributionKindManifest:
-			b, readErr := io.ReadAll(rc)
-			closeErr := rc.Close()
-			err = errors.Join(readErr, closeErr)
-			if err != nil {
-				return nil, err
-			}
-			switch desc.MediaType {
-			case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-				var idx ocispec.Index
-				if err := json.Unmarshal(b, &idx); err != nil {
-					return nil, err
-				}
-				for _, m := range idx.Manifests {
-					// TODO: Add platform option.
-					//nolint: staticcheck // Simplify in the future.
-					if !(m.Platform.OS == runtime.GOOS && m.Platform.Architecture == runtime.GOARCH) {
-						continue
-					}
-					queue = append(queue, DistributionPath{
-						Kind:     DistributionKindManifest,
-						Name:     dist.Name,
-						Digest:   m.Digest,
-						Registry: dist.Registry,
-					})
-				}
-			case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-				var manifest ocispec.Manifest
-				err := json.Unmarshal(b, &manifest)
+			switch dist.Kind {
+			case DistributionKindBlob:
+				// Right now we are just discarding the contents because we do not have a writable store.
+				_, copyErr := io.Copy(io.Discard, rc)
+				closeErr := rc.Close()
+				err := errors.Join(copyErr, closeErr)
 				if err != nil {
-					return nil, err
+					return ocispec.Descriptor{}, err
 				}
-				queue = append(queue, DistributionPath{
-					Kind:     DistributionKindBlob,
-					Name:     dist.Name,
-					Digest:   manifest.Config.Digest,
-					Registry: dist.Registry,
-				})
-				for _, layer := range manifest.Layers {
+			case DistributionKindManifest:
+				b, readErr := io.ReadAll(rc)
+				closeErr := rc.Close()
+				err = errors.Join(readErr, closeErr)
+				if err != nil {
+					return ocispec.Descriptor{}, err
+				}
+				switch desc.MediaType {
+				case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+					var idx ocispec.Index
+					if err := json.Unmarshal(b, &idx); err != nil {
+						return ocispec.Descriptor{}, err
+					}
+					for _, m := range idx.Manifests {
+						// TODO: Add platform option.
+						//nolint: staticcheck // Simplify in the future.
+						if !(m.Platform.OS == runtime.GOOS && m.Platform.Architecture == runtime.GOARCH) {
+							continue
+						}
+						queue = append(queue, DistributionPath{
+							Kind:     DistributionKindManifest,
+							Name:     dist.Name,
+							Digest:   m.Digest,
+							Registry: dist.Registry,
+						})
+					}
+				case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+					var manifest ocispec.Manifest
+					err := json.Unmarshal(b, &manifest)
+					if err != nil {
+						return ocispec.Descriptor{}, err
+					}
 					queue = append(queue, DistributionPath{
 						Kind:     DistributionKindBlob,
 						Name:     dist.Name,
-						Digest:   layer.Digest,
+						Digest:   manifest.Config.Digest,
 						Registry: dist.Registry,
 					})
+					for _, layer := range manifest.Layers {
+						queue = append(queue, DistributionPath{
+							Kind:     DistributionKindBlob,
+							Name:     dist.Name,
+							Digest:   layer.Digest,
+							Registry: dist.Registry,
+						})
+					}
 				}
 			}
+			return desc, nil
+		}()
+		if err != nil {
+			return nil, err
 		}
 
 		metric := PullMetric{
@@ -142,11 +150,7 @@ func (c *Client) Head(ctx context.Context, dist DistributionPath, mirror *url.UR
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
-	defer rc.Close()
-	_, err = io.Copy(io.Discard, rc)
-	if err != nil {
-		return ocispec.Descriptor{}, err
-	}
+	defer httpx.DrainAndClose(rc)
 	return desc, nil
 }
 
