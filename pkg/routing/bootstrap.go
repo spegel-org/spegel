@@ -16,6 +16,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+
+	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
 // Bootstrapper resolves peers to bootstrap with for the P2P router.
@@ -120,14 +122,16 @@ func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 var _ Bootstrapper = &HTTPBootstrapper{}
 
 type HTTPBootstrapper struct {
-	addr string
-	peer string
+	httpClient *http.Client
+	addr       string
+	peer       string
 }
 
 func NewHTTPBootstrapper(addr, peer string) *HTTPBootstrapper {
 	return &HTTPBootstrapper{
-		addr: addr,
-		peer: peer,
+		httpClient: httpx.BaseClient(),
+		addr:       addr,
+		peer:       peer,
 	}
 }
 
@@ -159,11 +163,19 @@ func (bs *HTTPBootstrapper) Run(ctx context.Context, id string) error {
 }
 
 func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
-	resp, err := http.DefaultClient.Get(bs.peer)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, bs.peer, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	resp, err := bs.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer httpx.DrainAndClose(resp.Body)
+	err = httpx.CheckResponseStatus(resp, http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

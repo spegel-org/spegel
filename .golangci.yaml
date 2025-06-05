@@ -15,6 +15,7 @@ linters:
     - staticcheck
     - testifylint
     - unused
+    - noctx
   settings:
     errcheck:
       disable-default-exclusions: true

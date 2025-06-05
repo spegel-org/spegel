@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#911](https://github.com/spegel-org/spegel/pull/911) Enforce use of request contexts and fix response closing.
+
 ### Security
 
 ## v0.3.0

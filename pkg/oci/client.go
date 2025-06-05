@@ -209,6 +209,7 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		}
 		err = httpx.CheckResponseStatus(resp, http.StatusOK, http.StatusPartialContent)
 		if err != nil {
+			httpx.DrainAndClose(resp.Body)
 			return nil, ocispec.Descriptor{}, err
 		}
 
@@ -217,6 +218,7 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		}
 		desc, err := DescriptorFromHeader(resp.Header)
 		if err != nil {
+			httpx.DrainAndClose(resp.Body)
 			return nil, ocispec.Descriptor{}, err
 		}
 		return resp.Body, desc, nil
@@ -257,11 +259,11 @@ func getBearerToken(ctx context.Context, wwwAuth string, client *http.Client) (s
 	if err != nil {
 		return "", err
 	}
+	defer httpx.DrainAndClose(resp.Body)
 	err = httpx.CheckResponseStatus(resp, http.StatusOK)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
