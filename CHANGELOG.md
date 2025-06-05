@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - [#905](https://github.com/spegel-org/spegel/pull/905) Change mirror type to url and add byte range parameter.
+- [#909](https://github.com/spegel-org/spegel/pull/909) Add base http client and transport.
 
 ### Changed
 

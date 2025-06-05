@@ -31,8 +31,10 @@ type Client struct {
 }
 
 func NewClient() *Client {
+	hc := httpx.BaseClient()
+	hc.Timeout = 0
 	return &Client{
-		hc: &http.Client{},
+		hc: hc,
 		tc: sync.Map{},
 	}
 }
