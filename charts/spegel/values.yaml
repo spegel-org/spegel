@@ -35,13 +35,8 @@ podSecurityContext: {}
 revisionHistoryLimit: 10
 
 # -- Security context for the Spegel container.
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext: 
+  readOnlyRootFilesystem: true
 
 service:
   registry:

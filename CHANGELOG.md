@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#872](https://github.com/spegel-org/spegel/pull/872) Allow returning libp2p crypto priv key in linter.
 - [#894](https://github.com/spegel-org/spegel/pull/894) Update Kind to v0.29.0 and Fix Containerd v2 support.
 - [#899](https://github.com/spegel-org/spegel/pull/899) Handle situation where digest is missing in reigstry response header.
+- [#902](https://github.com/spegel-org/spegel/pull/902) Disable data dir when running Spegel in Kubernetes.
 
 ### Security
 
