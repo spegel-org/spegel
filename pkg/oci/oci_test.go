@@ -21,7 +21,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func TestOCIClient(t *testing.T) {
+func TestStore(t *testing.T) {
 	t.Parallel()
 
 	b, err := os.ReadFile("./testdata/images.json")

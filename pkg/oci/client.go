@@ -213,10 +213,18 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 			return nil, ocispec.Descriptor{}, err
 		}
 
-		if resp.Header.Get(HeaderDockerDigest) == "" {
-			resp.Header.Set(HeaderDockerDigest, dist.Digest.String())
+		// Handle optional headers for blobs.
+		header := resp.Header.Clone()
+		if dist.Kind == DistributionKindBlob {
+			if header.Get(httpx.HeaderContentType) == "" {
+				header.Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
+			}
+			if header.Get(HeaderDockerDigest) == "" {
+				header.Set(HeaderDockerDigest, dist.Digest.String())
+			}
 		}
-		desc, err := DescriptorFromHeader(resp.Header)
+
+		desc, err := DescriptorFromHeader(header)
 		if err != nil {
 			httpx.DrainAndClose(resp.Body)
 			return nil, ocispec.Descriptor{}, err
