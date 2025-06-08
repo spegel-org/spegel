@@ -1,103 +1,83 @@
 package oci
 
 import (
-	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"runtime"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"cuelabs.dev/go/oci/ociregistry/ocimem"
+	"cuelabs.dev/go/oci/ociregistry/ociserver"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/stretchr/testify/require"
 )
 
-func TestPull(t *testing.T) {
+func TestClient(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		b, mt, err := func() ([]byte, string, error) {
-			switch req.URL.Path {
-			case "/v2/test/image/manifests/index":
-				idx := ocispec.Index{
-					Manifests: []ocispec.Descriptor{
-						{
-							Digest: digest.Digest("manifest"),
-							Platform: &ocispec.Platform{
-								OS:           runtime.GOOS,
-								Architecture: runtime.GOARCH,
-							},
-						},
-					},
-				}
-				b, err := json.Marshal(&idx)
-				if err != nil {
-					return nil, "", err
-				}
-				return b, ocispec.MediaTypeImageIndex, nil
-			case "/v2/test/image/manifests/manifest":
-				manifest := ocispec.Manifest{
-					Config: ocispec.Descriptor{
-						Digest: digest.Digest("config"),
-					},
-					Layers: []ocispec.Descriptor{
-						{
-							Digest: digest.Digest("layer"),
-						},
-					},
-				}
-				b, err := json.Marshal(&manifest)
-				if err != nil {
-					return nil, "", err
-				}
-				return b, ocispec.MediaTypeImageManifest, nil
-			case "/v2/test/image/blobs/config":
-				config := ocispec.ImageConfig{
-					User: "root",
-				}
-				b, err := json.Marshal(&config)
-				if err != nil {
-					return nil, "", err
-				}
-				return b, ocispec.MediaTypeImageConfig, nil
-			case "/v2/test/image/blobs/layer":
-				return []byte("hello world"), ocispec.MediaTypeImageLayer, nil
-			default:
-				return nil, "", errors.New("not found")
-			}
-		}()
-		if err != nil {
-			rw.WriteHeader(http.StatusNotFound)
-			return
-		}
+	img := Image{
+		Repository: "test/image",
+		Tag:        "latest",
+	}
 
-		rw.Header().Set(httpx.HeaderContentType, mt)
-		dgst := digest.SHA256.FromBytes(b)
-		rw.Header().Set(HeaderDockerDigest, dgst.String())
-		rw.WriteHeader(http.StatusOK)
-
-		//nolint: errcheck // Ignore error.
-		rw.Write(b)
-	}))
+	mem := ocimem.New()
+	blobs := []ocispec.Descriptor{
+		{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    digest.Digest("sha256:68b8a989a3e08ddbdb3a0077d35c0d0e59c9ecf23d0634584def8bdbb7d6824f"),
+			Size:      529,
+		},
+		{
+			MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+			Digest:    digest.Digest("sha256:3caa2469de2a23cbcc209dd0b9d01cd78ff9a0f88741655991d36baede5b0996"),
+			Size:      118,
+		},
+	}
+	for _, blob := range blobs {
+		f, err := os.Open(filepath.Join("testdata", "blobs", "sha256", blob.Digest.Encoded()))
+		require.NoError(t, err)
+		_, err = mem.PushBlob(t.Context(), img.Repository, blob, f)
+		f.Close()
+		require.NoError(t, err)
+	}
+	manifests := []ocispec.Descriptor{
+		{
+			MediaType: "application/vnd.oci.image.manifest.v1+json",
+			Digest:    digest.Digest("sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9"),
+		},
+	}
+	for _, manifest := range manifests {
+		b, err := os.ReadFile(filepath.Join("testdata", "blobs", "sha256", manifest.Digest.Encoded()))
+		require.NoError(t, err)
+		_, err = mem.PushManifest(t.Context(), img.Repository, img.Tag, b, manifest.MediaType)
+		require.NoError(t, err)
+	}
+	reg := ociserver.New(mem, nil)
+	srv := httptest.NewServer(reg)
 	t.Cleanup(func() {
 		srv.Close()
 	})
 
-	img := Image{
-		Repository: "test/image",
-		Digest:     digest.Digest("index"),
-		Registry:   "example.com",
-	}
 	client := NewClient()
 	mirror, err := url.Parse(srv.URL)
 	require.NoError(t, err)
 	pullResults, err := client.Pull(t.Context(), img, mirror)
 	require.NoError(t, err)
+	require.Len(t, pullResults, 3)
 
-	require.NotEmpty(t, pullResults)
+	dist := DistributionPath{
+		Kind:   DistributionKindBlob,
+		Name:   img.Repository,
+		Digest: blobs[0].Digest,
+	}
+	desc, err := client.Head(t.Context(), dist, mirror)
+	require.NoError(t, err)
+	require.Equal(t, dist.Digest, desc.Digest)
+	require.Equal(t, httpx.ContentTypeBinary, desc.MediaType)
 }
 
 func TestDescriptorHeader(t *testing.T) {

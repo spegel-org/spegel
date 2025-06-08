@@ -21,6 +21,11 @@ const (
 	HeaderXForwardedFor   = "X-Forwarded-For"
 )
 
+const (
+	ContentTypeBinary = "application/octet-stream"
+	ContentTypeJSON   = "application/json"
+)
+
 // BaseClient returns a http client with reasonable defaults set.
 func BaseClient() *http.Client {
 	return &http.Client{
