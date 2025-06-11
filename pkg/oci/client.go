@@ -25,6 +25,39 @@ const (
 	HeaderDockerDigest = "Docker-Content-Digest"
 )
 
+type FetchConfig struct {
+	Mirror *url.URL
+	Header http.Header
+}
+
+func (cfg *FetchConfig) Apply(opts ...FetchOption) error {
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type FetchOption func(cfg *FetchConfig) error
+
+func WithFetchMirror(mirror *url.URL) FetchOption {
+	return func(cfg *FetchConfig) error {
+		cfg.Mirror = mirror
+		return nil
+	}
+}
+
+func WithFetchHeader(header http.Header) FetchOption {
+	return func(cfg *FetchConfig) error {
+		cfg.Header = header
+		return nil
+	}
+}
+
 type Client struct {
 	hc *http.Client
 	tc sync.Map
@@ -46,7 +79,7 @@ type PullMetric struct {
 	Duration      time.Duration
 }
 
-func (c *Client) Pull(ctx context.Context, img Image, mirror *url.URL) ([]PullMetric, error) {
+func (c *Client) Pull(ctx context.Context, img Image, opts ...FetchOption) ([]PullMetric, error) {
 	pullMetrics := []PullMetric{}
 
 	queue := []DistributionPath{
@@ -64,7 +97,7 @@ func (c *Client) Pull(ctx context.Context, img Image, mirror *url.URL) ([]PullMe
 
 		start := time.Now()
 		desc, err := func() (ocispec.Descriptor, error) {
-			rc, desc, err := c.Get(ctx, dist, mirror, nil)
+			rc, desc, err := c.Get(ctx, dist, nil, opts...)
 			if err != nil {
 				return ocispec.Descriptor{}, err
 			}
@@ -145,8 +178,8 @@ func (c *Client) Pull(ctx context.Context, img Image, mirror *url.URL) ([]PullMe
 	return pullMetrics, nil
 }
 
-func (c *Client) Head(ctx context.Context, dist DistributionPath, mirror *url.URL) (ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodHead, dist, mirror, nil)
+func (c *Client) Head(ctx context.Context, dist DistributionPath, opts ...FetchOption) (ocispec.Descriptor, error) {
+	rc, desc, err := c.fetch(ctx, http.MethodHead, dist, nil, opts...)
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -154,22 +187,28 @@ func (c *Client) Head(ctx context.Context, dist DistributionPath, mirror *url.UR
 	return desc, nil
 }
 
-func (c *Client) Get(ctx context.Context, dist DistributionPath, mirror *url.URL, brr []httpx.ByteRange) (io.ReadCloser, ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, mirror, brr)
+func (c *Client) Get(ctx context.Context, dist DistributionPath, brr []httpx.ByteRange, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, brr, opts...)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}
 	return rc, desc, nil
 }
 
-func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, mirror *url.URL, brr []httpx.ByteRange) (io.ReadCloser, ocispec.Descriptor, error) {
+func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, brr []httpx.ByteRange, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+	cfg := FetchConfig{}
+	err := cfg.Apply(opts...)
+	if err != nil {
+		return nil, ocispec.Descriptor{}, err
+	}
+
 	tcKey := dist.Registry + dist.Name
 
 	u := dist.URL()
-	if mirror != nil {
-		u.Scheme = mirror.Scheme
-		u.Host = mirror.Host
-		u.Path = path.Join(mirror.Path, u.Path)
+	if cfg.Mirror != nil {
+		u.Scheme = cfg.Mirror.Scheme
+		u.Host = cfg.Mirror.Host
+		u.Path = path.Join(cfg.Mirror.Path, u.Path)
 	}
 	if u.Host == "docker.io" {
 		u.Host = "registry-1.docker.io"
@@ -180,6 +219,7 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		if err != nil {
 			return nil, ocispec.Descriptor{}, err
 		}
+		httpx.CopyHeader(req.Header, cfg.Header)
 		req.Header.Set(httpx.HeaderUserAgent, "spegel")
 		req.Header.Add(httpx.HeaderAccept, "application/vnd.oci.image.manifest.v1+json")
 		req.Header.Add(httpx.HeaderAccept, "application/vnd.docker.distribution.manifest.v2+json")
