@@ -159,7 +159,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	if len(res.PeerResults) > 0 {
 		// Pull the image and measure performance.
-		pullMetrics, err := w.ociClient.Pull(req.Context(), img, mirror)
+		pullMetrics, err := w.ociClient.Pull(req.Context(), img, oci.WithFetchMirror(mirror))
 		if err != nil {
 			rw.WriteError(http.StatusInternalServerError, err)
 			return

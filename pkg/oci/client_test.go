@@ -65,7 +65,7 @@ func TestClient(t *testing.T) {
 	client := NewClient()
 	mirror, err := url.Parse(srv.URL)
 	require.NoError(t, err)
-	pullResults, err := client.Pull(t.Context(), img, mirror)
+	pullResults, err := client.Pull(t.Context(), img, WithFetchMirror(mirror))
 	require.NoError(t, err)
 	require.Len(t, pullResults, 3)
 
@@ -74,7 +74,7 @@ func TestClient(t *testing.T) {
 		Name:   img.Repository,
 		Digest: blobs[0].Digest,
 	}
-	desc, err := client.Head(t.Context(), dist, mirror)
+	desc, err := client.Head(t.Context(), dist, WithFetchMirror(mirror))
 	require.NoError(t, err)
 	require.Equal(t, dist.Digest, desc.Digest)
 	require.Equal(t, httpx.ContentTypeBinary, desc.MediaType)
