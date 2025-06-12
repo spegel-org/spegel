@@ -24,7 +24,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/common v0.64.0
 	github.com/stretchr/testify v1.10.0
-	go.etcd.io/bbolt v1.4.0
+	go.etcd.io/bbolt v1.4.1
 	golang.org/x/sync v0.15.0
 	google.golang.org/grpc v1.73.0
 	k8s.io/apimachinery v0.33.1
