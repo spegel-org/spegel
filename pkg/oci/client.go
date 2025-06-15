@@ -64,8 +64,12 @@ type Client struct {
 }
 
 func NewClient() *Client {
-	hc := httpx.BaseClient()
-	hc.Timeout = 0
+	transport := httpx.BaseTransport()
+	transport.MaxIdleConnsPerHost = transport.MaxIdleConns
+	hc := &http.Client{
+		Transport: transport,
+		Timeout:   0,
+	}
 	return &Client{
 		hc: hc,
 		tc: sync.Map{},
