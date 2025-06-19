@@ -12,6 +12,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | basicAuthSecretName | string | `""` | Name of secret containing basic authentication credentials for registry. |
 | clusterDomain | string | `"cluster.local."` | Domain configured for service domain names. |
 | commonLabels | object | `{}` | Common labels to apply to all rendered resources. |
+| extraEnvs | list | `[]` | Extra environment variables to add to the Spegel container. |
 | extraVolumeMounts | list | `[]` | Extra volume mounts to add to the Spegel registry container. |
 | extraVolumes | list | `[]` | Extra volumes to add to the Spegel pod. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
