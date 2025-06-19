@@ -67,6 +67,12 @@ resources:
   limits:
     memory: 128Mi
 
+# -- Extra volumes to add to the Spegel pod.
+extraVolumes: []
+
+# -- Extra volume mounts to add to the Spegel registry container.
+extraVolumeMounts: []
+
 # -- Node selector for pod assignment.
 nodeSelector:
   kubernetes.io/os: linux
