@@ -122,6 +122,9 @@ spec:
         {{- end }}
         - name: NODE_IP
         {{- include "networking.nodeIp" . | nindent 10 }}
+        {{- with .Values.extraEnvs }}
+        {{- . | toYaml | nindent 8 }}
+        {{- end }}
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
@@ -158,6 +161,9 @@ spec:
             mountPath: {{ . }}
             readOnly: true
           {{- end }}
+          {{- if .Values.extraVolumeMounts }}
+          {{- tpl (toYaml .Values.extraVolumeMounts) . | nindent 10 }}
+          {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       volumes:
@@ -181,6 +187,9 @@ spec:
           hostPath:
             path: {{ .Values.spegel.containerdRegistryConfigPath }}
             type: DirectoryOrCreate
+        {{- end }}
+        {{- if .Values.extraVolumes }}
+        {{- tpl (toYaml .Values.extraVolumes) . | nindent 8 }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
