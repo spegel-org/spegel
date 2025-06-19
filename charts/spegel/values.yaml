@@ -67,6 +67,9 @@ resources:
   limits:
     memory: 128Mi
 
+# -- Extra environment variables to add to the Spegel container.
+extraEnvs: []
+
 # -- Extra volumes to add to the Spegel pod.
 extraVolumes: []
 

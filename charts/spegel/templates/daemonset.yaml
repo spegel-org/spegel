@@ -122,6 +122,9 @@ spec:
         {{- end }}
         - name: NODE_IP
         {{- include "networking.nodeIp" . | nindent 10 }}
+        {{- with .Values.extraEnvs }}
+        {{- . | toYaml | nindent 8 }}
+        {{- end }}
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
