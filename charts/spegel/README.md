@@ -12,6 +12,8 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | basicAuthSecretName | string | `""` | Name of secret containing basic authentication credentials for registry. |
 | clusterDomain | string | `"cluster.local."` | Domain configured for service domain names. |
 | commonLabels | object | `{}` | Common labels to apply to all rendered resources. |
+| extraVolumeMounts | list | `[]` | Extra volume mounts to add to the Spegel registry container. |
+| extraVolumes | list | `[]` | Extra volumes to add to the Spegel pod. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
 | grafanaDashboard.annotations | object | `{}` | Annotations that ConfigMaps can have to get configured in Grafana, See: sidecar.dashboards.folderAnnotation for specifying the dashboard folder. https://github.com/grafana/helm-charts/tree/main/charts/grafana |
 | grafanaDashboard.enabled | bool | `false` | If true creates a Grafana dashboard. |
