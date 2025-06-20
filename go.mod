@@ -27,8 +27,8 @@ require (
 	go.etcd.io/bbolt v1.4.1
 	golang.org/x/sync v0.15.0
 	google.golang.org/grpc v1.73.0
-	k8s.io/apimachinery v0.33.1
-	k8s.io/cri-api v0.33.1
+	k8s.io/apimachinery v0.33.2
+	k8s.io/cri-api v0.33.2
 	k8s.io/klog/v2 v2.130.1
 )
 
