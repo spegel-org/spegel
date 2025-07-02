@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func TestE2E(t *testing.T) {
 	kindName := "spegel-e2e"
 
 	// Create kind cluster.
-	kcPath := createKindCluster(t.Context(), t, kindName, proxyMode, ipFamily)
+	kcPath := createKindCluster(t.Context(), t, kindName, proxyMode, ipFamily, 4)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -61,8 +62,9 @@ func TestE2E(t *testing.T) {
 		"docker.io/library/nginx:1.23.0",
 		"docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b",
 		"mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416",
+		"docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd",
 	}
-	for _, image := range images {
+	for _, image := range images[:4] {
 		g.Go(func() error {
 			t.Logf("Pulling image %s", image)
 			_, err := commandWithError(gCtx, t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, image))
@@ -85,7 +87,7 @@ func TestE2E(t *testing.T) {
 	// Deploy Spegel.
 	deploySpegel(t.Context(), t, kindName, imageRef, kcPath)
 	podOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
-	require.Len(t, strings.Split(podOutput, "\n"), 5)
+	require.Len(t, strings.Split(podOutput, "\n"), 4)
 
 	// Verify that configuration has been backed up.
 	backupHostToml := command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 cat /etc/containerd/certs.d/_backup/docker.io/hosts.toml", kindName))
@@ -103,11 +105,11 @@ func TestE2E(t *testing.T) {
 
 	// Remove Spegel from the last node to test that the mirror fallback is working.
 	workerPod := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=%s-worker4", kcPath, kindName))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-worker4 spegel-", kcPath, kindName))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-worker4 spegel.dev/enabled-", kcPath, kindName))
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel wait --for=delete %s --timeout=60s", kcPath, workerPod))
 
 	// Pull image from registry after Spegel has started.
-	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd", kindName))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, images[4]))
 
 	// Verify that both local and external ports are working.
 	tests := []struct {
@@ -157,7 +159,7 @@ func TestE2E(t *testing.T) {
 	}
 
 	// Pull test image that does not contain any media types.
-	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker3 crictl pull mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416", kindName))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker3 crictl pull %s", kindName, images[3]))
 
 	// Deploy test Nginx pods and verify deployment status.
 	t.Log("Deploy test Nginx pods")
@@ -169,11 +171,11 @@ func TestE2E(t *testing.T) {
 
 	// Verify that Spegel has never restarted.
 	restartOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
-	require.Equal(t, "0 0 0 0", restartOutput)
+	require.Equal(t, "0 0 0", restartOutput)
 
 	// Remove all Spegel Pods and only restart one to verify that running a single instance works.
 	t.Log("Scale down Spegel to single instance")
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-control-plane %s-worker %s-worker2 spegel-", kcPath, kindName, kindName, kindName))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-control-plane %s-worker %s-worker2 spegel.dev/enabled-", kcPath, kindName, kindName, kindName))
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel delete pods --all", kcPath))
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel rollout status daemonset spegel --timeout 60s", kcPath))
 	podOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
@@ -213,29 +215,29 @@ func TestDevDeploy(t *testing.T) {
 	kindName := "spegel-dev"
 
 	clusterOutput := command(t.Context(), t, "kind get clusters")
-	exists := false
-	for _, cluster := range strings.Split(clusterOutput, "\n") {
-		if cluster != kindName {
-			continue
-		}
-		exists = true
-		break
-	}
+	clusters := strings.Split(clusterOutput, "\n")
+	clusterExists := slices.Contains(clusters, kindName)
+
 	kcPath := ""
-	if exists {
+	if clusterExists {
+		t.Log("Using existing Kind cluster")
 		kcPath = filepath.Join(t.TempDir(), "kind.kubeconfig")
 		kcOutput := command(t.Context(), t, fmt.Sprintf("kind get kubeconfig --name %s", kindName))
 		err := os.WriteFile(kcPath, []byte(kcOutput), 0o644)
 		require.NoError(t, err)
 	} else {
-		kcPath = createKindCluster(t.Context(), t, kindName, "iptables", "ipv4")
+		kcPath = createKindCluster(t.Context(), t, kindName, "iptables", "ipv4", 2)
 	}
 	deploySpegel(t.Context(), t, kindName, imageRef, kcPath)
 }
 
-func createKindCluster(ctx context.Context, t *testing.T, kindName, proxyMode, ipFamily string) string {
+func createKindCluster(ctx context.Context, t *testing.T, kindName, proxyMode, ipFamily string, nodeCount int) string {
 	t.Helper()
 
+	workerNodes := []string{}
+	for range nodeCount {
+		workerNodes = append(workerNodes, "  - role: worker\n    labels:\n      spegel.dev/enabled: true")
+	}
 	kindConfig := fmt.Sprintf(`apiVersion: kind.x-k8s.io/v1alpha4
 kind: Cluster
 networking:
@@ -255,23 +257,8 @@ containerdConfigPatches:
     content_sharing_policy = "isolated"
 nodes:
   - role: control-plane
-    labels:
-      spegel: schedule
-  - role: worker
-    labels:
-      spegel: schedule
-  - role: worker
-    labels:
-      spegel: schedule
-      test: true
-  - role: worker
-    labels:
-      spegel: schedule
-      test: true
-  - role: worker
-    labels:
-      spegel: schedule
-      test: true`, proxyMode, ipFamily)
+%s`, proxyMode, ipFamily, strings.Join(workerNodes, "\n"))
+
 	path := filepath.Join(t.TempDir(), "kind-config.yaml")
 	err := os.WriteFile(path, []byte(kindConfig), 0o644)
 	require.NoError(t, err)
@@ -295,7 +282,7 @@ func deploySpegel(ctx context.Context, t *testing.T, kindName, imageRef, kcPath 
 	for _, node := range nodes {
 		command(ctx, t, fmt.Sprintf("docker exec %s-%s ctr -n k8s.io image tag %s ghcr.io/spegel-org/spegel@%s", kindName, node, imageRef, imageDigest))
 	}
-	command(ctx, t, fmt.Sprintf("helm --kubeconfig %s upgrade --timeout 60s --create-namespace --wait --install --namespace=\"spegel\" spegel ../../charts/spegel --set \"image.pullPolicy=Never\" --set \"image.digest=%s\" --set \"nodeSelector.spegel=schedule\"", kcPath, imageDigest))
+	command(ctx, t, fmt.Sprintf("helm --kubeconfig %s upgrade --timeout 60s --create-namespace --wait --install --namespace=spegel spegel ../../charts/spegel --set image.pullPolicy=Never --set image.digest=%s --set-string \"nodeSelector.spegel\\.dev/enabled\"=true", kcPath, imageDigest))
 }
 
 func getNodes(ctx context.Context, t *testing.T, kindName string) []string {
@@ -303,7 +290,7 @@ func getNodes(ctx context.Context, t *testing.T, kindName string) []string {
 
 	nodes := []string{}
 	nodeOutput := command(ctx, t, fmt.Sprintf("kind get nodes --name %s", kindName))
-	for _, node := range strings.Split(nodeOutput, "\n") {
+	for node := range strings.SplitSeq(nodeOutput, "\n") {
 		nodes = append(nodes, strings.TrimPrefix(node, kindName+"-"))
 	}
 	return nodes

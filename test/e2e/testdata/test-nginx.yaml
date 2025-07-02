@@ -26,8 +26,15 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 80
-      nodeSelector:
-        test: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - spegel-dev-worker
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -52,8 +59,15 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 80
-      nodeSelector:
-        test: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - spegel-dev-worker
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -78,8 +92,15 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 80
-      nodeSelector:
-        test: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - spegel-dev-worker
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -104,5 +125,12 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 80
-      nodeSelector:
-        test: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - spegel-dev-worker

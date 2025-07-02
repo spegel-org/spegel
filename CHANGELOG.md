@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#906](https://github.com/spegel-org/spegel/pull/906) Replace HTTP header strings with httpx constants.
 - [#916](https://github.com/spegel-org/spegel/pull/916) Refactor OCI client options and add header configuration.
+- [#931](https://github.com/spegel-org/spegel/pull/931) Cleanup e2e tests to use more standardized node labels.
 
 ### Deprecated
 
