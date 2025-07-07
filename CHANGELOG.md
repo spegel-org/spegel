@@ -12,12 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#905](https://github.com/spegel-org/spegel/pull/905) Change mirror type to url and add byte range parameter.
 - [#909](https://github.com/spegel-org/spegel/pull/909) Add base http client and transport.
 - [#910](https://github.com/spegel-org/spegel/pull/910) Add drain and close function.
+- [#933](https://github.com/spegel-org/spegel/pull/933) Verify that OCI volumes works with Sepgel in e2e tests.
 
 ### Changed
 
 - [#906](https://github.com/spegel-org/spegel/pull/906) Replace HTTP header strings with httpx constants.
 - [#916](https://github.com/spegel-org/spegel/pull/916) Refactor OCI client options and add header configuration.
 - [#931](https://github.com/spegel-org/spegel/pull/931) Cleanup e2e tests to use more standardized node labels.
+- [#932](https://github.com/spegel-org/spegel/pull/932) Switch to using spegel-org images in e2e tests.
 
 ### Deprecated
 
