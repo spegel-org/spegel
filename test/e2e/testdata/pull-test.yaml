@@ -34,7 +34,7 @@ spec:
               - key: kubernetes.io/hostname
                 operator: NotIn
                 values:
-                - spegel-dev-worker
+                - spegel-e2e-worker
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -67,7 +67,7 @@ spec:
               - key: kubernetes.io/hostname
                 operator: NotIn
                 values:
-                - spegel-dev-worker
+                - spegel-e2e-worker
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -100,7 +100,7 @@ spec:
               - key: kubernetes.io/hostname
                 operator: NotIn
                 values:
-                - spegel-dev-worker
+                - spegel-e2e-worker
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -133,7 +133,7 @@ spec:
               - key: kubernetes.io/hostname
                 operator: NotIn
                 values:
-                - spegel-dev-worker
+                - spegel-e2e-worker
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -174,4 +174,4 @@ spec:
               - key: kubernetes.io/hostname
                 operator: NotIn
                 values:
-                - spegel-dev-worker
+                - spegel-e2e-worker
