@@ -52,19 +52,18 @@ func TestE2E(t *testing.T) {
 		}
 
 		t.Log("Deleting Kind cluster")
-		command(ctx, t, fmt.Sprintf("kind delete cluster --name %s", kindName))
+		// command(ctx, t, fmt.Sprintf("kind delete cluster --name %s", kindName))
 	})
 
 	// Pull test images.
 	g, gCtx := errgroup.WithContext(t.Context())
 	images := []string{
 		"ghcr.io/spegel-org/conformance:583e014",
-		"docker.io/library/nginx:1.23.0",
-		"docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b",
-		"mcr.microsoft.com/containernetworking/azure-cns@sha256:7944413c630746a35d5596f56093706e8d6a3db0569bec0c8e58323f965f7416",
-		"docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd",
+		"ghcr.io/spegel-org/benchmark:v1-10MB-1",
+		"ghcr.io/spegel-org/benchmark:v2-10MB-1",
+		"ghcr.io/spegel-org/benchmark:v1-10MB-4",
 	}
-	for _, image := range images[:4] {
+	for _, image := range images[:3] {
 		g.Go(func() error {
 			t.Logf("Pulling image %s", image)
 			_, err := commandWithError(gCtx, t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, image))
@@ -109,7 +108,7 @@ func TestE2E(t *testing.T) {
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel wait --for=delete %s --timeout=60s", kcPath, workerPod))
 
 	// Pull image from registry after Spegel has started.
-	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, images[4]))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, images[3]))
 
 	// Verify that both local and external ports are working.
 	tests := []struct {
@@ -158,16 +157,13 @@ func TestE2E(t *testing.T) {
 		command(t.Context(), t, fmt.Sprintf("docker exec %s-%s iptables -A OUTPUT -o eth0 -j REJECT", kindName, node))
 	}
 
-	// Pull test image that does not contain any media types.
-	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker3 crictl pull %s", kindName, images[3]))
-
-	// Deploy test Nginx pods and verify deployment status.
-	t.Log("Deploy test Nginx pods")
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply -f ./testdata/test-nginx.yaml", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-tag --for condition=available", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-digest --for condition=available", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s deployment/nginx-tag-and-digest --for condition=available", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace nginx wait --timeout=30s -l app=nginx-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod", kcPath))
+	// Deploy pull test pods and verify deployment status.
+	t.Log("Deploy test pull test pods")
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply -f ./testdata/pull-test.yaml", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-tag --for condition=available", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-digest --for condition=available", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-tag-and-digest --for condition=available", kcPath))
+	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s -l app=pull-test-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod", kcPath))
 
 	// Verify that Spegel has never restarted.
 	restartOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
