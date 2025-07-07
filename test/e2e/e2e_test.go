@@ -52,7 +52,7 @@ func TestE2E(t *testing.T) {
 		}
 
 		t.Log("Deleting Kind cluster")
-		// command(ctx, t, fmt.Sprintf("kind delete cluster --name %s", kindName))
+		command(ctx, t, fmt.Sprintf("kind delete cluster --name %s", kindName))
 	})
 
 	// Pull test images.
@@ -61,9 +61,11 @@ func TestE2E(t *testing.T) {
 		"ghcr.io/spegel-org/conformance:583e014",
 		"ghcr.io/spegel-org/benchmark:v1-10MB-1",
 		"ghcr.io/spegel-org/benchmark:v2-10MB-1",
+		"docker.io/library/busybox:1.37.0",
+		"ghcr.io/spegel-org/benchmark:v2-10MB-4",
 		"ghcr.io/spegel-org/benchmark:v1-10MB-4",
 	}
-	for _, image := range images[:3] {
+	for _, image := range images[:5] {
 		g.Go(func() error {
 			t.Logf("Pulling image %s", image)
 			_, err := commandWithError(gCtx, t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, image))
@@ -75,6 +77,7 @@ func TestE2E(t *testing.T) {
 	}
 	err := g.Wait()
 	require.NoError(t, err)
+	t.Log("Image pull completed.")
 
 	// Write existing configuration to test backup.
 	hostsToml := `server = https://docker.io
@@ -108,7 +111,7 @@ func TestE2E(t *testing.T) {
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel wait --for=delete %s --timeout=60s", kcPath, workerPod))
 
 	// Pull image from registry after Spegel has started.
-	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, images[3]))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, images[5]))
 
 	// Verify that both local and external ports are working.
 	tests := []struct {
@@ -168,6 +171,11 @@ func TestE2E(t *testing.T) {
 	// Verify that Spegel has never restarted.
 	restartOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
 	require.Equal(t, "0 0 0", restartOutput)
+
+	// Check OCI volume content.
+	ociPodName := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test get pods -l app=pull-test-oci-volume -o jsonpath='{.items[0].metadata.name}'", kcPath))
+	ociVolumeFiles := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test exec %s -- sh -c 'ls -1A /oci-volume | sort'", kcPath, ociPodName))
+	require.Equal(t, "pause\nrandom_file_2259168264799515459.txt\nrandom_file_495671701297603781.txt\nrandom_file_7526869637736667835.txt\nrandom_file_8163815451001128425.txt", ociVolumeFiles)
 
 	// Remove all Spegel Pods and only restart one to verify that running a single instance works.
 	t.Log("Scale down Spegel to single instance")
@@ -239,6 +247,8 @@ kind: Cluster
 networking:
   kubeProxyMode: %s
   ipFamily: %s
+featureGates:
+  ImageVolume: true
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".registry]
