@@ -172,6 +172,11 @@ func TestE2E(t *testing.T) {
 	restartOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
 	require.Equal(t, "0 0 0", restartOutput)
 
+	// Validate the nodes pull test pods are running on.
+	pullTestNodesOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test get pods -o jsonpath='{.items[*].spec.nodeName}'", kcPath))
+	nodeNames := strings.Split(pullTestNodesOutput, " ")
+	require.NotContains(t, nodeNames, "spegel-e2e-worker")
+
 	// Check OCI volume content.
 	ociPodName := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test get pods -l app=pull-test-oci-volume -o jsonpath='{.items[0].metadata.name}'", kcPath))
 	ociVolumeFiles := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test exec %s -- sh -c 'ls -1A /oci-volume | sort'", kcPath, ociPodName))
