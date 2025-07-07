@@ -1,28 +1,28 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: nginx
+  name: pull-test
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-tag
-  namespace: nginx
+  name: pull-test-tag
+  namespace: pull-test
   labels:
-    app: nginx-tag
+    app: pull-test-tag
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx-tag
+      app: pull-test-tag
   template:
     metadata:
       labels:
-        app: nginx-tag
+        app: pull-test-tag
     spec:
       containers:
-      - name: nginx
-        image: docker.io/library/nginx:1.23.0
+      - name: pull-test
+        image: ghcr.io/spegel-org/benchmark:v1-10MB-1
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -39,23 +39,23 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-digest
-  namespace: nginx
+  name: pull-test-digest
+  namespace: pull-test
   labels:
-    app: nginx-digest
+    app: pull-test-digest
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx-digest
+      app: pull-test-digest
   template:
     metadata:
       labels:
-        app: nginx-digest
+        app: pull-test-digest
     spec:
       containers:
-      - name: nginx
-        image: docker.io/library/nginx@sha256:b3a676a9145dc005062d5e79b92d90574fb3bf2396f4913dc1732f9065f55c4b # 1.22.0
+      - name: pull-test
+        image: ghcr.io/spegel-org/benchmark@sha256:9fccb471b0f2482af80f8bd7b198dfe3afedb16e683fdd30a17423a32be54d10 #v2-10MB-1
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -72,23 +72,23 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-tag-and-digest
-  namespace: nginx
+  name: pull-test-tag-and-digest
+  namespace: pull-test
   labels:
-    app: nginx-tag-and-digest
+    app: pull-test-tag-and-digest
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx-tag-and-digest
+      app: pull-test-tag-and-digest
   template:
     metadata:
       labels:
-        app: nginx-tag-and-digest
+        app: pull-test-tag-and-digest
     spec:
       containers:
-      - name: nginx
-        image: docker.io/library/nginx:1.21.0@sha256:2f1cd90e00fe2c991e18272bb35d6a8258eeb27785d121aa4cc1ae4235167cfd
+      - name: pull-test
+        image: ghcr.io/spegel-org/benchmark:v1-10MB-4@sha256:7eeb6e8677d65452dbb5bd824a23d40b3753d26a69279db7dccb9dd426b192b8
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -105,23 +105,23 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-not-present
-  namespace: nginx
+  name: pull-test-not-present
+  namespace: pull-test
   labels:
-    app: nginx-not-present
+    app: pull-test-not-present
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: nginx-not-present
+      app: pull-test-not-present
   template:
     metadata:
       labels:
-        app: nginx-not-present
+        app: pull-test-not-present
     spec:
       containers:
-      - name: nginx
-        image: docker.io/library/nginx:1.1.0-bullseye-perl
+      - name: pull-test
+        image: ghcr.io/spegel-org/benchmark:does-not-exist
         imagePullPolicy: Always
         ports:
         - containerPort: 80
