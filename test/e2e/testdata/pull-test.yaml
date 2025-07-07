@@ -134,3 +134,44 @@ spec:
                 operator: NotIn
                 values:
                 - spegel-dev-worker
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pull-test-oci-volume
+  namespace: pull-test
+  labels:
+    app: pull-test-oci-volume
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pull-test-oci-volume
+  template:
+    metadata:
+      labels:
+        app: pull-test-oci-volume
+    spec:
+      containers:
+      - name: pull-test
+        image: docker.io/library/busybox:1.37.0
+        imagePullPolicy: Always
+        command: ["sh", "-c", "sleep infinity"]
+        volumeMounts:
+            - name: oci-volume
+              mountPath: /oci-volume
+              readOnly: true
+      volumes:
+        - name: oci-volume
+          image:
+            reference: ghcr.io/spegel-org/benchmark:v1-10MB-4
+            pullPolicy: Always
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                - spegel-dev-worker
