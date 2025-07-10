@@ -25,7 +25,7 @@ require (
 	github.com/prometheus/common v0.65.0
 	github.com/stretchr/testify v1.10.0
 	go.etcd.io/bbolt v1.4.2
-	golang.org/x/sync v0.15.0
+	golang.org/x/sync v0.16.0
 	google.golang.org/grpc v1.73.0
 	k8s.io/apimachinery v0.33.2
 	k8s.io/cri-api v0.33.2
