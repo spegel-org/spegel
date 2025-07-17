@@ -145,6 +145,12 @@ spec:
           httpGet:
             path: /healthz
             port: registry
+        livenessProbe:
+          periodSeconds: 10
+          failureThreshold: 30
+          httpGet:
+            path: /healthz
+            port: registry
         volumeMounts:
           {{- if .Values.basicAuthSecretName }}
           - name: basic-auth
