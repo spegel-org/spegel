@@ -4,6 +4,7 @@ metadata:
   name: {{ include "spegel.fullname" . }}
   namespace: {{ include "spegel.namespace" . }}
   labels:
+    app.kubernetes.io/component: spegel
     {{- include "spegel.labels" . | nindent 4 }}
 spec:
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -11,6 +12,7 @@ spec:
     {{- toYaml .Values.updateStrategy | nindent 4 }}
   selector:
     matchLabels:
+      app.kubernetes.io/component: spegel
       {{- include "spegel.selectorLabels" . | nindent 6 }}
   template:
     metadata:
@@ -19,6 +21,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
+        app.kubernetes.io/component: spegel
         {{- include "spegel.selectorLabels" . | nindent 8 }}
         {{- with .Values.commonLabels }}
         {{- toYaml . | nindent 8 }}
