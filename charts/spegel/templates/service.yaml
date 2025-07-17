@@ -8,6 +8,7 @@ metadata:
     {{- include "spegel.labels" . | nindent 4 }}
 spec:
   selector:
+    app.kubernetes.io/component: spegel
     {{- include "spegel.selectorLabels" . | nindent 4 }}
   ports:
     - name: metrics
@@ -29,6 +30,7 @@ metadata:
 spec:
   type: NodePort
   selector:
+    app.kubernetes.io/component: spegel
     {{- include "spegel.selectorLabels" . | nindent 4 }}
   ports:
     - name: registry
@@ -46,6 +48,7 @@ metadata:
     {{- include "spegel.labels" . | nindent 4 }}
 spec:
   selector:
+    app.kubernetes.io/component: spegel
     {{- include "spegel.selectorLabels" . | nindent 4 }}
   clusterIP: None
   publishNotReadyAddresses: true
