@@ -31,7 +31,7 @@ func TestResponseWriter(t *testing.T) {
 		ResponseWriter: httptest.NewRecorder(),
 	}
 	rw.WriteHeader(http.StatusNotFound)
-	require.True(t, rw.writtenHeader)
+	require.True(t, rw.wroteHeader)
 	require.Equal(t, http.StatusNotFound, rw.Status())
 	rw.WriteHeader(http.StatusBadGateway)
 	require.Equal(t, http.StatusNotFound, rw.Status())
