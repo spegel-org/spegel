@@ -14,6 +14,7 @@ type ResponseWriter interface {
 	Status() int
 	Size() int64
 	SetHandler(handler string)
+	HeadersWritten() bool
 }
 
 var (
@@ -21,27 +22,30 @@ var (
 	_ http.Flusher        = &response{}
 	_ http.Hijacker       = &response{}
 	_ io.ReaderFrom       = &response{}
+	_ ResponseWriter      = &response{}
 )
 
 type response struct {
 	http.ResponseWriter
-	error         error
-	handler       string
-	status        int
-	size          int64
-	writtenHeader bool
+	error       error
+	handler     string
+	status      int
+	size        int64
+	wroteHeader bool
 }
 
 func (r *response) WriteHeader(statusCode int) {
-	if !r.writtenHeader {
-		r.writtenHeader = true
+	if !r.wroteHeader {
+		r.wroteHeader = true
 		r.status = statusCode
 	}
 	r.ResponseWriter.WriteHeader(statusCode)
 }
 
 func (r *response) Write(b []byte) (int, error) {
-	r.writtenHeader = true
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
 	n, err := r.ResponseWriter.Write(b)
 	r.size += int64(n)
 	return n, err
@@ -53,7 +57,6 @@ func (r *response) WriteError(statusCode int, err error) {
 }
 
 func (r *response) Flush() {
-	r.writtenHeader = true
 	//nolint: errcheck // No method to throw the error.
 	flusher := r.ResponseWriter.(http.Flusher)
 	flusher.Flush()
@@ -66,6 +69,9 @@ func (r *response) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 func (r *response) ReadFrom(rd io.Reader) (int64, error) {
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
 	n, err := io.Copy(r.ResponseWriter, rd)
 	r.size += n
 	return n, err
@@ -76,7 +82,7 @@ func (r *response) Unwrap() http.ResponseWriter {
 }
 
 func (r *response) Status() int {
-	if r.status == 0 {
+	if !r.wroteHeader {
 		return http.StatusOK
 	}
 	return r.status
@@ -92,4 +98,8 @@ func (r *response) Size() int64 {
 
 func (r *response) SetHandler(handler string) {
 	r.handler = handler
+}
+
+func (r *response) HeadersWritten() bool {
+	return r.wroteHeader
 }

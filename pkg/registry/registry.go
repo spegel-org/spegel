@@ -343,7 +343,7 @@ func (r *Registry) handleBlob(rw httpx.ResponseWriter, req *http.Request, dist o
 	http.ServeContent(rw, req, "", time.Time{}, rc)
 }
 
-func forwardRequest(client *http.Client, bufferPool *sync.Pool, req *http.Request, rw http.ResponseWriter, addrPort netip.AddrPort) error {
+func forwardRequest(client *http.Client, bufferPool *sync.Pool, req *http.Request, rw httpx.ResponseWriter, addrPort netip.AddrPort) error {
 	// Do request to mirror.
 	forwardScheme := "http"
 	if req.TLS != nil {
@@ -370,10 +370,12 @@ func forwardRequest(client *http.Client, bufferPool *sync.Pool, req *http.Reques
 		return err
 	}
 
-	// TODO (phillebaba): Is it possible to retry if copy fails half way through?
-	// Copy forward response to response writer.
-	httpx.CopyHeader(rw.Header(), forwardResp.Header)
-	rw.WriteHeader(http.StatusOK)
+	// Can only write header and status code once.
+	if !rw.HeadersWritten() {
+		httpx.CopyHeader(rw.Header(), forwardResp.Header)
+		rw.WriteHeader(forwardResp.StatusCode)
+	}
+
 	//nolint: errcheck // Ignore
 	buf := bufferPool.Get().(*[]byte)
 	defer bufferPool.Put(buf)

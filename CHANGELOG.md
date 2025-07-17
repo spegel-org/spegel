@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#911](https://github.com/spegel-org/spegel/pull/911) Enforce use of request contexts and fix response closing.
 - [#914](https://github.com/spegel-org/spegel/pull/914) Fix OCI client header parsing and improve tests.
 - [#935](https://github.com/spegel-org/spegel/pull/935) Fix node selector in e2e pull test.
+- [#942](https://github.com/spegel-org/spegel/pull/942) Skip writing headers and status code on mirror retries.
 
 ### Security
 
