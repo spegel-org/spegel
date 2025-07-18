@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"path"
 	"strconv"
@@ -26,7 +25,7 @@ const (
 )
 
 type RegistryConfig struct {
-	Client           *http.Client
+	Transport        http.RoundTripper
 	Log              logr.Logger
 	Username         string
 	Password         string
@@ -72,10 +71,7 @@ func WithResolveTimeout(resolveTimeout time.Duration) RegistryOption {
 
 func WithTransport(transport http.RoundTripper) RegistryOption {
 	return func(cfg *RegistryConfig) error {
-		if cfg.Client == nil {
-			cfg.Client = &http.Client{}
-		}
-		cfg.Client.Transport = transport
+		cfg.Transport = transport
 		return nil
 	}
 }
@@ -96,10 +92,10 @@ func WithBasicAuth(username, password string) RegistryOption {
 }
 
 type Registry struct {
-	client           *http.Client
 	bufferPool       *sync.Pool
 	log              logr.Logger
 	ociStore         oci.Store
+	ociClient        *oci.Client
 	router           routing.Router
 	username         string
 	password         string
@@ -109,14 +105,7 @@ type Registry struct {
 }
 
 func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
-	transport, ok := http.DefaultTransport.(*http.Transport)
-	if !ok {
-		return nil, errors.New("default transporn is not of type http.Transport")
-	}
 	cfg := RegistryConfig{
-		Client: &http.Client{
-			Transport: transport.Clone(),
-		},
 		Log:              logr.Discard(),
 		ResolveRetries:   3,
 		ResolveLatestTag: true,
@@ -127,16 +116,29 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		return nil, err
 	}
 
+	httpClient := &http.Client{}
+	if cfg.Transport != nil {
+		httpClient.Transport = cfg.Transport
+	} else {
+		transport := httpx.BaseTransport()
+		transport.MaxIdleConns = 100
+		transport.MaxConnsPerHost = 100
+		transport.MaxIdleConnsPerHost = 100
+		httpClient.Transport = transport
+	}
+	ociClient := oci.NewClient(httpClient)
+
 	bufferPool := &sync.Pool{
 		New: func() any {
 			buf := make([]byte, 32*1024)
 			return &buf
 		},
 	}
+
 	r := &Registry{
 		ociStore:         ociStore,
 		router:           router,
-		client:           cfg.Client,
+		ociClient:        ociClient,
 		log:              cfg.Log,
 		resolveRetries:   cfg.ResolveRetries,
 		resolveLatestTag: cfg.ResolveLatestTag,
@@ -252,8 +254,8 @@ func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist
 	}
 
 	// Resolve mirror with the requested reference
-	resolveCtx, cancel := context.WithTimeout(req.Context(), r.resolveTimeout)
-	defer cancel()
+	resolveCtx, resolveCancel := context.WithTimeout(req.Context(), r.resolveTimeout)
+	defer resolveCancel()
 	resolveCtx = logr.NewContext(resolveCtx, log)
 	peerCh, err := r.router.Resolve(resolveCtx, dist.Reference(), r.resolveRetries)
 	if err != nil {
@@ -281,11 +283,61 @@ func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist
 
 			mirrorAttempts++
 
-			err := forwardRequest(r.client, r.bufferPool, req, rw, peer)
+			mirror := &url.URL{
+				Scheme:   "http",
+				Host:     peer.String(),
+				Path:     req.URL.Path,
+				RawQuery: req.URL.RawQuery,
+			}
+			if req.TLS != nil {
+				mirror.Scheme = "https"
+			}
+			fetchOpts := []oci.FetchOption{
+				oci.WithFetchMirror(mirror),
+				oci.WithBasicAuth(r.username, r.password),
+			}
+
+			err := func() error {
+				switch req.Method {
+				case http.MethodHead:
+					ociCtx, ociCancel := context.WithTimeout(req.Context(), 1*time.Second)
+					defer ociCancel()
+					desc, err := r.ociClient.Head(ociCtx, dist, fetchOpts...)
+					if err != nil {
+						return err
+					}
+					oci.WriteDescriptorToHeader(desc, rw.Header())
+					rw.WriteHeader(http.StatusOK)
+					return nil
+				case http.MethodGet:
+					ociCtx := req.Context()
+					if dist.Kind == oci.DistributionKindManifest {
+						var ociCancel context.CancelFunc
+						ociCtx, ociCancel = context.WithTimeout(req.Context(), 2*time.Second)
+						defer ociCancel()
+					}
+					rc, desc, err := r.ociClient.Get(ociCtx, dist, nil, fetchOpts...)
+					if err != nil {
+						return err
+					}
+					if !rw.HeadersWritten() {
+						oci.WriteDescriptorToHeader(desc, rw.Header())
+						rw.WriteHeader(http.StatusOK)
+					}
+					_, err = io.Copy(rw, rc)
+					if err != nil {
+						return err
+					}
+					return nil
+				default:
+					return fmt.Errorf("unsupported request method %s", req.Method)
+				}
+			}()
 			if err != nil {
 				log.Error(err, "request to mirror failed", "attempt", mirrorAttempts, "path", req.URL.Path, "mirror", peer)
 				continue
 			}
+
 			log.V(4).Info("mirrored request", "path", req.URL.Path, "mirror", peer)
 			return
 		}
@@ -341,47 +393,4 @@ func (r *Registry) handleBlob(rw httpx.ResponseWriter, req *http.Request, dist o
 	defer rc.Close()
 
 	http.ServeContent(rw, req, "", time.Time{}, rc)
-}
-
-func forwardRequest(client *http.Client, bufferPool *sync.Pool, req *http.Request, rw httpx.ResponseWriter, addrPort netip.AddrPort) error {
-	// Do request to mirror.
-	forwardScheme := "http"
-	if req.TLS != nil {
-		forwardScheme = "https"
-	}
-	u := &url.URL{
-		Scheme:   forwardScheme,
-		Host:     addrPort.String(),
-		Path:     req.URL.Path,
-		RawQuery: req.URL.RawQuery,
-	}
-	forwardReq, err := http.NewRequestWithContext(req.Context(), req.Method, u.String(), nil)
-	if err != nil {
-		return err
-	}
-	httpx.CopyHeader(forwardReq.Header, req.Header)
-	forwardResp, err := client.Do(forwardReq)
-	if err != nil {
-		return err
-	}
-	defer httpx.DrainAndClose(forwardResp.Body)
-	err = httpx.CheckResponseStatus(forwardResp, http.StatusOK, http.StatusPartialContent)
-	if err != nil {
-		return err
-	}
-
-	// Can only write header and status code once.
-	if !rw.HeadersWritten() {
-		httpx.CopyHeader(rw.Header(), forwardResp.Header)
-		rw.WriteHeader(forwardResp.StatusCode)
-	}
-
-	//nolint: errcheck // Ignore
-	buf := bufferPool.Get().(*[]byte)
-	defer bufferPool.Put(buf)
-	_, err = io.CopyBuffer(rw, forwardResp.Body, *buf)
-	if err != nil {
-		return err
-	}
-	return nil
 }
