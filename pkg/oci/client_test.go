@@ -62,7 +62,7 @@ func TestClient(t *testing.T) {
 		srv.Close()
 	})
 
-	client := NewClient()
+	client := NewClient(srv.Client())
 	mirror, err := url.Parse(srv.URL)
 	require.NoError(t, err)
 	pullResults, err := client.Pull(t.Context(), img, WithFetchMirror(mirror))

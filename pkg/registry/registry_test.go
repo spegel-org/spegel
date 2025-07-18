@@ -36,7 +36,7 @@ func TestRegistryOptions(t *testing.T) {
 	require.Equal(t, 5, cfg.ResolveRetries)
 	require.True(t, cfg.ResolveLatestTag)
 	require.Equal(t, 10*time.Minute, cfg.ResolveTimeout)
-	require.Equal(t, transport, cfg.Client.Transport)
+	require.Equal(t, transport, cfg.Transport)
 	require.Equal(t, log, cfg.Log)
 	require.Equal(t, "foo", cfg.Username)
 	require.Equal(t, "bar", cfg.Password)
