@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#909](https://github.com/spegel-org/spegel/pull/909) Add base http client and transport.
 - [#910](https://github.com/spegel-org/spegel/pull/910) Add drain and close function.
 - [#933](https://github.com/spegel-org/spegel/pull/933) Verify that OCI volumes works with Sepgel in e2e tests.
+- [#949](https://github.com/spegel-org/spegel/pull/949) Set timeout for mirror requests and switch to using OCI client.
 
 ### Changed
 

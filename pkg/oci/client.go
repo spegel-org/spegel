@@ -25,9 +25,27 @@ const (
 	HeaderDockerDigest = "Docker-Content-Digest"
 )
 
+type Client struct {
+	httpClient *http.Client
+	tc         sync.Map
+}
+
+func NewClient(httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = httpx.BaseClient()
+		httpClient.Timeout = 0
+	}
+	return &Client{
+		httpClient: httpClient,
+		tc:         sync.Map{},
+	}
+}
+
 type FetchConfig struct {
-	Mirror *url.URL
-	Header http.Header
+	Mirror   *url.URL
+	Header   http.Header
+	Username string
+	Password string
 }
 
 func (cfg *FetchConfig) Apply(opts ...FetchOption) error {
@@ -58,17 +76,11 @@ func WithFetchHeader(header http.Header) FetchOption {
 	}
 }
 
-type Client struct {
-	hc *http.Client
-	tc sync.Map
-}
-
-func NewClient() *Client {
-	hc := httpx.BaseClient()
-	hc.Timeout = 0
-	return &Client{
-		hc: hc,
-		tc: sync.Map{},
+func WithBasicAuth(username, password string) FetchOption {
+	return func(cfg *FetchConfig) error {
+		cfg.Username = username
+		cfg.Password = password
+		return nil
 	}
 }
 
@@ -187,15 +199,15 @@ func (c *Client) Head(ctx context.Context, dist DistributionPath, opts ...FetchO
 	return desc, nil
 }
 
-func (c *Client) Get(ctx context.Context, dist DistributionPath, brr []httpx.ByteRange, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, brr, opts...)
+func (c *Client) Get(ctx context.Context, dist DistributionPath, br *httpx.Range, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, br, opts...)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}
 	return rc, desc, nil
 }
 
-func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, brr []httpx.ByteRange, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, br *httpx.Range, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
 	cfg := FetchConfig{}
 	err := cfg.Apply(opts...)
 	if err != nil {
@@ -220,27 +232,28 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 			return nil, ocispec.Descriptor{}, err
 		}
 		httpx.CopyHeader(req.Header, cfg.Header)
+		req.SetBasicAuth(cfg.Username, cfg.Password)
 		req.Header.Set(httpx.HeaderUserAgent, "spegel")
 		req.Header.Add(httpx.HeaderAccept, "application/vnd.oci.image.manifest.v1+json")
 		req.Header.Add(httpx.HeaderAccept, "application/vnd.docker.distribution.manifest.v2+json")
 		req.Header.Add(httpx.HeaderAccept, "application/vnd.oci.image.index.v1+json")
 		req.Header.Add(httpx.HeaderAccept, "application/vnd.docker.distribution.manifest.list.v2+json")
-		if len(brr) > 0 {
-			req.Header.Add(httpx.HeaderRange, httpx.FormatMultipartRangeHeader(brr))
+		if br != nil {
+			req.Header.Add(httpx.HeaderRange, br.String())
 		}
 		token, ok := c.tc.Load(tcKey)
 		if ok {
 			//nolint: errcheck // We know it will be a string.
 			req.Header.Set(httpx.HeaderAuthorization, "Bearer "+token.(string))
 		}
-		resp, err := c.hc.Do(req)
+		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			return nil, ocispec.Descriptor{}, err
 		}
 		if resp.StatusCode == http.StatusUnauthorized {
 			c.tc.Delete(tcKey)
 			wwwAuth := resp.Header.Get(httpx.HeaderWWWAuthenticate)
-			token, err = getBearerToken(ctx, wwwAuth, c.hc)
+			token, err = getBearerToken(ctx, wwwAuth, c.httpClient)
 			if err != nil {
 				return nil, ocispec.Descriptor{}, err
 			}

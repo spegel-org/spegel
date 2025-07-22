@@ -141,8 +141,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		return err
 	}
 
-	ociClient := oci.NewClient()
-
 	// OCI Store
 	ociStore, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.MirroredRegistries, oci.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
@@ -226,7 +224,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
 	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 	if args.DebugWebEnabled {
-		web, err := web.NewWeb(router, ociClient)
+		web, err := web.NewWeb(router, oci.NewClient(nil))
 		if err != nil {
 			return err
 		}
