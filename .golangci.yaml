@@ -16,6 +16,7 @@ linters:
     - testifylint
     - unused
     - noctx
+    - forbidigo
   settings:
     errcheck:
       disable-default-exclusions: true
