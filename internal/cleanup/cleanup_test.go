@@ -31,10 +31,9 @@ func TestCleanupFail(t *testing.T) {
 func TestCleanupSucceed(t *testing.T) {
 	t.Parallel()
 
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		panic(err)
-	}
+	listenCfg := &net.ListenConfig{}
+	listener, err := listenCfg.Listen(t.Context(), "tcp", ":")
+	require.NoError(t, err)
 	addr := listener.Addr().String()
 	err = listener.Close()
 	require.NoError(t, err)
