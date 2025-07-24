@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -29,6 +30,7 @@ type response struct {
 	http.ResponseWriter
 	error       error
 	handler     string
+	method      string
 	status      int
 	size        int64
 	wroteHeader bool
@@ -54,6 +56,24 @@ func (r *response) Write(b []byte) (int, error) {
 func (r *response) WriteError(statusCode int, err error) {
 	r.error = err
 	r.WriteHeader(statusCode)
+
+	if r.method == http.MethodHead {
+		return
+	}
+
+	var respErr ResponseError
+	if errors.As(err, &respErr) {
+		b, rbErr := respErr.ResponseBody()
+		if rbErr != nil {
+			r.error = errors.Join(r.error, rbErr)
+			return
+		}
+		_, wErr := r.Write(b)
+		if wErr != nil {
+			r.error = errors.Join(r.error, wErr)
+			return
+		}
+	}
 }
 
 func (r *response) Flush() {

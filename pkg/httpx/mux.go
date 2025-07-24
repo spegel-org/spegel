@@ -45,7 +45,10 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 	metricsPath := metricsFriendlyPath(pattern)
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		rw := &response{ResponseWriter: w}
+		rw := &response{
+			ResponseWriter: w,
+			method:         req.Method,
+		}
 		defer func() {
 			latency := time.Since(start)
 			statusCode := strconv.FormatInt(int64(rw.Status()), 10)
