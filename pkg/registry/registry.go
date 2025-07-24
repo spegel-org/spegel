@@ -186,7 +186,8 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	if r.username != "" || r.password != "" {
 		username, password, _ := req.BasicAuth()
 		if r.username != username || r.password != password {
-			rw.WriteError(http.StatusUnauthorized, errors.New("invalid basic authentication"))
+			respErr := oci.NewDistributionError(oci.ErrCodeUnauthorized, "invalid credentials", nil)
+			rw.WriteError(http.StatusUnauthorized, respErr)
 			return
 		}
 	}
@@ -232,9 +233,14 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		r.handleBlob(rw, req, dist)
 		return
 	default:
+		// This should never happen as it would be caught when parsing the path.
 		rw.WriteError(http.StatusNotFound, fmt.Errorf("unknown distribution path kind %s", dist.Kind))
 		return
 	}
+}
+
+type MirrorErrorDetails struct {
+	Attempts int `json:"attempts"`
 }
 
 func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
@@ -248,9 +254,17 @@ func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist
 		metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, cacheType).Inc()
 	}()
 
+	mirrorDetails := MirrorErrorDetails{
+		Attempts: 0,
+	}
+	errCode := map[oci.DistributionKind]oci.DistributionErrorCode{
+		oci.DistributionKindBlob:     oci.ErrCodeManifestUnknown,
+		oci.DistributionKindManifest: oci.ErrCodeBlobUnknown,
+	}[dist.Kind]
+
 	if !r.resolveLatestTag && dist.IsLatestTag() {
-		r.log.V(4).Info("skipping mirror request for image with latest tag", "image", dist.Reference())
-		rw.WriteHeader(http.StatusNotFound)
+		respErr := oci.NewDistributionError(errCode, "latest tag resolving is disabled", mirrorDetails)
+		rw.WriteError(http.StatusNotFound, respErr)
 		return
 	}
 
@@ -260,30 +274,32 @@ func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist
 	resolveCtx = logr.NewContext(resolveCtx, log)
 	peerCh, err := r.router.Resolve(resolveCtx, dist.Reference(), r.resolveRetries)
 	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("error occurred when attempting to resolve mirrors: %w", err))
+		respErr := oci.NewDistributionError(errCode, "unable to resolve peers", mirrorDetails)
+		rw.WriteError(http.StatusNotFound, respErr)
 		return
 	}
 
-	var mirrorAttempts = 0
 	var rng *httpx.Range
 	for {
 		select {
 		case <-req.Context().Done():
-			// Request has been closed by server or client. No use continuing.
-			rw.WriteError(http.StatusNotFound, fmt.Errorf("mirroring for image component %s has been cancelled: %w", dist.Reference(), resolveCtx.Err()))
+			// Request has been closed by server or client, no use continuing.
+			respErr := oci.NewDistributionError(errCode, "mirroring for image component has been cancelled", mirrorDetails)
+			rw.WriteError(http.StatusNotFound, errors.Join(respErr, req.Context().Err()))
 			return
 		case peer, ok := <-peerCh:
 			// Channel closed means no more mirrors will be received and max retries has been reached.
 			if !ok {
-				err = fmt.Errorf("mirror with image component %s could not be found", dist.Reference())
-				if mirrorAttempts > 0 {
-					err = errors.Join(err, fmt.Errorf("requests to %d mirrors failed, all attempts have been exhausted or timeout has been reached", mirrorAttempts))
+				msg := fmt.Sprintf("mirror with image component %s could not be found", dist.Reference())
+				if mirrorDetails.Attempts > 0 {
+					msg = fmt.Sprintf("%s requests to %d mirrors failed, all attempts have been exhausted or timeout has been reached", msg, mirrorDetails.Attempts)
 				}
-				rw.WriteError(http.StatusNotFound, err)
+				respErr := oci.NewDistributionError(errCode, msg, mirrorDetails)
+				rw.WriteError(http.StatusNotFound, errors.Join(respErr, resolveCtx.Err()))
 				return
 			}
 
-			mirrorAttempts++
+			mirrorDetails.Attempts++
 
 			mirror := &url.URL{
 				Scheme: "http",
@@ -373,7 +389,7 @@ func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist
 				return nil
 			}()
 			if err != nil {
-				log.Error(err, "request to mirror failed", "attempt", mirrorAttempts, "path", req.URL.Path, "mirror", peer)
+				log.Error(err, "request to mirror failed", "attempt", mirrorDetails.Attempts, "path", req.URL.Path, "mirror", peer)
 				continue
 			}
 
@@ -387,22 +403,27 @@ func (r *Registry) handleManifest(rw httpx.ResponseWriter, req *http.Request, di
 	if dist.Digest == "" {
 		dgst, err := r.ociStore.Resolve(req.Context(), dist.Reference())
 		if err != nil {
-			rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get digest for image %s: %w", dist.Reference(), err))
+			respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get digest for image tag %s", dist.Reference()), nil)
+			rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 			return
 		}
 		dist.Digest = dgst
 	}
 	b, mediaType, err := r.ociStore.GetManifest(req.Context(), dist.Digest)
 	if err != nil {
-		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not get manifest content for digest %s: %w", dist.Digest.String(), err))
+		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
+		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 		return
 	}
+
 	rw.Header().Set(httpx.HeaderContentType, mediaType)
 	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(int64(len(b)), 10))
 	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
+	rw.WriteHeader(http.StatusOK)
 	if req.Method == http.MethodHead {
 		return
 	}
+
 	_, err = rw.Write(b)
 	if err != nil {
 		r.log.Error(err, "error occurred when writing manifest")
@@ -413,23 +434,26 @@ func (r *Registry) handleManifest(rw httpx.ResponseWriter, req *http.Request, di
 func (r *Registry) handleBlob(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	size, err := r.ociStore.Size(req.Context(), dist.Digest)
 	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine size of blob with digest %s: %w", dist.Digest.String(), err))
+		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not determine size of blob %s", dist.Digest), nil)
+		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 		return
 	}
+
 	rw.Header().Set(httpx.HeaderAcceptRanges, "bytes")
 	rw.Header().Set(httpx.HeaderContentType, "application/octet-stream")
 	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(size, 10))
 	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
 	if req.Method == http.MethodHead {
+		rw.WriteHeader(http.StatusOK)
 		return
 	}
 
 	rc, err := r.ociStore.GetBlob(req.Context(), dist.Digest)
 	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not get reader for blob with digest %s: %w", dist.Digest.String(), err))
+		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get reader for blob %s", dist.Digest), nil)
+		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 		return
 	}
 	defer rc.Close()
-
 	http.ServeContent(rw, req, "", time.Time{}, rc)
 }

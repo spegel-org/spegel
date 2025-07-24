@@ -1,12 +1,15 @@
 package oci
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 
 	"github.com/opencontainers/go-digest"
+
+	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
 var (
@@ -108,4 +111,56 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 		return dist, nil
 	}
 	return DistributionPath{}, errors.New("distribution path could not be parsed")
+}
+
+var _ httpx.ResponseError = &DistributionError{}
+
+type DistributionErrorCode string
+
+const (
+	ErrCodeBlobUnknown         DistributionErrorCode = "BLOB_UNKNOWN"
+	ErrCodeBlobUploadInvalid   DistributionErrorCode = "BLOB_UPLOAD_INVALID"
+	ErrCodeBlobUploadUnknown   DistributionErrorCode = "BLOB_UPLOAD_UNKNOWN"
+	ErrCodeDigestInvalid       DistributionErrorCode = "DIGEST_INVALID"
+	ErrCodeManifestBlobUnknown DistributionErrorCode = "MANIFEST_BLOB_UNKNOWN"
+	ErrCodeManifestInvalid     DistributionErrorCode = "MANIFEST_INVALID"
+	ErrCodeManifestUnknown     DistributionErrorCode = "MANIFEST_UNKNOWN"
+	ErrCodeNameInvalid         DistributionErrorCode = "NAME_INVALID"
+	ErrCodeNameUnknown         DistributionErrorCode = "NAME_UNKNOWN"
+	ErrCodeSizeInvalid         DistributionErrorCode = "SIZE_INVALID"
+	ErrCodeUnauthorized        DistributionErrorCode = "UNAUTHORIZED"
+	ErrCodeDenied              DistributionErrorCode = "DENIED"
+	ErrCodeUnsupported         DistributionErrorCode = "UNSUPPORTED"
+	ErrCodeTooManyRequests     DistributionErrorCode = "TOOMANYREQUESTS"
+)
+
+type DistributionError struct {
+	Code    DistributionErrorCode `json:"code"`
+	Detail  any                   `json:"detail,omitempty"`
+	Message string                `json:"message,omitempty"`
+}
+
+func NewDistributionError(code DistributionErrorCode, message string, detail any) *DistributionError {
+	return &DistributionError{
+		Code:    code,
+		Message: message,
+		Detail:  detail,
+	}
+}
+
+func (e *DistributionError) Error() string {
+	return fmt.Sprintf("%s %s", e.Code, e.Message)
+}
+
+func (e *DistributionError) ResponseBody() ([]byte, error) {
+	errResp := struct {
+		Errors []DistributionError `json:"errors"`
+	}{
+		Errors: []DistributionError{*e},
+	}
+	b, err := json.Marshal(errResp)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }

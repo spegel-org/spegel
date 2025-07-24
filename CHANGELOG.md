@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#933](https://github.com/spegel-org/spegel/pull/933) Verify that OCI volumes works with Sepgel in e2e tests.
 - [#949](https://github.com/spegel-org/spegel/pull/949) Set timeout for mirror requests and switch to using OCI client.
 - [#951](https://github.com/spegel-org/spegel/pull/951) Add tests for channel merge.
+- [#953](https://github.com/spegel-org/spegel/pull/953) Add OCI errors to registry 4xx responses.
 
 ### Changed
 

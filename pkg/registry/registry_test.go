@@ -190,16 +190,16 @@ func TestRegistryHandler(t *testing.T) {
 	}{
 		{
 			name:            "request should timeout when no peers exists",
-			key:             "no-peers",
+			key:             "sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591",
 			expectedStatus:  http.StatusNotFound,
-			expectedBody:    []byte{},
+			expectedBody:    []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":0},"message":"mirror with image component sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591 could not be found"}]}`),
 			expectedHeaders: nil,
 		},
 		{
 			name:            "request should not timeout and give 404 if all peers fail",
 			key:             "sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6",
 			expectedStatus:  http.StatusNotFound,
-			expectedBody:    []byte{},
+			expectedBody:    []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":3},"message":"mirror with image component sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6 could not be found requests to 3 mirrors failed, all attempts have been exhausted or timeout has been reached"}]}`),
 			expectedHeaders: nil,
 		},
 		{
@@ -252,11 +252,13 @@ func TestRegistryHandler(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedStatus, resp.StatusCode)
 
-				if method == http.MethodGet {
+				switch method {
+				case http.MethodGet:
 					require.Equal(t, tt.expectedBody, b)
-				}
-				if method == http.MethodHead {
+				case http.MethodHead:
 					require.Empty(t, b)
+				default:
+					t.FailNow()
 				}
 
 				if tt.expectedHeaders == nil {
