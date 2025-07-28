@@ -34,7 +34,8 @@ import (
 )
 
 const (
-	backupDir = "_backup"
+	backupDir       = "_backup"
+	defaultRegistry = "_default"
 )
 
 type Feature uint32
@@ -101,14 +102,19 @@ type Containerd struct {
 	contentFilter      []string
 }
 
-func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistries []url.URL, opts ...ContainerdOption) (*Containerd, error) {
+func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistries []string, opts ...ContainerdOption) (*Containerd, error) {
 	cfg := &ContainerdConfig{}
 	err := cfg.Apply(opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	imageFilter, eventFilter, contentFilter := createFilters(mirroredRegistries)
+	parsedMirroredRegistries, err := parseMirroredRegistries(mirroredRegistries)
+	if err != nil {
+		return nil, err
+	}
+	imageFilter, eventFilter, contentFilter := createFilters(parsedMirroredRegistries)
+
 	c := &Containerd{
 		contentPath: cfg.ContentPath,
 		clientGetter: func() (*client.Client, error) {
@@ -486,9 +492,9 @@ func parseContentRegistries(l map[string]string) []string {
 	return registries
 }
 
-func createFilters(mirroredRegistries []url.URL) ([]string, []string, []string) {
+func createFilters(parsedMirroredRegistries []url.URL) ([]string, []string, []string) {
 	registryHosts := []string{}
-	for _, registry := range mirroredRegistries {
+	for _, registry := range parsedMirroredRegistries {
 		registryHosts = append(registryHosts, strings.ReplaceAll(registry.Host, `.`, `\\.`))
 	}
 	imageFilter := fmt.Sprintf(`name~="^(%s)/"`, strings.Join(registryHosts, "|"))
@@ -499,7 +505,7 @@ func createFilters(mirroredRegistries []url.URL) ([]string, []string, []string) 
 	}
 	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/delete",event.%s`, imageFilter)
 	contentFilters := []string{}
-	for _, registry := range mirroredRegistries {
+	for _, registry := range parsedMirroredRegistries {
 		contentFilters = append(contentFilters, fmt.Sprintf(`labels."%s.%s"~="^."`, labels.LabelDistributionSource, registry.Host))
 	}
 	return []string{imageFilter}, []string{eventFilter, `topic~="/content/create"`}, contentFilters
@@ -508,12 +514,23 @@ func createFilters(mirroredRegistries []url.URL) ([]string, []string, []string) 
 // Refer to containerd registry configuration documentation for more information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegistries, mirrorTargets []url.URL, resolveTags, prependExisting bool, username, password string) error {
+func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegistries, mirrorTargets []string, resolveTags, prependExisting bool, username, password string) error {
 	log := logr.FromContextOrDiscard(ctx)
-	err := validateRegistries(mirroredRegistries)
+
+	// Parse and verify mirror urls.
+	if len(mirroredRegistries) == 0 {
+		mirroredRegistries = append(mirroredRegistries, defaultRegistry)
+	}
+	parsedMirroredRegistries, err := parseMirroredRegistries(mirroredRegistries)
 	if err != nil {
 		return err
 	}
+	parsedMirrorTargets, err := parseMirrorTargets(mirrorTargets)
+	if err != nil {
+		return err
+	}
+
+	// Backup and clear configgurrationn.
 	err = os.MkdirAll(configPath, 0o755)
 	if err != nil {
 		return err
@@ -527,35 +544,27 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 		return err
 	}
 
+	// Write mirror configuration
 	capabilities := []string{"pull"}
 	if resolveTags {
 		capabilities = append(capabilities, "resolve")
 	}
-	if len(mirroredRegistries) == 0 {
-		mirroredRegistries = append(mirroredRegistries, url.URL{})
-	}
-
-	// Write mirror configuration
-	for _, mirroredRegistry := range mirroredRegistries {
-		templatedHosts, err := templateHosts(mirroredRegistry, mirrorTargets, capabilities, username, password)
+	for _, mr := range parsedMirroredRegistries {
+		templatedHosts, err := templateHosts(mr, parsedMirrorTargets, capabilities, username, password)
 		if err != nil {
 			return err
 		}
 		if prependExisting {
-			existingHosts, err := existingHosts(configPath, mirroredRegistry)
+			existingHosts, err := existingHosts(configPath, mr)
 			if err != nil {
 				return err
 			}
 			if existingHosts != "" {
 				templatedHosts = templatedHosts + "\n\n" + existingHosts
 			}
-			log.Info("prepending to existing Containerd mirror configuration", "registry", mirroredRegistry.String())
+			log.Info("prepending to existing Containerd mirror configuration", "registry", mr.String())
 		}
-		hostComp := mirroredRegistry.Host
-		if hostComp == "" {
-			hostComp = "_default"
-		}
-		fp := path.Join(configPath, hostComp, "hosts.toml")
+		fp := path.Join(configPath, mr.Host, "hosts.toml")
 		err = os.MkdirAll(filepath.Dir(fp), 0o755)
 		if err != nil {
 			return err
@@ -564,7 +573,7 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 		if err != nil {
 			return err
 		}
-		log.Info("added Containerd mirror configuration", "registry", mirroredRegistry.String(), "path", fp)
+		log.Info("added Containerd mirror configuration", "registry", mr.String(), "path", fp)
 	}
 	return nil
 }
@@ -613,21 +622,55 @@ func CleanupMirrorConfiguration(ctx context.Context, configPath string) error {
 	return nil
 }
 
-func validateRegistries(urls []url.URL) error {
+func parseMirroredRegistries(mirroredRegistries []string) ([]url.URL, error) {
+	mru := []url.URL{}
+	for _, s := range mirroredRegistries {
+		if s == defaultRegistry {
+			mru = append(mru, url.URL{Host: defaultRegistry})
+			continue
+		}
+		u, err := url.Parse(s)
+		if err != nil {
+			return nil, err
+		}
+		err = validateRegistry(u)
+		if err != nil {
+			return nil, err
+		}
+		mru = append(mru, *u)
+	}
+	return mru, nil
+}
+
+func parseMirrorTargets(mirroredTargets []string) ([]url.URL, error) {
+	mru := []url.URL{}
+	for _, s := range mirroredTargets {
+		u, err := url.Parse(s)
+		if err != nil {
+			return nil, err
+		}
+		err = validateRegistry(u)
+		if err != nil {
+			return nil, err
+		}
+		mru = append(mru, *u)
+	}
+	return mru, nil
+}
+
+func validateRegistry(u *url.URL) error {
 	errs := []error{}
-	for _, u := range urls {
-		if u.Scheme != "http" && u.Scheme != "https" {
-			errs = append(errs, fmt.Errorf("invalid registry url scheme must be http or https: %s", u.String()))
-		}
-		if u.Path != "" {
-			errs = append(errs, fmt.Errorf("invalid registry url path has to be empty: %s", u.String()))
-		}
-		if len(u.Query()) != 0 {
-			errs = append(errs, fmt.Errorf("invalid registry url query has to be empty: %s", u.String()))
-		}
-		if u.User != nil {
-			errs = append(errs, fmt.Errorf("invalid registry url user has to be empty: %s", u.String()))
-		}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		errs = append(errs, fmt.Errorf("invalid registry url scheme must be http or https: %s", u.String()))
+	}
+	if u.Path != "" {
+		errs = append(errs, fmt.Errorf("invalid registry url path has to be empty: %s", u.String()))
+	}
+	if len(u.Query()) != 0 {
+		errs = append(errs, fmt.Errorf("invalid registry url query has to be empty: %s", u.String()))
+	}
+	if u.User != nil {
+		errs = append(errs, fmt.Errorf("invalid registry url user has to be empty: %s", u.String()))
 	}
 	return errors.Join(errs...)
 }
@@ -679,10 +722,13 @@ func clearConfig(configPath string) error {
 	return nil
 }
 
-func templateHosts(mirroredRegistry url.URL, mirrorTargets []url.URL, capabilities []string, username, password string) (string, error) {
-	server := mirroredRegistry.String()
-	if mirroredRegistry.String() == "https://docker.io" {
+func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, capabilities []string, username, password string) (string, error) {
+	server := parsedMirrorRegistry.String()
+	if parsedMirrorRegistry.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
+	}
+	if parsedMirrorRegistry.Host == defaultRegistry {
+		server = ""
 	}
 
 	authorization := ""
@@ -700,7 +746,7 @@ func templateHosts(mirroredRegistry url.URL, mirrorTargets []url.URL, capabiliti
 	}{
 		Server:        server,
 		Capabilities:  fmt.Sprintf("['%s']", strings.Join(capabilities, "', '")),
-		MirrorTargets: mirrorTargets,
+		MirrorTargets: parsedMirrorTargets,
 		Authorization: authorization,
 	}
 	tmpl, err := template.New("").Parse(`{{- with .Server }}server = '{{ . }}'{{ end }}
@@ -729,8 +775,8 @@ type hostFile struct {
 	Hosts map[string]any `toml:"host"`
 }
 
-func existingHosts(configPath string, mirroredRegistry url.URL) (string, error) {
-	fp := path.Join(configPath, backupDir, mirroredRegistry.Host, "hosts.toml")
+func existingHosts(configPath string, parsedMirrorRegistry url.URL) (string, error) {
+	fp := path.Join(configPath, backupDir, parsedMirrorRegistry.Host, "hosts.toml")
 	b, err := os.ReadFile(fp)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil

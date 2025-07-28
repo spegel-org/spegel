@@ -307,18 +307,18 @@ func TestMirrorConfiguration(t *testing.T) {
 		name                string
 		username            string
 		password            string
-		registries          []url.URL
-		mirrors             []url.URL
+		mirroredRegistries  []string
+		mirrorTargets       []string
 		resolveTags         bool
 		createConfigPathDir bool
 		prependExisting     bool
 	}{
 		{
-			name:            "multiple mirrors",
-			resolveTags:     true,
-			registries:      stringListToUrlList(t, []string{"http://foo.bar:5000"}),
-			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.2:5000", "http://127.0.0.1:5001"}),
-			prependExisting: false,
+			name:               "multiple mirrors targets",
+			resolveTags:        true,
+			mirroredRegistries: []string{"http://foo.bar:5000"},
+			mirrorTargets:      []string{"http://127.0.0.1:5000", "http://127.0.0.2:5000", "http://127.0.0.1:5001"},
+			prependExisting:    false,
 			expectedFiles: map[string]string{
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
@@ -336,11 +336,11 @@ dial_timeout = '200ms'`,
 			},
 		},
 		{
-			name:            "_default registry mirrors",
-			resolveTags:     true,
-			registries:      stringListToUrlList(t, []string{}),
-			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
-			prependExisting: false,
+			name:               "empty mirrored registires defaults to _default",
+			resolveTags:        true,
+			mirroredRegistries: []string{},
+			mirrorTargets:      []string{"http://127.0.0.1:5000"},
+			prependExisting:    false,
 			expectedFiles: map[string]string{
 				"_default/hosts.toml": `[host.'http://127.0.0.1:5000']
 capabilities = ['pull', 'resolve']
@@ -348,11 +348,23 @@ dial_timeout = '200ms'`,
 			},
 		},
 		{
-			name:            "resolve tags disabled",
-			resolveTags:     false,
-			registries:      stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
-			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
-			prependExisting: false,
+			name:               "default is explicitly set",
+			resolveTags:        true,
+			mirroredRegistries: []string{defaultRegistry},
+			mirrorTargets:      []string{"http://127.0.0.1:5000"},
+			prependExisting:    false,
+			expectedFiles: map[string]string{
+				"_default/hosts.toml": `[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'`,
+			},
+		},
+		{
+			name:               "resolve tags disabled",
+			resolveTags:        false,
+			mirroredRegistries: []string{"https://docker.io", "http://foo.bar:5000"},
+			mirrorTargets:      []string{"http://127.0.0.1:5000"},
+			prependExisting:    false,
 			expectedFiles: map[string]string{
 				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
@@ -369,8 +381,8 @@ dial_timeout = '200ms'`,
 		{
 			name:                "config path directory does not exist",
 			resolveTags:         true,
-			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
-			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			mirroredRegistries:  []string{"https://docker.io", "http://foo.bar:5000"},
+			mirrorTargets:       []string{"http://127.0.0.1:5000"},
 			createConfigPathDir: false,
 			prependExisting:     false,
 			expectedFiles: map[string]string{
@@ -389,8 +401,8 @@ dial_timeout = '200ms'`,
 		{
 			name:                "config path directory does exist",
 			resolveTags:         true,
-			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
-			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			mirroredRegistries:  []string{"https://docker.io", "http://foo.bar:5000"},
+			mirrorTargets:       []string{"http://127.0.0.1:5000"},
 			createConfigPathDir: true,
 			prependExisting:     false,
 			expectedFiles: map[string]string{
@@ -409,8 +421,8 @@ dial_timeout = '200ms'`,
 		{
 			name:                "config path directory contains configuration",
 			resolveTags:         true,
-			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
-			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			mirroredRegistries:  []string{"https://docker.io", "http://foo.bar:5000"},
+			mirrorTargets:       []string{"http://127.0.0.1:5000"},
 			createConfigPathDir: true,
 			prependExisting:     false,
 			existingFiles: map[string]string{
@@ -435,8 +447,8 @@ dial_timeout = '200ms'`,
 		{
 			name:                "config path directory contains backup",
 			resolveTags:         true,
-			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
-			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			mirroredRegistries:  []string{"https://docker.io", "http://foo.bar:5000"},
+			mirrorTargets:       []string{"http://127.0.0.1:5000"},
 			createConfigPathDir: true,
 			prependExisting:     false,
 			existingFiles: map[string]string{
@@ -463,8 +475,8 @@ dial_timeout = '200ms'`,
 		{
 			name:                "prepend to existing configuration",
 			resolveTags:         true,
-			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
-			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			mirroredRegistries:  []string{"https://docker.io", "http://foo.bar:5000"},
+			mirrorTargets:       []string{"http://127.0.0.1:5000"},
 			createConfigPathDir: true,
 			prependExisting:     true,
 			existingFiles: map[string]string{
@@ -523,8 +535,8 @@ dial_timeout = '200ms'`,
 		{
 			name:                "prepend existing disabled",
 			resolveTags:         true,
-			registries:          stringListToUrlList(t, []string{"https://docker.io", "http://foo.bar:5000"}),
-			mirrors:             stringListToUrlList(t, []string{"http://127.0.0.1:5000"}),
+			mirroredRegistries:  []string{"https://docker.io", "http://foo.bar:5000"},
+			mirrorTargets:       []string{"http://127.0.0.1:5000"},
 			createConfigPathDir: true,
 			prependExisting:     false,
 			existingFiles: map[string]string{
@@ -569,13 +581,13 @@ dial_timeout = '200ms'`,
 			},
 		},
 		{
-			name:            "with basic authentication",
-			resolveTags:     true,
-			registries:      stringListToUrlList(t, []string{"http://foo.bar:5000"}),
-			mirrors:         stringListToUrlList(t, []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"}),
-			prependExisting: false,
-			username:        "hello",
-			password:        "world",
+			name:               "with basic authentication",
+			resolveTags:        true,
+			mirroredRegistries: []string{"http://foo.bar:5000"},
+			mirrorTargets:      []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"},
+			prependExisting:    false,
+			username:           "hello",
+			password:           "world",
 			expectedFiles: map[string]string{
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
@@ -609,7 +621,7 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 				err = os.WriteFile(path, []byte(v), 0o644)
 				require.NoError(t, err)
 			}
-			err := AddMirrorConfiguration(t.Context(), registryConfigPath, tt.registries, tt.mirrors, tt.resolveTags, tt.prependExisting, tt.username, tt.password)
+			err := AddMirrorConfiguration(t.Context(), registryConfigPath, tt.mirroredRegistries, tt.mirrorTargets, tt.resolveTags, tt.prependExisting, tt.username, tt.password)
 			require.NoError(t, err)
 			ok, err := dirExists(filepath.Join(registryConfigPath, "_backup"))
 			require.NoError(t, err)
@@ -639,22 +651,22 @@ func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
 	t.Parallel()
 
 	configPath := filepath.Join(t.TempDir(), "etc", "containerd", "certs.d")
-	mirrors := stringListToUrlList(t, []string{"http://127.0.0.1:5000"})
+	mirrorTargets := []string{"http://127.0.0.1:5000"}
 
-	registries := stringListToUrlList(t, []string{"ftp://docker.io"})
-	err := AddMirrorConfiguration(t.Context(), configPath, registries, mirrors, true, false, "", "")
+	mirroredRegistries := []string{"ftp://docker.io"}
+	err := AddMirrorConfiguration(t.Context(), configPath, mirroredRegistries, mirrorTargets, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url scheme must be http or https: ftp://docker.io")
 
-	registries = stringListToUrlList(t, []string{"https://docker.io/foo/bar"})
-	err = AddMirrorConfiguration(t.Context(), configPath, registries, mirrors, true, false, "", "")
+	mirroredRegistries = []string{"https://docker.io/foo/bar"}
+	err = AddMirrorConfiguration(t.Context(), configPath, mirroredRegistries, mirrorTargets, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url path has to be empty: https://docker.io/foo/bar")
 
-	registries = stringListToUrlList(t, []string{"https://docker.io?foo=bar"})
-	err = AddMirrorConfiguration(t.Context(), configPath, registries, mirrors, true, false, "", "")
+	mirroredRegistries = []string{"https://docker.io?foo=bar"}
+	err = AddMirrorConfiguration(t.Context(), configPath, mirroredRegistries, mirrorTargets, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url query has to be empty: https://docker.io?foo=bar")
 
-	registries = stringListToUrlList(t, []string{"https://foo@docker.io"})
-	err = AddMirrorConfiguration(t.Context(), configPath, registries, mirrors, true, false, "", "")
+	mirroredRegistries = []string{"https://foo@docker.io"}
+	err = AddMirrorConfiguration(t.Context(), configPath, mirroredRegistries, mirrorTargets, true, false, "", "")
 	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
 }
 
