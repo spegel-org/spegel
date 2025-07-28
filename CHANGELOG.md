@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#949](https://github.com/spegel-org/spegel/pull/949) Set timeout for mirror requests and switch to using OCI client.
 - [#951](https://github.com/spegel-org/spegel/pull/951) Add tests for channel merge.
 - [#953](https://github.com/spegel-org/spegel/pull/953) Add OCI errors to registry 4xx responses.
+- [#954](https://github.com/spegel-org/spegel/pull/954) Allow setting _default mirrored registry.
 
 ### Changed
 
