@@ -168,6 +168,7 @@ func (r *Registry) Server(addr string) (*http.Server, error) {
 
 func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
 	rw.SetHandler("ready")
+
 	ok, err := r.router.Ready(req.Context())
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("could not determine router readiness: %w", err))
@@ -216,8 +217,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 			_, ociErr = r.ociStore.Size(req.Context(), dist.Digest)
 		}
 		if ociErr != nil {
-			rw.SetHandler("mirror")
-			r.handleMirror(rw, req, dist)
+			r.mirrorHandler(rw, req, dist)
 			return
 		}
 	}
@@ -225,12 +225,10 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	// Serve registry endpoints.
 	switch dist.Kind {
 	case oci.DistributionKindManifest:
-		rw.SetHandler("manifest")
-		r.handleManifest(rw, req, dist)
+		r.manifestHandler(rw, req, dist)
 		return
 	case oci.DistributionKindBlob:
-		rw.SetHandler("blob")
-		r.handleBlob(rw, req, dist)
+		r.blobHandler(rw, req, dist)
 		return
 	default:
 		// This should never happen as it would be caught when parsing the path.
@@ -243,7 +241,9 @@ type MirrorErrorDetails struct {
 	Attempts int `json:"attempts"`
 }
 
-func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+	rw.SetHandler("mirror")
+
 	log := r.log.WithValues("ref", dist.Reference(), "path", req.URL.Path)
 
 	defer func() {
@@ -399,7 +399,9 @@ func (r *Registry) handleMirror(rw httpx.ResponseWriter, req *http.Request, dist
 	}
 }
 
-func (r *Registry) handleManifest(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+	rw.SetHandler("manifest")
+
 	if dist.Digest == "" {
 		dgst, err := r.ociStore.Resolve(req.Context(), dist.Reference())
 		if err != nil {
@@ -431,7 +433,9 @@ func (r *Registry) handleManifest(rw httpx.ResponseWriter, req *http.Request, di
 	}
 }
 
-func (r *Registry) handleBlob(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+	rw.SetHandler("blob")
+
 	size, err := r.ociStore.Size(req.Context(), dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not determine size of blob %s", dist.Digest), nil)
