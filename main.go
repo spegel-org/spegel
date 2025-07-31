@@ -18,7 +18,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
-	"k8s.io/klog/v2"
 
 	"github.com/spegel-org/spegel/internal/cleanup"
 	"github.com/spegel-org/spegel/internal/web"
@@ -91,7 +90,6 @@ func main() {
 	}
 	handler := slog.NewJSONHandler(os.Stderr, &opts)
 	log := logr.FromSlogHandler(handler)
-	klog.SetLogger(log)
 	ctx := logr.NewContext(context.Background(), log)
 
 	err := run(ctx, args)

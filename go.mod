@@ -29,7 +29,6 @@ require (
 	google.golang.org/grpc v1.74.2
 	k8s.io/apimachinery v0.33.3
 	k8s.io/cri-api v0.33.3
-	k8s.io/klog/v2 v2.130.1
 )
 
 require (

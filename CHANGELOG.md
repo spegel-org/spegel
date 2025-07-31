@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#942](https://github.com/spegel-org/spegel/pull/942) Skip writing headers and status code on mirror retries.
 - [#950](https://github.com/spegel-org/spegel/pull/950) Fix lint errors and add forbidgo.
 - [#955](https://github.com/spegel-org/spegel/pull/955) Cleanup and move set handler to handler functions.
+- [#956](https://github.com/spegel-org/spegel/pull/956) Remove setting logger for klog.
 
 ### Security
 
