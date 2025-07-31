@@ -9,11 +9,13 @@ import (
 	"sync"
 
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 var _ Store = &Memory{}
 
 type Memory struct {
+	descs  map[digest.Digest]ocispec.Descriptor
 	blobs  map[digest.Digest][]byte
 	tags   map[string]digest.Digest
 	images []Image
@@ -24,6 +26,7 @@ func NewMemory() *Memory {
 	return &Memory{
 		images: []Image{},
 		tags:   map[string]digest.Digest{},
+		descs:  map[digest.Digest]ocispec.Descriptor{},
 		blobs:  map[digest.Digest][]byte{},
 	}
 }
@@ -84,15 +87,15 @@ func (m *Memory) GetManifest(ctx context.Context, dgst digest.Digest) ([]byte, s
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
+	desc, ok := m.descs[dgst]
+	if !ok {
+		return nil, "", errors.Join(ErrNotFound, fmt.Errorf("manifest with digest %s not found", dgst))
+	}
 	b, ok := m.blobs[dgst]
 	if !ok {
 		return nil, "", errors.Join(ErrNotFound, fmt.Errorf("manifest with digest %s not found", dgst))
 	}
-	mt, err := DetermineMediaType(b)
-	if err != nil {
-		return nil, "", err
-	}
-	return b, mt, nil
+	return b, desc.MediaType, nil
 }
 
 func (m *Memory) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
@@ -125,9 +128,10 @@ func (m *Memory) AddImage(img Image) {
 	m.tags[tagName] = img.Digest
 }
 
-func (m *Memory) AddBlob(b []byte, dgst digest.Digest) {
+func (m *Memory) Write(desc ocispec.Descriptor, b []byte) {
 	m.mx.Lock()
 	defer m.mx.Unlock()
 
-	m.blobs[dgst] = b
+	m.descs[desc.Digest] = desc
+	m.blobs[desc.Digest] = b
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spegel-org/spegel/pkg/httpx"
@@ -152,10 +153,10 @@ func TestRegistryHandler(t *testing.T) {
 	badAddrPort := netip.MustParseAddrPort(badSvr.Listener.Addr().String())
 
 	memStore := oci.NewMemory()
-	memStore.AddBlob([]byte("no working peers"), digest.Digest("sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6"))
-	memStore.AddBlob([]byte("first peer"), digest.Digest("sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67"))
-	memStore.AddBlob([]byte("second peer"), digest.Digest("sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2"))
-	memStore.AddBlob([]byte("last peer working"), digest.Digest("sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba"))
+	memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6")}, []byte("no working peers"))
+	memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67")}, []byte("first peer"))
+	memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2")}, []byte("second peer"))
+	memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba")}, []byte("last peer working"))
 	goodReg, err := NewRegistry(memStore, routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.AddrPort{}))
 	require.NoError(t, err)
 	goodSvr := httptest.NewServer(goodReg.Handler())
