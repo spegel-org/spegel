@@ -2,7 +2,6 @@ package oci
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -24,24 +23,14 @@ import (
 func TestStore(t *testing.T) {
 	t.Parallel()
 
-	b, err := os.ReadFile("./testdata/images.json")
+	b, err := os.ReadFile("./testdata/store.json")
 	require.NoError(t, err)
-	imgs := []map[string]string{}
-	err = json.Unmarshal(b, &imgs)
+	md := struct {
+		Images map[string]digest.Digest             `json:"images"`
+		Blobs  map[digest.Digest]ocispec.Descriptor `json:"blobs"`
+	}{}
+	err = json.Unmarshal(b, &md)
 	require.NoError(t, err)
-	blobs := map[digest.Digest][]byte{}
-	fileItems, err := os.ReadDir("./testdata/blobs/sha256")
-	require.NoError(t, err)
-	for _, item := range fileItems {
-		if item.IsDir() {
-			continue
-		}
-		dgst, err := digest.Parse(fmt.Sprintf("sha256:%s", item.Name()))
-		require.NoError(t, err)
-		b, err := os.ReadFile(path.Join("./testdata/blobs/sha256", item.Name()))
-		require.NoError(t, err)
-		blobs[dgst] = b
-	}
 
 	contentPath := t.TempDir()
 	contentStore, err := local.NewStore(contentPath)
@@ -51,29 +40,6 @@ func TestStore(t *testing.T) {
 	db := metadata.NewDB(boltDB, contentStore, nil)
 	imageStore := metadata.NewImageStore(db)
 	ctx := namespaces.WithNamespace(t.Context(), "k8s.io")
-	for _, img := range imgs {
-		dgst, err := digest.Parse(img["digest"])
-		require.NoError(t, err)
-		cImg := images.Image{
-			Name: img["name"],
-			Target: ocispec.Descriptor{
-				MediaType: img["mediaType"],
-				Digest:    dgst,
-				Size:      int64(len(blobs[dgst])),
-			},
-		}
-		_, err = imageStore.Create(ctx, cImg)
-		require.NoError(t, err)
-	}
-	for k, v := range blobs {
-		writer, err := contentStore.Writer(ctx, content.WithRef(k.String()))
-		require.NoError(t, err)
-		_, err = writer.Write(v)
-		require.NoError(t, err)
-		err = writer.Commit(ctx, int64(len(v)), k)
-		require.NoError(t, err)
-		writer.Close()
-	}
 	containerdClient, err := client.New("", client.WithServices(client.WithImageStore(imageStore), client.WithContentStore(contentStore)))
 	require.NoError(t, err)
 	remoteContainerd := &Containerd{
@@ -84,19 +50,40 @@ func TestStore(t *testing.T) {
 		client:      containerdClient,
 	}
 
-	memoryClient := NewMemory()
-	for _, img := range imgs {
-		dgst, err := digest.Parse(img["digest"])
+	memoryStore := NewMemory()
+
+	for k, dgst := range md.Images {
+		desc := md.Blobs[dgst]
+		cImg := images.Image{
+			Name: k,
+			Target: ocispec.Descriptor{
+				MediaType: desc.MediaType,
+				Digest:    desc.Digest,
+				Size:      desc.Size,
+			},
+		}
+		_, err = imageStore.Create(ctx, cImg)
 		require.NoError(t, err)
-		img, err := ParseImageRequireDigest(img["name"], dgst)
+
+		img, err := ParseImageRequireDigest(k, desc.Digest)
 		require.NoError(t, err)
-		memoryClient.AddImage(img)
+		memoryStore.AddImage(img)
 	}
-	for k, v := range blobs {
-		memoryClient.AddBlob(v, k)
+	for _, desc := range md.Blobs {
+		b, err := os.ReadFile(path.Join("testdata", "blobs", "sha256", desc.Digest.Encoded()))
+		require.NoError(t, err)
+		writer, err := contentStore.Writer(ctx, content.WithRef(desc.Digest.String()))
+		require.NoError(t, err)
+		_, err = writer.Write(b)
+		require.NoError(t, err)
+		err = writer.Commit(ctx, desc.Size, desc.Digest)
+		require.NoError(t, err)
+		writer.Close()
+
+		memoryStore.Write(desc, b)
 	}
 
-	for _, ociStore := range []Store{remoteContainerd, localContainerd, memoryClient} {
+	for _, ociStore := range []Store{remoteContainerd, localContainerd, memoryStore} {
 		t.Run(ociStore.Name(), func(t *testing.T) {
 			t.Parallel()
 
@@ -167,18 +154,21 @@ func TestStore(t *testing.T) {
 					size, err := ociStore.Size(ctx, tt.dgst)
 					require.NoError(t, err)
 					require.Equal(t, tt.size, size)
+
+					expected, err := os.ReadFile(path.Join("testdata", "blobs", "sha256", tt.dgst.Encoded()))
+					require.NoError(t, err)
 					if tt.mediaType != ocispec.MediaTypeImageLayer {
 						b, mediaType, err := ociStore.GetManifest(ctx, tt.dgst)
 						require.NoError(t, err)
 						require.Equal(t, tt.mediaType, mediaType)
-						require.Equal(t, blobs[tt.dgst], b)
+						require.Equal(t, expected, b)
 					} else {
 						rc, err := ociStore.GetBlob(ctx, tt.dgst)
 						require.NoError(t, err)
 						defer rc.Close()
 						b, err := io.ReadAll(rc)
 						require.NoError(t, err)
-						require.Equal(t, blobs[tt.dgst], b)
+						require.Equal(t, expected, b)
 					}
 				})
 			}

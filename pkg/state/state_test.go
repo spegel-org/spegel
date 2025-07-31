@@ -48,7 +48,7 @@ func TestTrack(t *testing.T) {
 		_, err = hash.Write(b)
 		require.NoError(t, err)
 		dgst := digest.NewDigest(digest.SHA256, hash)
-		ociStore.AddBlob(b, dgst)
+		ociStore.Write(ocispec.Descriptor{Digest: dgst}, b)
 		img, err := oci.ParseImageRequireDigest(imageStr, dgst)
 		require.NoError(t, err)
 		ociStore.AddImage(img)
