@@ -46,7 +46,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate images meta
         id: meta
-        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 #v5.7.0
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f #v5.8.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/spegel
           tags: type=raw,value=${{ steps.prep.outputs.VERSION }}
