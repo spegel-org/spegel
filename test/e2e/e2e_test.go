@@ -34,31 +34,16 @@ func TestE2E(t *testing.T) {
 	// Create kind cluster.
 	kcPath := createKindCluster(t.Context(), t, kindName, proxyMode, ipFamily, 4)
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
-
-		if t.Failed() {
-			t.Log("Test failure debug output")
-
-			out, _ := commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods", kcPath))
-			t.Logf("Spegel Pods:\n\n%s\n\n", out)
-			out, _ = commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel logs -l app.kubernetes.io/name=spegel --max-log-requests 50", kcPath))
-			t.Logf("Spegel Logs:\n\n%s\n\n", out)
-
-			out, _ = commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance get pods", kcPath))
-			t.Logf("Conformance Pods:\n\n%s\n\n", out)
-			out, _ = commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance logs -l job-name=conformance", kcPath))
-			t.Logf("Conformance Logs:\n\n%s\n\n", out)
-		}
-
 		t.Log("Deleting Kind cluster")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 		command(ctx, t, fmt.Sprintf("kind delete cluster --name %s", kindName))
 	})
 
 	// Pull test images.
 	g, gCtx := errgroup.WithContext(t.Context())
 	images := []string{
-		"ghcr.io/spegel-org/conformance:583e014",
+		"ghcr.io/spegel-org/conformance:9d1b925",
 		"ghcr.io/spegel-org/benchmark:v1-10MB-1",
 		"ghcr.io/spegel-org/benchmark:v2-10MB-1",
 		"docker.io/library/busybox:1.37.0",
@@ -87,6 +72,16 @@ func TestE2E(t *testing.T) {
 	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 bash -c \"mkdir -p /etc/containerd/certs.d/docker.io; echo -e '%s' > /etc/containerd/certs.d/docker.io/hosts.toml\"", kindName, hostsToml))
 
 	// Deploy Spegel.
+	t.Cleanup(func() {
+		if t.Failed() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			out, _ := commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o wide", kcPath))
+			t.Logf("Spegel Pods:\n\n%s\n\n", out)
+			out, _ = commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel logs -l app.kubernetes.io/name=spegel --max-log-requests 50", kcPath))
+			t.Logf("Spegel Logs:\n\n%s\n\n", out)
+		}
+	})
 	deploySpegel(t.Context(), t, kindName, imageRef, kcPath)
 	podOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
 	require.Len(t, strings.Split(podOutput, "\n"), 4)
@@ -100,10 +95,24 @@ func TestE2E(t *testing.T) {
 	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 mkdir /etc/containerd/certs.d/_backup", kindName))
 
 	// Run conformance tests.
-	t.Log("Running conformance tests")
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s create namespace conformance --dry-run=client -o yaml | kubectl --kubeconfig %s apply -f -", kcPath, kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply --namespace conformance -f ./testdata/conformance-job.yaml", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 60s --for=condition=complete job/conformance", kcPath))
+	succeeded := t.Run("Run conformance tests", func(t *testing.T) {
+		t.Cleanup(func() {
+			if t.Failed() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				out, _ := commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance get pods -o wide", kcPath))
+				t.Logf("Conformance Pods:\n\n%s\n\n", out)
+				out, _ = commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance logs -l job-name=conformance", kcPath))
+				t.Logf("Conformance Logs:\n\n%s\n\n", out)
+			}
+		})
+		command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s create namespace conformance --dry-run=client -o yaml | kubectl --kubeconfig %s apply -f -", kcPath, kcPath))
+		command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply --namespace conformance -f ./testdata/conformance-job.yaml", kcPath))
+		command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace conformance wait --timeout 60s --for=condition=complete job/conformance", kcPath))
+	})
+	if !succeeded {
+		t.FailNow()
+	}
 
 	// Remove Spegel from the last node to test that the mirror fallback is working.
 	workerPod := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=%s-worker4", kcPath, kindName))
@@ -161,12 +170,25 @@ func TestE2E(t *testing.T) {
 	}
 
 	// Deploy pull test pods and verify deployment status.
-	t.Log("Deploy test pull test pods")
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply -f ./testdata/pull-test.yaml", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-tag --for condition=available", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-digest --for condition=available", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-tag-and-digest --for condition=available", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s -l app=pull-test-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod", kcPath))
+	t.Log("Deploy pull test pods")
+	succeeded = t.Run("Deploy pull test pods", func(t *testing.T) {
+		t.Cleanup(func() {
+			if t.Failed() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				out, _ := commandWithError(ctx, t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test get pods -o wide", kcPath))
+				t.Logf("Pull Test Pods:\n\n%s\n\n", out)
+			}
+		})
+		command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s apply -f ./testdata/pull-test.yaml", kcPath))
+		command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-tag --for condition=available", kcPath))
+		command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-digest --for condition=available", kcPath))
+		command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s deployment/pull-test-tag-and-digest --for condition=available", kcPath))
+		command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test wait --timeout=30s -l app=pull-test-not-present --for jsonpath='{.status.containerStatuses[*].state.waiting.reason}'=ImagePullBackOff pod", kcPath))
+	})
+	if !succeeded {
+		t.FailNow()
+	}
 
 	// Verify that Spegel has never restarted.
 	restartOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))

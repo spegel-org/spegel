@@ -9,7 +9,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: conformance
-        image: ghcr.io/spegel-org/conformance:583e014
+        image: ghcr.io/spegel-org/conformance:9d1b925
         env:
         - name: OCI_TEST_PULL
           value: "1"
