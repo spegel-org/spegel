@@ -142,12 +142,18 @@ spec:
           periodSeconds: 3
           failureThreshold: 60
           httpGet:
-            path: /healthz
+            path: /readyz
             port: registry
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /readyz
             port: registry
+        {{- if .Values.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: registry
+        {{- end }}
         volumeMounts:
           {{- if .Values.basicAuthSecretName }}
           - name: basic-auth

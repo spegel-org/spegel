@@ -27,7 +27,7 @@ func Run(ctx context.Context, addr, configPath string) error {
 	g, gCtx := errgroup.WithContext(ctx)
 
 	mux := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodGet && req.URL.Path != "/healthz" {
+		if req.Method != http.MethodGet && req.URL.Path != "/readyz" {
 			log.Error(errors.New("unknown request"), "unsupported probe request", "path", req.URL.Path, "method", req.Method)
 			rw.WriteHeader(http.StatusNotFound)
 			return
@@ -117,7 +117,7 @@ func probeIPs(ctx context.Context, client *http.Client, ips []net.IPAddr, port s
 			u := url.URL{
 				Scheme: "http",
 				Host:   net.JoinHostPort(ip.String(), port),
-				Path:   "/healthz",
+				Path:   "/readyz",
 			}
 			reqCtx, cancel := context.WithTimeout(gCtx, 1*time.Second)
 			defer cancel()

@@ -44,7 +44,7 @@ func TestRegistryOptions(t *testing.T) {
 	require.Equal(t, "bar", cfg.Password)
 }
 
-func TestReadyHandler(t *testing.T) {
+func TestProbeHandlers(t *testing.T) {
 	t.Parallel()
 
 	router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:8080"))
@@ -54,13 +54,21 @@ func TestReadyHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	rw := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/healthz", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/readyz", nil)
 	srv.Handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusInternalServerError, rw.Result().StatusCode)
+	rw = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "http://localhost/livez", nil)
+	srv.Handler.ServeHTTP(rw, req)
+	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 
 	router.Add("foo", netip.MustParseAddrPort("127.0.0.1:9090"))
 	rw = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "http://localhost/healthz", nil)
+	req = httptest.NewRequest(http.MethodGet, "http://localhost/readyz", nil)
+	srv.Handler.ServeHTTP(rw, req)
+	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
+	rw = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "http://localhost/livez", nil)
 	srv.Handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 }

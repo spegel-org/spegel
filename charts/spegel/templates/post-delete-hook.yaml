@@ -39,7 +39,7 @@ spec:
           - --addr=:{{ .Values.service.cleanup.port }}
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /readyz
             port: readiness
         ports:
           - name: readiness
