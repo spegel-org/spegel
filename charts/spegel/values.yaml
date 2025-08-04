@@ -191,3 +191,7 @@ verticalPodAutoscaler:
     # -- Specifies whether recommended updates are applied when a Pod is started and whether recommended updates
     # are applied during the life of a Pod. Possible values are "Off", "Initial", "Recreate", and "Auto".
     updateMode: Auto
+
+livenessProbe:
+  # -- When enabled a liveness probe will be added to the registry. 
+  enabled: false

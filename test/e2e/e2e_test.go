@@ -156,7 +156,7 @@ func TestE2E(t *testing.T) {
 		if addr.Is6() {
 			hostIP = fmt.Sprintf("[%s]", hostIP)
 		}
-		httpCode := command(t.Context(), t, fmt.Sprintf("docker exec %s-worker curl -s -o /dev/null -w \"%%{http_code}\" http://%s:%s/healthz || true", kindName, hostIP, tt.port))
+		httpCode := command(t.Context(), t, fmt.Sprintf("docker exec %s-worker curl -s -o /dev/null -w \"%%{http_code}\" http://%s:%s/readyz || true", kindName, hostIP, tt.port))
 		require.Equal(t, tt.expected, httpCode)
 	}
 

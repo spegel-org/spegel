@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -57,8 +58,8 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 			HttpRequestDurHistogram.WithLabelValues(metricsPath, req.Method, statusCode).Observe(latency.Seconds())
 			HttpResponseSizeHistogram.WithLabelValues(metricsPath, req.Method, statusCode).Observe(float64(rw.Size()))
 
-			// Ignore logging requests to healthz to reduce log noise
-			if req.URL.Path == "/healthz" {
+			// Ignore logging requests to readyz and livez to reduce log noise
+			if slices.Contains([]string{"/readyz", "/livez"}, req.URL.Path) {
 				return
 			}
 

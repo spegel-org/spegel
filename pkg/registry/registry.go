@@ -152,7 +152,8 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 
 func (r *Registry) Handler() *httpx.ServeMux {
 	m := httpx.NewServeMux(r.log)
-	m.Handle("GET /healthz", r.readyHandler)
+	m.Handle("GET /readyz", r.readyHandler)
+	m.Handle("GET /livez", r.livenesHandler)
 	m.Handle("GET /v2/", r.registryHandler)
 	m.Handle("HEAD /v2/", r.registryHandler)
 	return m
@@ -167,7 +168,7 @@ func (r *Registry) Server(addr string) (*http.Server, error) {
 }
 
 func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetHandler("ready")
+	rw.SetHandler("readyz")
 
 	ok, err := r.router.Ready(req.Context())
 	if err != nil {
@@ -178,6 +179,13 @@ func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	rw.WriteHeader(http.StatusOK)
+}
+
+func (r *Registry) livenesHandler(rw httpx.ResponseWriter, req *http.Request) {
+	rw.SetHandler("livez")
+
+	rw.WriteHeader(http.StatusOK)
 }
 
 func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {

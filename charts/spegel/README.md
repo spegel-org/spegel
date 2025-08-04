@@ -22,6 +22,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | image.repository | string | `"ghcr.io/spegel-org/spegel"` | Image repository. |
 | image.tag | string | `""` | Overrides the image tag whose default is the chart appVersion. |
 | imagePullSecrets | list | `[]` | Image Pull Secrets |
+| livenessProbe.enabled | bool | `false` | When enabled a liveness probe will be added to the registry.  |
 | nameOverride | string | `""` | Overrides the name of the chart. |
 | namespaceOverride | string | `""` | Overrides the namespace where spegel resources are installed. |
 | nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for pod assignment. |
