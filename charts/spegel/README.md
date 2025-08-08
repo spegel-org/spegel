@@ -13,7 +13,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | clusterDomain | string | `"cluster.local."` | Domain configured for service domain names. |
 | commonLabels | object | `{}` | Common labels to apply to all rendered resources. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
-| grafanaDashboard.annotations | object | `{}` | Annotations that ConfigMaps can have to get configured in Grafana, See: sidecar.dashboards.folderAnnotation for specifying the dashboard folder. https://github.com/grafana/helm-charts/tree/main/charts/grafana |
+| grafanaDashboard.annotations | object | `{}` | Annotations that ConfigMaps can have to get configured in Grafana, See: sidecar.dashboards.folderAnnotation for specifying the dashboard folder. <https://github.com/grafana/helm-charts/tree/main/charts/grafana> |
 | grafanaDashboard.enabled | bool | `false` | If true creates a Grafana dashboard. |
 | grafanaDashboard.sidecarLabel | string | `"grafana_dashboard"` | Label that ConfigMaps should have to be loaded as dashboards. |
 | grafanaDashboard.sidecarLabelValue | string | `"1"` | Label value that ConfigMaps should have to be loaded as dashboards. |
@@ -32,8 +32,12 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | resources | object | `{"limits":{"memory":"128Mi"},"requests":{"memory":"128Mi"}}` | Resource requests and limits for the Spegel container. |
 | revisionHistoryLimit | int | `10` | The number of old history to retain to allow rollback. |
 | securityContext | object | `{"readOnlyRootFilesystem":true}` | Security context for the Spegel container. |
+| service.bootstrap.annotations | object | `{}` | Annotations to add to the bootstrap service |
+| service.cleanup.annotations | object | `{}` | Annotations to add to the cleanup service (used in post-delete hook) |
 | service.cleanup.port | int | `8080` | Port to expose cleanup probe on. |
+| service.metrics.annotations | object | `{}` | Annotations to add to the metrics service |
 | service.metrics.port | int | `9090` | Port to expose the metrics via the service. |
+| service.registry.annotations | object | `{}` | Annotations to add to the registry service |
 | service.registry.hostPort | int | `30020` | Local host port to expose the registry. |
 | service.registry.nodeIp | string | `""` | Override the NODE_ID environment variable. It defaults to the field status.hostIP |
 | service.registry.nodePort | int | `30021` | Node port to expose the registry via the service. |
