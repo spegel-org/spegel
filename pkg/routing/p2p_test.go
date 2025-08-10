@@ -176,7 +176,7 @@ func TestBootstrapFunc(t *testing.T) {
 	}
 }
 
-func TestListenMultiaddrs(t *testing.T) {
+func TestAddrToListenAddrs(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -204,12 +204,12 @@ func TestListenMultiaddrs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			multiAddrs, err := listenMultiaddrs(tt.addr)
+			listenAddrs, err := addrToListenAddrs(tt.addr)
 			require.NoError(t, err)
 			//nolint: testifylint // This is easier to read and understand.
-			require.Equal(t, len(tt.expected), len(multiAddrs))
+			require.Equal(t, len(tt.expected), len(listenAddrs))
 			for i, e := range tt.expected {
-				require.Equal(t, e, multiAddrs[i].String())
+				require.Equal(t, e, listenAddrs[i].String())
 			}
 		})
 	}
@@ -234,7 +234,7 @@ func TestCreateCid(t *testing.T) {
 	require.Equal(t, "bafkreigdvoh7cnza5cwzar65hfdgwpejotszfqx2ha6uuolaofgk54ge6i", c.String())
 }
 
-func TestHostMatches(t *testing.T) {
+func TestAddrInfoEqual(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -308,7 +308,7 @@ func TestHostMatches(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			matches, err := hostMatches(tt.host, tt.addrInfo)
+			matches, err := addrInfoEqual(tt.host, tt.addrInfo)
 			require.NoError(t, err)
 			require.Equal(t, tt.expected, matches)
 		})

@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#932](https://github.com/spegel-org/spegel/pull/932) Switch to using spegel-org images in e2e tests.
 - [#957](https://github.com/spegel-org/spegel/pull/957) Refactor memory store to include descriptor.
 - [#970](https://github.com/spegel-org/spegel/pull/970) Refactor bootstraper to use address info instead of string.
+- [#968](https://github.com/spegel-org/spegel/pull/968) Refactor p2p in preparation for dual stack support.
 
 ### Deprecated
 
