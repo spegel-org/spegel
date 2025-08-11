@@ -23,7 +23,7 @@ import (
 // Bootstrapper resolves peers to bootstrap with for the P2P router.
 type Bootstrapper interface {
 	// Run starts the bootstrap process. Should be blocking even if not needed.
-	Run(ctx context.Context, id string) error
+	Run(ctx context.Context, addrInfo peer.AddrInfo) error
 	// Get returns a list of peers that should be used as bootstrap nodes.
 	// If the peer ID is empty it will be resolved.
 	// If the address is missing a port the P2P router port will be used.
@@ -55,7 +55,7 @@ func NewStaticBootstrapper(peers []peer.AddrInfo) *StaticBootstrapper {
 	}
 }
 
-func (b *StaticBootstrapper) Run(ctx context.Context, id string) error {
+func (b *StaticBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error {
 	<-ctx.Done()
 	return nil
 }
@@ -88,7 +88,7 @@ func NewDNSBootstrapper(host string, limit int) *DNSBootstrapper {
 	}
 }
 
-func (b *DNSBootstrapper) Run(ctx context.Context, id string) error {
+func (b *DNSBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error {
 	<-ctx.Done()
 	return nil
 }
@@ -135,15 +135,19 @@ func NewHTTPBootstrapper(addr, peer string) *HTTPBootstrapper {
 	}
 }
 
-func (bs *HTTPBootstrapper) Run(ctx context.Context, id string) error {
+func (bs *HTTPBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error {
+	b, err := addrInfo.MarshalJSON()
+	if err != nil {
+		return err
+	}
 	g, ctx := errgroup.WithContext(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/id", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		//nolint:errcheck // ignore
-		w.Write([]byte(id))
+		w.Write(b)
 	})
-	srv := http.Server{
+	srv := &http.Server{
 		Addr:    bs.addr,
 		Handler: mux,
 	}
@@ -163,7 +167,7 @@ func (bs *HTTPBootstrapper) Run(ctx context.Context, id string) error {
 }
 
 func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, bs.peer, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, bs.peer+"/id", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -180,11 +184,8 @@ func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr, err := ma.NewMultiaddr(string(b))
-	if err != nil {
-		return nil, err
-	}
-	addrInfo, err := peer.AddrInfoFromP2pAddr(addr)
+	addrInfo := &peer.AddrInfo{}
+	err = addrInfo.UnmarshalJSON(b)
 	if err != nil {
 		return nil, err
 	}
