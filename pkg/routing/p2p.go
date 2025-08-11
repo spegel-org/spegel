@@ -163,8 +163,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 }
 
 func (r *P2PRouter) Run(ctx context.Context) (err error) {
-	self := fmt.Sprintf("%s/p2p/%s", r.host.Addrs()[0].String(), r.host.ID().String())
-	logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", self)
+	logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", r.host.ID())
 	if err := r.kdht.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("could not bootstrap distributed hash table: %w", err)
 	}
@@ -174,7 +173,7 @@ func (r *P2PRouter) Run(ctx context.Context) (err error) {
 			err = errors.Join(err, cerr)
 		}
 	}()
-	err = r.bootstrapper.Run(ctx, self)
+	err = r.bootstrapper.Run(ctx, *host.InfoFromHost(r.host))
 	if err != nil {
 		return err
 	}
