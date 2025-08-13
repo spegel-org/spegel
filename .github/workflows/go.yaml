@@ -27,6 +27,11 @@ jobs:
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 #v5.5.0
         with:
           go-version-file: go.mod
+
+      - run: go version
+      - run: go env GOROOT GOTOOLDIR
+      - run: ls "$(go env GOTOOLDIR)"
+
       - name: Run tests
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
       - name: Upload coverage reports to Codecov
