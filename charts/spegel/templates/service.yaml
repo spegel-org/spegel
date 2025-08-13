@@ -6,6 +6,10 @@ metadata:
   labels:
     app.kubernetes.io/component: metrics
     {{- include "spegel.labels" . | nindent 4 }}
+  {{- with .Values.service.metrics.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   selector:
     app.kubernetes.io/component: spegel
@@ -23,9 +27,14 @@ metadata:
   namespace: {{ include "spegel.namespace" . }}
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
-  {{- if .Values.service.registry.topologyAwareHintsEnabled }}
+  {{- if or .Values.service.registry.topologyAwareHintsEnabled .Values.service.registry.annotations }}
   annotations:
+    {{- if .Values.service.registry.topologyAwareHintsEnabled }}
     service.kubernetes.io/topology-mode: "auto"
+    {{- end }}
+    {{- with .Values.service.registry.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- end }}
 spec:
   type: NodePort
@@ -46,6 +55,10 @@ metadata:
   namespace: {{ include "spegel.namespace" . }}
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
+  {{- with .Values.service.bootstrap.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   selector:
     app.kubernetes.io/component: spegel

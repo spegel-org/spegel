@@ -70,6 +70,9 @@ metadata:
     helm.sh/hook: "post-delete"
     helm.sh/hook-delete-policy: "before-hook-creation, hook-succeeded"
     helm.sh/hook-weight: "0"
+    {{- with .Values.service.cleanup.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   selector:
     app.kubernetes.io/component: cleanup

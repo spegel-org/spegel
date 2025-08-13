@@ -50,15 +50,24 @@ service:
     hostPort: 30020
     # -- If true adds topology aware hints annotation to node port service.
     topologyAwareHintsEnabled: true
+    # -- Annotations to add to the registry service
+    annotations: {}
   router:
     # -- Port to expose the router via the service.
     port: 5001
   metrics:
     # -- Port to expose the metrics via the service.
     port: 9090
+    # -- Annotations to add to the metrics service
+    annotations: {}
+  bootstrap:
+    # -- Annotations to add to the bootstrap service
+    annotations: {}
   cleanup:
     # -- Port to expose cleanup probe on.
     port: 8080
+    # -- Annotations to add to the cleanup service (used in post-delete hook)
+    annotations: {}
 
 # -- Resource requests and limits for the Spegel container.
 resources:
