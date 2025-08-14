@@ -32,6 +32,9 @@ type RegistryConfig struct {
 	ResolveRetries   int
 	ResolveLatestTag bool
 	ResolveTimeout   time.Duration
+	Push             bool
+	PushUpstream     bool
+	LeaseDuration    time.Duration
 }
 
 func (cfg *RegistryConfig) Apply(opts ...RegistryOption) error {
@@ -91,6 +94,27 @@ func WithBasicAuth(username, password string) RegistryOption {
 	}
 }
 
+func WithPush(enabled bool) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.Push = enabled
+		return nil
+	}
+}
+
+func WithPushUpstream(enabled bool) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.PushUpstream = enabled
+		return nil
+	}
+}
+
+func WithLeaseDuration(d time.Duration) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.LeaseDuration = d
+		return nil
+	}
+}
+
 type Registry struct {
 	bufferPool       *sync.Pool
 	log              logr.Logger
@@ -102,6 +126,9 @@ type Registry struct {
 	resolveRetries   int
 	resolveTimeout   time.Duration
 	resolveLatestTag bool
+	push             bool
+	pushUpstream     bool
+	leaseDuration    time.Duration
 }
 
 func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
@@ -110,6 +137,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		ResolveRetries:   3,
 		ResolveLatestTag: true,
 		ResolveTimeout:   20 * time.Millisecond,
+		LeaseDuration:    10 * time.Minute,
 	}
 	err := cfg.Apply(opts...)
 	if err != nil {
@@ -146,6 +174,9 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		username:         cfg.Username,
 		password:         cfg.Password,
 		bufferPool:       bufferPool,
+		push:             cfg.Push,
+		pushUpstream:     cfg.PushUpstream,
+		leaseDuration:    cfg.LeaseDuration,
 	}
 	return r, nil
 }
@@ -155,7 +186,13 @@ func (r *Registry) Handler() *httpx.ServeMux {
 	m.Handle("GET /readyz", r.readyHandler)
 	m.Handle("GET /livez", r.livenesHandler)
 	m.Handle("GET /v2/", r.registryHandler)
-	m.Handle("HEAD /v2/", r.registryHandler)
+	if r.push {
+		m.Handle("GET /v2/{app_name}/blobs/uploads/{uuid}", r.pushHandler)
+		m.Handle("PUT /v2/", r.pushHandler)
+		m.Handle("POST /v2/", r.pushHandler)
+		m.Handle("PATCH /v2/", r.pushHandler)
+		m.Handle("DELETE /v2/", r.pushHandler)
+	}
 	return m
 }
 
