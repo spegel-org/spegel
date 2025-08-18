@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -91,7 +92,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		return nil, err
 	}
 
-	multiAddrs, err := listenMultiaddrs(addr)
+	listenAddrs, err := addrToListenAddrs(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +117,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		return nil
 	})
 	libp2pOpts := []libp2p.Option{
-		libp2p.ListenAddrs(multiAddrs...),
+		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
 		addrFactoryOpt,
 	}
@@ -189,11 +190,11 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	if len(addrInfos) == 1 {
-		matches, err := hostMatches(*host.InfoFromHost(r.host), addrInfos[0])
+		ok, err := addrInfoEqual(*host.InfoFromHost(r.host), addrInfos[0])
 		if err != nil {
 			return false, err
 		}
-		if matches {
+		if ok {
 			return true, nil
 		}
 	}
@@ -277,20 +278,21 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) 
 		bootstrapCtx, bootstrapCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer bootstrapCancel()
 
+		// Get port to append if it is missing from bootstrap address.
 		// TODO (phillebaba): Consider if we should do a best effort bootstrap without host address.
-		hostAddrs := h.Addrs()
-		if len(hostAddrs) == 0 {
+		hostAddrInfo := host.InfoFromHost(h)
+		if len(hostAddrInfo.Addrs) == 0 {
 			return nil
 		}
-		var hostPort ma.Component
-		ma.ForEach(hostAddrs[0], func(c ma.Component) bool {
-			if c.Protocol().Code == ma.P_TCP {
-				hostPort = c
-				return false
-			}
-			return true
+		portIdx := slices.IndexFunc(hostAddrInfo.Addrs[0], func(c ma.Component) bool {
+			return c.Protocol().Code == ma.P_TCP
 		})
+		if portIdx == -1 {
+			return nil
+		}
+		hostPort := hostAddrInfo.Addrs[0][portIdx]
 
+		// Get and filter bootstrap addresses.
 		addrInfos, err := bootstrapper.Get(bootstrapCtx)
 		if err != nil {
 			log.Error(err, "could not get bootstrap addresses")
@@ -299,12 +301,12 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) 
 		filteredAddrInfos := []peer.AddrInfo{}
 		for _, addrInfo := range addrInfos {
 			// Skip addresses that match host.
-			matches, err := hostMatches(*host.InfoFromHost(h), addrInfo)
+			ok, err := addrInfoEqual(*hostAddrInfo, addrInfo)
 			if err != nil {
 				log.Error(err, "could not compare host with address")
 				continue
 			}
-			if matches {
+			if ok {
 				log.Info("skipping bootstrap peer that is same as host")
 				continue
 			}
@@ -312,19 +314,14 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) 
 			// Add port to address if it is missing.
 			modifiedAddrs := []ma.Multiaddr{}
 			for _, addr := range addrInfo.Addrs {
-				hasPort := false
-				ma.ForEach(addr, func(c ma.Component) bool {
-					if c.Protocol().Code == ma.P_TCP {
-						hasPort = true
-						return false
-					}
-					return true
+				hasPort := slices.ContainsFunc(addr, func(c ma.Component) bool {
+					return c.Protocol().Code == ma.P_TCP
 				})
-				if hasPort {
-					modifiedAddrs = append(modifiedAddrs, addr)
+				if !hasPort {
+					modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &hostPort))
 					continue
 				}
-				modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &hostPort))
+				modifiedAddrs = append(modifiedAddrs, addr)
 			}
 			addrInfo.Addrs = modifiedAddrs
 
@@ -351,7 +348,7 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) 
 	}
 }
 
-func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
+func addrToListenAddrs(addr string) ([]ma.Multiaddr, error) {
 	h, p, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -378,11 +375,11 @@ func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
 	if len(ipComps) == 0 {
 		ipComps = []ma.Multiaddr{manet.IP6Unspecified, manet.IP4Unspecified}
 	}
-	multiAddrs := []ma.Multiaddr{}
+	listenAddrs := []ma.Multiaddr{}
 	for _, ipComp := range ipComps {
-		multiAddrs = append(multiAddrs, ipComp.Encapsulate(tcpComp))
+		listenAddrs = append(listenAddrs, ipComp.Encapsulate(tcpComp))
 	}
-	return multiAddrs, nil
+	return listenAddrs, nil
 }
 
 func isIp6(m ma.Multiaddr) bool {
@@ -391,6 +388,23 @@ func isIp6(m ma.Multiaddr) bool {
 		return false
 	}
 	return true
+}
+
+func addrInfoEqual(a1, a2 peer.AddrInfo) (bool, error) {
+	// If the IDs are not empty and match then we do not compare the addresses.
+	if a1.ID != "" && a2.ID != "" {
+		return a1.ID == a2.ID, nil
+	}
+
+	// Check if the any of the addresses match.
+	for _, a1Addr := range a1.Addrs {
+		for _, a2Addr := range a2.Addrs {
+			if a1Addr.Equal(a2Addr) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func createCid(key string) (cid.Cid, error) {
@@ -405,30 +419,6 @@ func createCid(key string) (cid.Cid, error) {
 		return cid.Cid{}, err
 	}
 	return c, nil
-}
-
-func hostMatches(host, addrInfo peer.AddrInfo) (bool, error) {
-	// Skip self when address ID matches host ID.
-	if host.ID != "" && addrInfo.ID != "" {
-		return host.ID == addrInfo.ID, nil
-	}
-
-	// Skip self when IP matches
-	hostIP, err := manet.ToIP(host.Addrs[0])
-	if err != nil {
-		return false, err
-	}
-	for _, addr := range addrInfo.Addrs {
-		addrIP, err := manet.ToIP(addr)
-		if err != nil {
-			return false, err
-		}
-		if hostIP.Equal(addrIP) {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 func loadOrCreatePrivateKey(ctx context.Context, dataDir string) (crypto.PrivKey, error) {
