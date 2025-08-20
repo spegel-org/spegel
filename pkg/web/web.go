@@ -119,7 +119,10 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer httpx.DrainAndClose(resp.Body)
-
+	if resp.StatusCode != http.StatusOK {
+		rw.WriteError(http.StatusInternalServerError, fmt.Errorf("invalid metrics response status %s", resp.Status))
+		return
+	}
 	parser := expfmt.TextParser{}
 	metricFamilies, err := parser.TextToMetricFamilies(resp.Body)
 	if err != nil {
@@ -131,11 +134,15 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 		ImageCount int64
 		LayerCount int64
 	}{}
-	for _, metric := range metricFamilies["spegel_advertised_images"].Metric {
-		data.ImageCount += int64(*metric.Gauge.Value)
+	if mf, ok := metricFamilies["spegel_advertised_images"]; ok {
+		for _, metric := range mf.Metric {
+			data.ImageCount += int64(*metric.Gauge.Value)
+		}
 	}
-	for _, metric := range metricFamilies["spegel_advertised_keys"].Metric {
-		data.LayerCount += int64(*metric.Gauge.Value)
+	if mf, ok := metricFamilies["spegel_advertised_keys"]; ok {
+		for _, metric := range mf.Metric {
+			data.LayerCount += int64(*metric.Gauge.Value)
+		}
 	}
 	err = w.tmpls.ExecuteTemplate(rw, "stats.html", data)
 	if err != nil {
