@@ -20,12 +20,12 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spegel-org/spegel/internal/cleanup"
-	"github.com/spegel-org/spegel/internal/web"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/state"
+	"github.com/spegel-org/spegel/pkg/web"
 )
 
 type ConfigurationCmd struct {
