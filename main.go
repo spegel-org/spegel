@@ -221,11 +221,11 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
 	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 	if args.DebugWebEnabled {
-		web, err := web.NewWeb(router, oci.NewClient(nil))
+		web, err := web.NewWeb(router, web.WithLogger(log))
 		if err != nil {
 			return err
 		}
-		mux.Handle("/debug/web/", web.Handler(log))
+		mux.Handle("/debug/web/", web.Handler())
 	}
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,

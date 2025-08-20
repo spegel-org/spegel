@@ -24,12 +24,38 @@ var templatesFS embed.FS
 
 type Web struct {
 	router     routing.Router
+	log        logr.Logger
 	ociClient  *oci.Client
 	httpClient *http.Client
+	transport  http.RoundTripper
 	tmpls      *template.Template
+	addr       string
 }
 
-func NewWeb(router routing.Router, ociClient *oci.Client) (*Web, error) {
+type WebOption func(*Web) error
+
+func WithLogger(log logr.Logger) WebOption {
+	return func(w *Web) error {
+		w.log = log
+		return nil
+	}
+}
+
+func WithTransport(transport http.RoundTripper) WebOption {
+	return func(w *Web) error {
+		w.transport = transport
+		return nil
+	}
+}
+
+func WithAddress(addr string) WebOption {
+	return func(w *Web) error {
+		w.addr = addr
+		return nil
+	}
+}
+
+func NewWeb(router routing.Router, opts ...WebOption) (*Web, error) {
 	funcs := template.FuncMap{
 		"formatBytes":    formatBytes,
 		"formatDuration": formatDuration,
@@ -38,16 +64,35 @@ func NewWeb(router routing.Router, ociClient *oci.Client) (*Web, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Web{
-		router:     router,
-		ociClient:  ociClient,
-		httpClient: httpx.BaseClient(),
-		tmpls:      tmpls,
-	}, nil
+	w := &Web{
+		router: router,
+		log:    logr.Discard(),
+		tmpls:  tmpls,
+	}
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(w); err != nil {
+			return nil, err
+		}
+	}
+
+	httpClient := &http.Client{}
+	if w.transport != nil {
+		httpClient.Transport = w.transport
+	} else {
+		httpClient.Transport = httpx.BaseTransport()
+	}
+
+	w.httpClient = httpClient
+	w.ociClient = oci.NewClient(httpClient)
+
+	return w, nil
 }
 
-func (w *Web) Handler(log logr.Logger) http.Handler {
-	m := httpx.NewServeMux(log)
+func (w *Web) Handler() http.Handler {
+	m := httpx.NewServeMux(w.log)
 	m.Handle("GET /debug/web/", w.indexHandler)
 	m.Handle("GET /debug/web/stats", w.statsHandler)
 	m.Handle("GET /debug/web/measure", w.measureHandler)
@@ -63,9 +108,7 @@ func (w *Web) indexHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
-	//nolint: errcheck // Ignore error.
-	srvAddr := req.Context().Value(http.LocalAddrContextKey).(net.Addr)
-	req, err := http.NewRequestWithContext(req.Context(), http.MethodGet, fmt.Sprintf("http://%s/metrics", srvAddr.String()), nil)
+	req, err := http.NewRequestWithContext(req.Context(), http.MethodGet, w.baseURL(req)+"/metrics", nil)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
@@ -122,9 +165,10 @@ type pullResult struct {
 }
 
 func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
-	mirror := &url.URL{
-		Scheme: "http",
-		Host:   "localhost:5000",
+	mirror, err := url.Parse(w.baseURL(req))
+	if err != nil {
+		rw.WriteError(http.StatusBadRequest, err)
+		return
 	}
 
 	// Parse image name.
@@ -181,6 +225,19 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
+}
+
+func (w *Web) baseURL(req *http.Request) string {
+	addr := w.addr
+	if addr == "" {
+		//nolint: errcheck // Ignore error.
+		srvAddr := req.Context().Value(http.LocalAddrContextKey).(net.Addr)
+		addr = srvAddr.String()
+	}
+	if req.TLS != nil {
+		return "https://" + addr
+	}
+	return "http://" + addr
 }
 
 func formatBytes(size int64) string {
