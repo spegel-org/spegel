@@ -71,6 +71,9 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 				"ip", GetClientIP(req),
 				"handler", rw.handler,
 			}
+			if ns := req.URL.Query().Get("ns"); ns != "" {
+				kvs = append(kvs, "ns", ns)
+			}
 			if rw.Status() >= 200 && rw.Status() < 400 {
 				s.log.Info("", kvs...)
 				return
@@ -78,7 +81,8 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 			s.log.Error(rw.Error(), "", kvs...)
 		}()
 		HttpRequestsInflight.WithLabelValues(metricsPath).Add(1)
-		handler(rw, req)
+		ctx := logr.NewContext(req.Context(), s.log)
+		handler(rw, req.WithContext(ctx))
 	})
 }
 
