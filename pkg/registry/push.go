@@ -319,6 +319,11 @@ func (r *Registry) handleManifestPut(rw httpx.ResponseWriter, req *http.Request,
 
 	dist.Digest = desc.Digest
 	created(rw, dist)
+
+	if err = images.Dispatch(ctx, images.SetChildrenLabels(cs, images.ChildrenHandler(cs)), nil, desc); err != nil {
+		r.log.Error(err, "failed to set image labels")
+		return
+	}
 	go func() {
 		// Broadcast image content for immediate discovery.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
