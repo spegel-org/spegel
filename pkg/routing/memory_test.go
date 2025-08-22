@@ -16,7 +16,7 @@ func TestMemoryRouter(t *testing.T) {
 	isReady, err := r.Ready(t.Context())
 	require.NoError(t, err)
 	require.False(t, isReady)
-	err = r.Advertise(t.Context(), []string{"foo"})
+	err = r.Advertise(t.Context(), []string{"foo"}, false)
 	require.NoError(t, err)
 	isReady, err = r.Ready(t.Context())
 	require.NoError(t, err)

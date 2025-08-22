@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/content"
@@ -318,6 +319,32 @@ func (r *Registry) handleManifestPut(rw httpx.ResponseWriter, req *http.Request,
 
 	dist.Digest = desc.Digest
 	created(rw, dist)
+	go func() {
+		// Broadcast image content for immediate discovery.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		img, err := oci.NewImage(dist.Registry, dist.Name, dist.Tag, desc.Digest)
+		if err != nil {
+			r.log.Error(err, "failed to announce image")
+			return
+		}
+		keys := []string{desc.Digest.String(), ref}
+		digests, err := oci.WalkImage(ctx, r.ociStore, img)
+		if err == nil {
+			for _, dgst := range digests {
+				keys = append(keys, dgst.String())
+			}
+		} else {
+			r.log.Error(err, "failed to walk image")
+		}
+
+		err = r.router.Advertise(ctx, keys, true)
+		if err != nil {
+			r.log.Error(err, "failed to advertise image")
+		} else {
+			r.log.Info("advertised image")
+		}
+	}()
 	if r.pushUpstream {
 		pushHeaders := req.Header.Clone()
 		go func() {
