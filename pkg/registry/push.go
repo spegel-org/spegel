@@ -248,6 +248,7 @@ func (r *Registry) handleBlobUploadCommit(rw httpx.ResponseWriter, req *http.Req
 		return
 	}
 
+	dist.Kind = oci.DistributionKindBlob
 	created(rw, dist)
 }
 
