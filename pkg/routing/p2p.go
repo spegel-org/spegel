@@ -189,10 +189,7 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	if len(addrInfos) == 1 {
-		matches, err := hostMatches(*host.InfoFromHost(r.host), addrInfos[0])
-		if err != nil {
-			return false, err
-		}
+		matches := addrInfoMatches(*host.InfoFromHost(r.host), addrInfos[0])
 		if matches {
 			return true, nil
 		}
@@ -299,11 +296,7 @@ func bootstrapFunc(ctx context.Context, bootstrapper Bootstrapper, h host.Host) 
 		filteredAddrInfos := []peer.AddrInfo{}
 		for _, addrInfo := range addrInfos {
 			// Skip addresses that match host.
-			matches, err := hostMatches(*host.InfoFromHost(h), addrInfo)
-			if err != nil {
-				log.Error(err, "could not compare host with address")
-				continue
-			}
+			matches := addrInfoMatches(*host.InfoFromHost(h), addrInfo)
 			if matches {
 				log.Info("skipping bootstrap peer that is same as host")
 				continue
@@ -407,28 +400,28 @@ func createCid(key string) (cid.Cid, error) {
 	return c, nil
 }
 
-func hostMatches(host, addrInfo peer.AddrInfo) (bool, error) {
+func addrInfoMatches(a, b peer.AddrInfo) bool {
 	// Skip self when address ID matches host ID.
-	if host.ID != "" && addrInfo.ID != "" {
-		return host.ID == addrInfo.ID, nil
+	if a.ID != "" && b.ID != "" {
+		return a.ID == b.ID
 	}
 
 	// Skip self when IP matches
-	hostIP, err := manet.ToIP(host.Addrs[0])
-	if err != nil {
-		return false, err
-	}
-	for _, addr := range addrInfo.Addrs {
-		addrIP, err := manet.ToIP(addr)
-		if err != nil {
-			return false, err
+	for _, aAddr := range a.Addrs {
+		if aAddr[0].Code() != ma.P_IP4 && aAddr[0].Code() != ma.P_IP6 {
+			continue
 		}
-		if hostIP.Equal(addrIP) {
-			return true, nil
+		for _, bAddr := range b.Addrs {
+			if aAddr[0].Code() != bAddr[0].Code() {
+				continue
+			}
+			if aAddr[0].Value() != bAddr[0].Value() {
+				continue
+			}
+			return true
 		}
 	}
-
-	return false, nil
+	return false
 }
 
 func loadOrCreatePrivateKey(ctx context.Context, dataDir string) (crypto.PrivKey, error) {
