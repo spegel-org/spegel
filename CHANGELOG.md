@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#950](https://github.com/spegel-org/spegel/pull/950) Fix lint errors and add forbidgo.
 - [#955](https://github.com/spegel-org/spegel/pull/955) Cleanup and move set handler to handler functions.
 - [#956](https://github.com/spegel-org/spegel/pull/956) Remove setting logger for klog.
+- [#984](https://github.com/spegel-org/spegel/pull/984) Fix host matches to support dual stack deployments.
 
 ### Security
 

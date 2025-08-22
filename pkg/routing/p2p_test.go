@@ -234,22 +234,22 @@ func TestCreateCid(t *testing.T) {
 	require.Equal(t, "bafkreigdvoh7cnza5cwzar65hfdgwpejotszfqx2ha6uuolaofgk54ge6i", c.String())
 }
 
-func TestHostMatches(t *testing.T) {
+func TestAddrInfoMatches(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name     string
-		host     peer.AddrInfo
-		addrInfo peer.AddrInfo
+		a        peer.AddrInfo
+		b        peer.AddrInfo
 		expected bool
 	}{
 		{
 			name: "ID match",
-			host: peer.AddrInfo{
+			a: peer.AddrInfo{
 				ID:    "foo",
 				Addrs: []ma.Multiaddr{},
 			},
-			addrInfo: peer.AddrInfo{
+			b: peer.AddrInfo{
 				ID:    "foo",
 				Addrs: []ma.Multiaddr{},
 			},
@@ -257,11 +257,11 @@ func TestHostMatches(t *testing.T) {
 		},
 		{
 			name: "ID do not match",
-			host: peer.AddrInfo{
+			a: peer.AddrInfo{
 				ID:    "foo",
 				Addrs: []ma.Multiaddr{},
 			},
-			addrInfo: peer.AddrInfo{
+			b: peer.AddrInfo{
 				ID:    "bar",
 				Addrs: []ma.Multiaddr{},
 			},
@@ -269,11 +269,11 @@ func TestHostMatches(t *testing.T) {
 		},
 		{
 			name: "IP4 match",
-			host: peer.AddrInfo{
+			a: peer.AddrInfo{
 				ID:    "",
 				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
 			},
-			addrInfo: peer.AddrInfo{
+			b: peer.AddrInfo{
 				ID:    "",
 				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
 			},
@@ -281,11 +281,11 @@ func TestHostMatches(t *testing.T) {
 		},
 		{
 			name: "IP4 do not match",
-			host: peer.AddrInfo{
+			a: peer.AddrInfo{
 				ID:    "",
 				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
 			},
-			addrInfo: peer.AddrInfo{
+			b: peer.AddrInfo{
 				ID:    "",
 				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.2")},
 			},
@@ -293,13 +293,31 @@ func TestHostMatches(t *testing.T) {
 		},
 		{
 			name: "IP6 match",
-			host: peer.AddrInfo{
+			a: peer.AddrInfo{
 				ID:    "",
 				Addrs: []ma.Multiaddr{ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba")},
 			},
-			addrInfo: peer.AddrInfo{
+			b: peer.AddrInfo{
+				ID: "",
+				Addrs: []ma.Multiaddr{
+					ma.StringCast("/ip4/192.168.1.1"),
+					ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba"),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "non IP address",
+			a: peer.AddrInfo{
+				ID: "",
+				Addrs: []ma.Multiaddr{
+					ma.StringCast("/tcp/5000"),
+					ma.StringCast("/ip4/192.168.1.1"),
+				},
+			},
+			b: peer.AddrInfo{
 				ID:    "",
-				Addrs: []ma.Multiaddr{ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba")},
+				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
 			},
 			expected: true,
 		},
@@ -308,8 +326,7 @@ func TestHostMatches(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			matches, err := hostMatches(tt.host, tt.addrInfo)
-			require.NoError(t, err)
+			matches := addrInfoMatches(tt.a, tt.b)
 			require.Equal(t, tt.expected, matches)
 		})
 	}
