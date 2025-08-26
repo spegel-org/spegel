@@ -9,6 +9,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | affinity | object | `{}` | Affinity settings for pod assignment. |
+| annotations | object | `{}` | Annotations to add to the DaemonSet. |
 | basicAuthSecretName | string | `""` | Name of secret containing basic authentication credentials for registry. |
 | clusterDomain | string | `"cluster.local."` | Domain configured for service domain names. |
 | commonLabels | object | `{}` | Common labels to apply to all rendered resources. |
