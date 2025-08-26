@@ -3,6 +3,10 @@ kind: DaemonSet
 metadata:
   name: {{ include "spegel.fullname" . }}
   namespace: {{ include "spegel.namespace" . }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   labels:
     app.kubernetes.io/component: spegel
     {{- include "spegel.labels" . | nindent 4 }}
