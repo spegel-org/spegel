@@ -253,14 +253,14 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, count int) (<-chan 
 	return peerCh, nil
 }
 
-func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
+func (r *P2PRouter) Advertise(ctx context.Context, keys []string, brdcst bool) error {
 	logr.FromContextOrDiscard(ctx).V(4).Info("advertising keys", "host", r.host.ID().String(), "keys", keys)
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {
 			return err
 		}
-		err = r.rd.Provide(ctx, c, false)
+		err = r.rd.Provide(ctx, c, brdcst)
 		if err != nil {
 			return err
 		}

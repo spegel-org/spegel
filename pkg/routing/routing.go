@@ -11,6 +11,6 @@ type Router interface {
 	Ready(ctx context.Context) (bool, error)
 	// Resolve asynchronously discovers addresses that can serve the content defined by the give key.
 	Resolve(ctx context.Context, key string, count int) (<-chan netip.AddrPort, error)
-	// Advertise broadcasts that the current router can serve the content.
-	Advertise(ctx context.Context, keys []string) error
+	// Advertise provides (and optionally broadcasts) that the current router can serve the content.
+	Advertise(ctx context.Context, keys []string, brdcst bool) error
 }
