@@ -63,18 +63,17 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 				return
 			}
 
-			kvs := []any{
-				"path", req.URL.Path,
-				"status", rw.Status(),
-				"method", req.Method,
-				"latency", latency.String(),
-				"ip", GetClientIP(req),
-				"handler", rw.handler,
-			}
-			if ns := req.URL.Query().Get("ns"); ns != "" {
-				kvs = append(kvs, "ns", ns)
-			}
 			if s.log.V(1).Enabled() {
+				kvs := []any{
+					"path", req.URL.Path,
+					"status", rw.Status(),
+					"method", req.Method,
+					"latency", latency.String(),
+					"ip", GetClientIP(req),
+				}
+				for k, v := range rw.attrs {
+					kvs = append(kvs, k, v)
+				}
 				if rw.Status() >= 200 && rw.Status() < 400 {
 					s.log.Info("", kvs...)
 				} else {

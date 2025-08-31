@@ -14,7 +14,7 @@ type ResponseWriter interface {
 	Error() error
 	Status() int
 	Size() int64
-	SetHandler(handler string)
+	SetAttrs(key string, value any)
 	HeadersWritten() bool
 }
 
@@ -29,7 +29,7 @@ var (
 type response struct {
 	http.ResponseWriter
 	error       error
-	handler     string
+	attrs       map[string]any
 	method      string
 	status      int
 	size        int64
@@ -116,8 +116,11 @@ func (r *response) Size() int64 {
 	return r.size
 }
 
-func (r *response) SetHandler(handler string) {
-	r.handler = handler
+func (r *response) SetAttrs(key string, value any) {
+	if r.attrs == nil {
+		r.attrs = map[string]any{}
+	}
+	r.attrs[key] = value
 }
 
 func (r *response) HeadersWritten() bool {

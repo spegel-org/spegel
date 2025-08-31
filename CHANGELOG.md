@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#957](https://github.com/spegel-org/spegel/pull/957) Refactor memory store to include descriptor.
 - [#970](https://github.com/spegel-org/spegel/pull/970) Refactor bootstraper to use address info instead of string.
 - [#975](https://github.com/spegel-org/spegel/pull/975) Update Go to 1.25.0.
+- [#995](https://github.com/spegel-org/spegel/pull/995) Cleanup http logger to allow generic attribute.
 
 ### Deprecated
 

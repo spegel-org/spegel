@@ -74,6 +74,6 @@ func TestResponseWriter(t *testing.T) {
 	rw = &response{
 		ResponseWriter: httptest.NewRecorder(),
 	}
-	rw.SetHandler("foo")
-	require.Equal(t, "foo", rw.handler)
+	rw.SetAttrs("foo", "bar")
+	require.Equal(t, map[string]any{"foo": "bar"}, rw.attrs)
 }
