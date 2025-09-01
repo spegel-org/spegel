@@ -117,7 +117,8 @@ func TestE2E(t *testing.T) {
 	// Remove Spegel from the last node to test that the mirror fallback is working.
 	workerPod := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=%s-worker4", kcPath, kindName))
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-worker4 spegel.dev/enabled-", kcPath, kindName))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel wait --for=delete %s --timeout=60s", kcPath, workerPod))
+	exitCode := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel wait --for=jsonpath='{.status.containerStatuses[0].state.terminated}' -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' %s --timeout=30s", kcPath, workerPod))
+	require.Equal(t, "0", exitCode)
 
 	// Pull image from registry after Spegel has started.
 	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, images[5]))

@@ -28,7 +28,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resol
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 		case <-tickerCh:
 			log.Info("running state update")
 			err := tick(ctx, ociStore, router, resolveLatestTag)

@@ -103,7 +103,7 @@ func TestTrack(t *testing.T) {
 
 			cancel()
 			err := g.Wait()
-			require.NoError(t, err)
+			require.ErrorIs(t, err, context.Canceled)
 		})
 	}
 }
