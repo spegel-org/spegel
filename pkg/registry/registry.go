@@ -22,11 +22,12 @@ import (
 
 const (
 	HeaderSpegelMirrored = "X-Spegel-Mirrored"
+	HandlerAttrKey       = "handler"
+	RegistryAttrKey      = "registry"
 )
 
 type RegistryConfig struct {
 	Transport        http.RoundTripper
-	Log              logr.Logger
 	Username         string
 	Password         string
 	ResolveRetries   int
@@ -76,13 +77,6 @@ func WithTransport(transport http.RoundTripper) RegistryOption {
 	}
 }
 
-func WithLogger(log logr.Logger) RegistryOption {
-	return func(cfg *RegistryConfig) error {
-		cfg.Log = log
-		return nil
-	}
-}
-
 func WithBasicAuth(username, password string) RegistryOption {
 	return func(cfg *RegistryConfig) error {
 		cfg.Username = username
@@ -93,7 +87,6 @@ func WithBasicAuth(username, password string) RegistryOption {
 
 type Registry struct {
 	bufferPool       *sync.Pool
-	log              logr.Logger
 	ociStore         oci.Store
 	ociClient        *oci.Client
 	router           routing.Router
@@ -106,7 +99,6 @@ type Registry struct {
 
 func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
 	cfg := RegistryConfig{
-		Log:              logr.Discard(),
 		ResolveRetries:   3,
 		ResolveLatestTag: true,
 		ResolveTimeout:   20 * time.Millisecond,
@@ -139,7 +131,6 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		ociStore:         ociStore,
 		router:           router,
 		ociClient:        ociClient,
-		log:              cfg.Log,
 		resolveRetries:   cfg.ResolveRetries,
 		resolveLatestTag: cfg.ResolveLatestTag,
 		resolveTimeout:   cfg.ResolveTimeout,
@@ -150,8 +141,8 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 	return r, nil
 }
 
-func (r *Registry) Handler() *httpx.ServeMux {
-	m := httpx.NewServeMux(r.log)
+func (r *Registry) Handler(log logr.Logger) *httpx.ServeMux {
+	m := httpx.NewServeMux(log)
 	m.Handle("GET /readyz", r.readyHandler)
 	m.Handle("GET /livez", r.livenesHandler)
 	m.Handle("GET /v2/", r.registryHandler)
@@ -159,16 +150,8 @@ func (r *Registry) Handler() *httpx.ServeMux {
 	return m
 }
 
-func (r *Registry) Server(addr string) (*http.Server, error) {
-	srv := &http.Server{
-		Addr:    addr,
-		Handler: r.Handler(),
-	}
-	return srv, nil
-}
-
 func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetHandler("readyz")
+	rw.SetAttrs(HandlerAttrKey, "readyz")
 
 	ok, err := r.router.Ready(req.Context())
 	if err != nil {
@@ -183,13 +166,13 @@ func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) livenesHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetHandler("livez")
+	rw.SetAttrs(HandlerAttrKey, "livez")
 
 	rw.WriteHeader(http.StatusOK)
 }
 
 func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetHandler("registry")
+	rw.SetAttrs(HandlerAttrKey, "registry")
 
 	// Check basic authentication
 	if r.username != "" || r.password != "" {
@@ -203,7 +186,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	// Quickly return 200 for /v2 to indicate that registry supports v2.
 	if path.Clean(req.URL.Path) == "/v2" {
-		rw.SetHandler("v2")
+		rw.SetAttrs(HandlerAttrKey, "v2")
 		rw.WriteHeader(http.StatusOK)
 		return
 	}
@@ -213,6 +196,9 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not parse path according to OCI distribution spec: %w", err))
 		return
+	}
+	if dist.Registry != "" {
+		rw.SetAttrs(RegistryAttrKey, dist.Registry)
 	}
 
 	// Request with mirror header are proxied.
@@ -250,9 +236,9 @@ type MirrorErrorDetails struct {
 }
 
 func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
-	rw.SetHandler("mirror")
+	rw.SetAttrs(HandlerAttrKey, "mirror")
 
-	log := r.log.WithValues("ref", dist.Reference(), "path", req.URL.Path)
+	log := logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Reference(), "path", req.URL.Path)
 
 	defer func() {
 		cacheType := "hit"
@@ -279,7 +265,6 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 	// Resolve mirror with the requested reference
 	resolveCtx, resolveCancel := context.WithTimeout(req.Context(), r.resolveTimeout)
 	defer resolveCancel()
-	resolveCtx = logr.NewContext(resolveCtx, log)
 	peerCh, err := r.router.Resolve(resolveCtx, dist.Reference(), r.resolveRetries)
 	if err != nil {
 		respErr := oci.NewDistributionError(errCode, "unable to resolve peers", mirrorDetails)
@@ -400,15 +385,13 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 				log.Error(err, "request to mirror failed", "attempt", mirrorDetails.Attempts, "path", req.URL.Path, "mirror", peer)
 				continue
 			}
-
-			log.V(4).Info("mirrored request", "path", req.URL.Path, "mirror", peer)
 			return
 		}
 	}
 }
 
 func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
-	rw.SetHandler("manifest")
+	rw.SetAttrs(HandlerAttrKey, "manifest")
 
 	if dist.Digest == "" {
 		dgst, err := r.ociStore.Resolve(req.Context(), dist.Reference())
@@ -436,13 +419,13 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 
 	_, err = rw.Write(b)
 	if err != nil {
-		r.log.Error(err, "error occurred when writing manifest")
+		logr.FromContextOrDiscard(req.Context()).Error(err, "error occurred when writing manifest")
 		return
 	}
 }
 
 func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
-	rw.SetHandler("blob")
+	rw.SetAttrs(HandlerAttrKey, "blob")
 
 	size, err := r.ociStore.Size(req.Context(), dist.Digest)
 	if err != nil {

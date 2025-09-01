@@ -23,13 +23,11 @@ func TestRegistryOptions(t *testing.T) {
 	t.Parallel()
 
 	transport := &http.Transport{}
-	log := logr.Discard()
 	opts := []RegistryOption{
 		WithResolveRetries(5),
 		WithResolveLatestTag(true),
 		WithResolveTimeout(10 * time.Minute),
 		WithTransport(transport),
-		WithLogger(log),
 		WithBasicAuth("foo", "bar"),
 	}
 	cfg := RegistryConfig{}
@@ -39,7 +37,6 @@ func TestRegistryOptions(t *testing.T) {
 	require.True(t, cfg.ResolveLatestTag)
 	require.Equal(t, 10*time.Minute, cfg.ResolveTimeout)
 	require.Equal(t, transport, cfg.Transport)
-	require.Equal(t, log, cfg.Log)
 	require.Equal(t, "foo", cfg.Username)
 	require.Equal(t, "bar", cfg.Password)
 }
@@ -50,26 +47,25 @@ func TestProbeHandlers(t *testing.T) {
 	router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:8080"))
 	reg, err := NewRegistry(nil, router)
 	require.NoError(t, err)
-	srv, err := reg.Server("")
-	require.NoError(t, err)
+	handler := reg.Handler(logr.Discard())
 
 	rw := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "http://localhost/readyz", nil)
-	srv.Handler.ServeHTTP(rw, req)
+	handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusInternalServerError, rw.Result().StatusCode)
 	rw = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "http://localhost/livez", nil)
-	srv.Handler.ServeHTTP(rw, req)
+	handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 
 	router.Add("foo", netip.MustParseAddrPort("127.0.0.1:9090"))
 	rw = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "http://localhost/readyz", nil)
-	srv.Handler.ServeHTTP(rw, req)
+	handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 	rw = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "http://localhost/livez", nil)
-	srv.Handler.ServeHTTP(rw, req)
+	handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 }
 
@@ -140,9 +136,8 @@ func TestBasicAuth(t *testing.T) {
 			rw := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodGet, "http://localhost/v2/", nil)
 			req.SetBasicAuth(tt.reqUsername, tt.reqPassword)
-			srv, err := reg.Server("")
-			require.NoError(t, err)
-			srv.Handler.ServeHTTP(rw, req)
+			handler := reg.Handler(logr.Discard())
+			handler.ServeHTTP(rw, req)
 
 			require.Equal(t, tt.expected, rw.Result().StatusCode)
 		})
@@ -154,7 +149,7 @@ func TestRegistryHandler(t *testing.T) {
 
 	badReg, err := NewRegistry(oci.NewMemory(), routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.AddrPort{}))
 	require.NoError(t, err)
-	badSvr := httptest.NewServer(badReg.Handler())
+	badSvr := httptest.NewServer(badReg.Handler(logr.Discard()))
 	t.Cleanup(func() {
 		badSvr.Close()
 	})
@@ -167,7 +162,7 @@ func TestRegistryHandler(t *testing.T) {
 	memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba")}, []byte("last peer working"))
 	goodReg, err := NewRegistry(memStore, routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.AddrPort{}))
 	require.NoError(t, err)
-	goodSvr := httptest.NewServer(goodReg.Handler())
+	goodSvr := httptest.NewServer(goodReg.Handler(logr.Discard()))
 	t.Cleanup(func() {
 		goodSvr.Close()
 	})
@@ -188,7 +183,7 @@ func TestRegistryHandler(t *testing.T) {
 	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
 	reg, err := NewRegistry(oci.NewMemory(), router)
 	require.NoError(t, err)
-	handler := reg.Handler()
+	handler := reg.Handler(logr.Discard())
 
 	tests := []struct {
 		expectedHeaders http.Header
