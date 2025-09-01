@@ -80,7 +80,7 @@ func TestTrack(t *testing.T) {
 			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
 			g, gCtx := errgroup.WithContext(ctx)
 			g.Go(func() error {
-				return Track(gCtx, ociStore, router, tt.resolveLatestTag)
+				return Track(gCtx, ociStore, router, WithResolveLatestTag(tt.resolveLatestTag))
 			})
 			time.Sleep(100 * time.Millisecond)
 

@@ -13,7 +13,41 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
-func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resolveLatestTag bool) error {
+type tracker struct {
+	resolveLatestTag bool
+	interval         time.Duration
+}
+
+type TrackerOption func(t *tracker) error
+
+func WithResolveLatestTag(b bool) TrackerOption {
+	return func(t *tracker) error {
+		t.resolveLatestTag = b
+		return nil
+	}
+}
+
+func WithInterval(d time.Duration) TrackerOption {
+	return func(t *tracker) error {
+		if d < time.Minute {
+			return errors.New("tracker interval must be a least 1 minute")
+		}
+		t.interval = d
+		return nil
+	}
+}
+
+func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts ...TrackerOption) error {
+	t := &tracker{
+		interval: routing.KeyTTL - time.Minute,
+	}
+
+	for _, opt := range opts {
+		if err := opt(t); err != nil {
+			return err
+		}
+	}
+
 	log := logr.FromContextOrDiscard(ctx)
 	eventCh, err := ociStore.Subscribe(ctx)
 	if err != nil {
@@ -22,7 +56,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resol
 	immediateCh := make(chan time.Time, 1)
 	immediateCh <- time.Now()
 	close(immediateCh)
-	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
+	expirationTicker := time.NewTicker(t.interval)
 	defer expirationTicker.Stop()
 	tickerCh := channel.Merge(immediateCh, expirationTicker.C)
 	for {
@@ -31,7 +65,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resol
 			return nil
 		case <-tickerCh:
 			log.Info("running state update")
-			err := tick(ctx, ociStore, router, resolveLatestTag)
+			err := tick(ctx, ociStore, router, t.resolveLatestTag)
 			if err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
