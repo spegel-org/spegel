@@ -18,6 +18,7 @@ var (
 	manifestRegexTag    = regexp.MustCompile(`/v2/` + nameRegex.String() + `/manifests/` + tagRegex.String() + `$`)
 	manifestRegexDigest = regexp.MustCompile(`/v2/` + nameRegex.String() + `/manifests/(.*)`)
 	blobsRegexDigest    = regexp.MustCompile(`/v2/` + nameRegex.String() + `/blobs/(.*)`)
+	blobsUploadsRegex   = regexp.MustCompile(`/v2/` + nameRegex.String() + `/blobs/uploads/(.*)`)
 )
 
 // DistributionKind represents the kind of content.
@@ -26,15 +27,17 @@ type DistributionKind string
 const (
 	DistributionKindManifest = "manifests"
 	DistributionKindBlob     = "blobs"
+	DistributionKindUpload   = "uploads"
 )
 
-// DistributionPath contains the individual parameters from a OCI distribution spec request.
+// DistributionPath contains the individual parameters from an OCI distribution spec request.
 type DistributionPath struct {
 	Kind     DistributionKind
 	Name     string
 	Digest   digest.Digest
 	Tag      string
 	Registry string
+	Session  string
 }
 
 // Reference returns the digest if set or alternatively if not the full image reference with the tag.
@@ -93,6 +96,18 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 			Name:     comps[1],
 			Digest:   dgst,
 			Registry: registry,
+		}
+		return dist, nil
+	}
+	comps = blobsUploadsRegex.FindStringSubmatch(u.Path)
+	if len(comps) == 6 {
+		dgst := digest.Digest(u.Query().Get("digest"))
+		dist := DistributionPath{
+			Kind:     DistributionKindUpload,
+			Name:     comps[1],
+			Digest:   dgst,
+			Registry: registry,
+			Session:  comps[5],
 		}
 		return dist, nil
 	}

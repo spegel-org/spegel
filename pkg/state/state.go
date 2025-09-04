@@ -70,7 +70,7 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, resolv
 		if !ok {
 			continue
 		}
-		err := router.Advertise(ctx, []string{tagName})
+		err := router.Advertise(ctx, []string{tagName}, false)
 		if err != nil {
 			return err
 		}
@@ -83,7 +83,7 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, resolv
 		return err
 	}
 	for _, content := range contents {
-		err := router.Advertise(ctx, []string{content.Digest.String()})
+		err := router.Advertise(ctx, []string{content.Digest.String()}, false)
 		if err != nil {
 			return err
 		}
@@ -111,7 +111,7 @@ func handle(ctx context.Context, router routing.Router, event oci.OCIEvent) erro
 	if event.Type != oci.CreateEvent {
 		return nil
 	}
-	err := router.Advertise(ctx, []string{event.Key})
+	err := router.Advertise(ctx, []string{event.Key}, false)
 	if err != nil {
 		return err
 	}

@@ -49,7 +49,7 @@ func (m *MemoryRouter) Resolve(ctx context.Context, key string, count int) (<-ch
 	return peerCh, nil
 }
 
-func (m *MemoryRouter) Advertise(ctx context.Context, keys []string) error {
+func (m *MemoryRouter) Advertise(ctx context.Context, keys []string, _ bool) error {
 	for _, key := range keys {
 		m.Add(key, m.self)
 	}

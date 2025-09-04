@@ -33,6 +33,7 @@ type RegistryConfig struct {
 	ResolveRetries   int
 	ResolveLatestTag bool
 	ResolveTimeout   time.Duration
+	Push             PushConfig
 }
 
 func (cfg *RegistryConfig) Apply(opts ...RegistryOption) error {
@@ -85,6 +86,13 @@ func WithBasicAuth(username, password string) RegistryOption {
 	}
 }
 
+func WithPushConfig(pushConfig PushConfig) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.Push = pushConfig
+		return nil
+	}
+}
+
 type Registry struct {
 	bufferPool       *sync.Pool
 	ociStore         oci.Store
@@ -95,6 +103,7 @@ type Registry struct {
 	resolveRetries   int
 	resolveTimeout   time.Duration
 	resolveLatestTag bool
+	push             PushConfig
 }
 
 func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
@@ -102,6 +111,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		ResolveRetries:   3,
 		ResolveLatestTag: true,
 		ResolveTimeout:   20 * time.Millisecond,
+		Push:             PushConfig{LeaseDuration: 10 * time.Minute},
 	}
 	err := cfg.Apply(opts...)
 	if err != nil {
@@ -137,6 +147,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		username:         cfg.Username,
 		password:         cfg.Password,
 		bufferPool:       bufferPool,
+		push:             cfg.Push,
 	}
 	return r, nil
 }
@@ -146,7 +157,13 @@ func (r *Registry) Handler(log logr.Logger) *httpx.ServeMux {
 	m.Handle("GET /readyz", r.readyHandler)
 	m.Handle("GET /livez", r.livenesHandler)
 	m.Handle("GET /v2/", r.registryHandler)
-	m.Handle("HEAD /v2/", r.registryHandler)
+	if r.push.Enabled {
+		m.Handle("GET /v2/{app_name}/blobs/uploads/{uuid}", r.pushHandler)
+		m.Handle("PUT /v2/", r.pushHandler)
+		m.Handle("POST /v2/", r.pushHandler)
+		m.Handle("PATCH /v2/", r.pushHandler)
+		m.Handle("DELETE /v2/", r.pushHandler)
+	}
 	return m
 }
 
