@@ -26,9 +26,16 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci"
 )
 
+type PushConfig struct {
+	Enabled         bool              `arg:"--push,env:PUSH" default:"false" help:"When true handles push endpoints by writing to the Containerd content and image store."`
+	Upstream        bool              `arg:"--push-upstream,env:PUSH_UPSTREAM" default:"false" help:"When true asynchronously pushes uploaded images to the upstream registry."`
+	UpstreamHeaders map[string]string `arg:"--push-upstream-headers,env:PUSH_UPSTREAM_HEADERS" help:"HTTP header overrides for upstream push request."`
+	LeaseDuration   time.Duration     `arg:"--push-lease-duration,env:PUSH_LEASE_DURATION" default:"10m" help:"Temporary lease duration for pushed images."`
+}
+
 // Add a temporary lease to newly created content and images.
 func (r *Registry) withLease(ctx context.Context) (context.Context, error) {
-	if r.leaseDuration == 0 {
+	if r.push.LeaseDuration == 0 {
 		return ctx, nil
 	}
 	cd, ok := r.ociStore.(*oci.Containerd)
@@ -41,7 +48,7 @@ func (r *Registry) withLease(ctx context.Context) (context.Context, error) {
 	}
 	lease := cdc.LeasesService()
 
-	l, err := lease.Create(ctx, leases.WithRandomID(), leases.WithExpiration(r.leaseDuration))
+	l, err := lease.Create(ctx, leases.WithRandomID(), leases.WithExpiration(r.push.LeaseDuration))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create lease: %w", err)
 	}
@@ -73,7 +80,7 @@ func created(rw httpx.ResponseWriter, dist oci.DistributionPath) {
 func (r *Registry) pushHandler(rw httpx.ResponseWriter, req *http.Request) {
 	rw.SetHandler("push")
 
-	if !r.push {
+	if !r.push.Enabled {
 		rw.WriteError(http.StatusMethodNotAllowed, oci.NewDistributionError(oci.ErrCodeUnsupported, "push endpoints disabled", nil))
 		return
 	}
@@ -350,8 +357,11 @@ func (r *Registry) handleManifestPut(rw httpx.ResponseWriter, req *http.Request,
 			r.log.Info("advertised image")
 		}
 	}()
-	if r.pushUpstream {
+	if r.push.Upstream {
 		pushHeaders := req.Header.Clone()
+		for k, v := range r.push.UpstreamHeaders {
+			pushHeaders.Set(k, v)
+		}
 		go func() {
 			log := r.log.WithName("backgroundPush").WithValues("ref", ref, "desc", desc)
 			log.Info("Starting upstream image push")

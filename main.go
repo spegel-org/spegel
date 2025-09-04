@@ -59,9 +59,7 @@ type RegistryCmd struct {
 	MirrorResolveRetries         int           `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
 	ResolveLatestTag             bool          `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
 	DebugWebEnabled              bool          `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"false" help:"When true enables debug web page."`
-	Push                         bool          `arg:"--push,env:PUSH" default:"false" help:"When true handles push endpoints by writing to the Containerd content and image store."`
-	PushUpstream                 bool          `arg:"--push-upstream,env:PUSH_UPSTREAM" default:"false" help:"When true asynchronously pushes uploaded images to the upstream registry."`
-	LeaseDuration                time.Duration `arg:"--lease-duration,env:LEASE_DURATION" default:"10m" help:"Temporary lease duration for pushed images."`
+	registry.PushConfig
 }
 
 type CleanupCmd struct {
@@ -187,9 +185,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithLogger(log),
 		registry.WithBasicAuth(username, password),
-		registry.WithPush(args.Push),
-		registry.WithPushUpstream(args.PushUpstream),
-		registry.WithLeaseDuration(args.LeaseDuration),
+		registry.WithPushConfig(args.PushConfig),
 	}
 	reg, err := registry.NewRegistry(ociStore, router, registryOpts...)
 	if err != nil {
