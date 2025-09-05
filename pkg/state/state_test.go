@@ -30,6 +30,8 @@ func TestTrack(t *testing.T) {
 	imgRefs := []string{
 		"docker.io/library/ubuntu:latest",
 		"ghcr.io/spegel-org/spegel:v0.0.9",
+		"quay.io/namespace/repo:latest",
+		"localhost:5000/test:latest",
 	}
 	imgs := []oci.Image{}
 	for _, imageStr := range imgRefs {
@@ -57,18 +59,52 @@ func TestTrack(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		resolveLatestTag bool
+		name            string
+		registryFilters []string
+		expectedImages  []string // Images that should be advertised
 	}{
 		{
-			name:             "resolve latest",
-			resolveLatestTag: true,
+			name:            "no filters - all images advertised",
+			registryFilters: []string{},
+			expectedImages:  []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
-			name:             "do not resolve latest",
-			resolveLatestTag: false,
+			name:            "nil filters - all images advertised",
+			registryFilters: nil,
+			expectedImages:  []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
+		},
+		{
+			name:            "filter docker.io only",
+			registryFilters: []string{`^docker\.io/`},
+			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
+		},
+		{
+			name:            "filter multiple registries",
+			registryFilters: []string{`^docker\.io/`, `^ghcr\.io/`},
+			expectedImages:  []string{"quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
+		},
+		{
+			name:            "filter all registries",
+			registryFilters: []string{`^docker\.io/`, `^ghcr\.io/`, `^quay\.io/`, `^localhost:`},
+			expectedImages:  []string{},
+		},
+		{
+			name:            "filter with case insensitive pattern",
+			registryFilters: []string{`(?i)^docker\.io/`},
+			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
+		},
+		{
+			name:            "filter with wildcard pattern",
+			registryFilters: []string{`.*\.io/`},
+			expectedImages:  []string{"localhost:5000/test:latest"},
+		},
+		{
+			name:            "filter with invalid regex - should be ignored",
+			registryFilters: []string{`[invalid`, `^docker\.io/`},
+			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -80,25 +116,37 @@ func TestTrack(t *testing.T) {
 			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
 			g, gCtx := errgroup.WithContext(ctx)
 			g.Go(func() error {
-				return Track(gCtx, ociStore, router, tt.resolveLatestTag)
+				return Track(gCtx, ociStore, router, tt.registryFilters)
 			})
 			time.Sleep(100 * time.Millisecond)
 
+			// Check that all images are advertised by digest (this should always happen)
 			for _, img := range imgs {
 				peers, ok := router.Lookup(img.Digest.String())
-				require.True(t, ok)
+				require.True(t, ok, "Image digest %s should be advertised", img.Digest.String())
 				require.Len(t, peers, 1)
+			}
+
+			// Check that only expected images are advertised by tag name
+			expectedTagNames := make(map[string]bool)
+			for _, expectedImg := range tt.expectedImages {
+				expectedTagNames[expectedImg] = true
+			}
+
+			for _, img := range imgs {
 				tagName, ok := img.TagName()
 				if !ok {
 					continue
 				}
-				peers, ok = router.Lookup(tagName)
-				if img.IsLatestTag() && !tt.resolveLatestTag {
-					require.False(t, ok)
-					continue
+				peers, ok := router.Lookup(tagName)
+				shouldBeAdvertised := expectedTagNames[tagName]
+
+				if shouldBeAdvertised {
+					require.True(t, ok, "Image %s should be advertised", tagName)
+					require.Len(t, peers, 1)
+				} else {
+					require.False(t, ok, "Image %s should NOT be advertised", tagName)
 				}
-				require.True(t, ok)
-				require.Len(t, peers, 1)
 			}
 
 			cancel()

@@ -54,10 +54,10 @@ type RegistryCmd struct {
 	DataDir                      string        `arg:"--data-dir,env:DATA_DIR" default:"/var/lib/spegel" help:"Directory where Spegel persists data."`
 	RouterAddr                   string        `arg:"--router-addr,env:ROUTER_ADDR" default:":5001" help:"address to serve router."`
 	RegistryAddr                 string        `arg:"--registry-addr,env:REGISTRY_ADDR" default:":5000" help:"address to server image registry."`
-	MirroredRegistries           []string      `arg:"--mirrored-registries,env:MIRRORED_REGISTRIES" help:"Registries that are configured to be mirrored, if slice is empty all registires are mirrored."`
+	MirroredRegistries           []string      `arg:"--mirrored-registries,env:MIRRORED_REGISTRIES" help:"Registries that are configured to be mirrored, if slice is empty all registries are mirrored."`
+	RegistryFilters              []string      `arg:"--registry-filters,env:REGISTRY_FILTERS" help:"Regular expressions to filter out tags/registries, if slice is empty all registries/tags are resolved."`
 	MirrorResolveTimeout         time.Duration `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries         int           `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
-	ResolveLatestTag             bool          `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
 	DebugWebEnabled              bool          `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"false" help:"When true enables debug web page."`
 }
 
@@ -170,7 +170,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 
 	// State tracking
 	g.Go(func() error {
-		err := state.Track(ctx, ociStore, router, args.ResolveLatestTag)
+		err := state.Track(ctx, ociStore, router, args.RegistryFilters)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -179,7 +179,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 
 	// Registry
 	registryOpts := []registry.RegistryOption{
-		registry.WithResolveLatestTag(args.ResolveLatestTag),
+		registry.WithRegistryFilters(args.RegistryFilters),
 		registry.WithResolveRetries(args.MirrorResolveRetries),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithBasicAuth(username, password),

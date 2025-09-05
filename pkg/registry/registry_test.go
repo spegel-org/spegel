@@ -23,9 +23,10 @@ func TestRegistryOptions(t *testing.T) {
 	t.Parallel()
 
 	transport := &http.Transport{}
+	filters := []string{"^docker\\.io/", "^gcr\\.io/"}
 	opts := []RegistryOption{
 		WithResolveRetries(5),
-		WithResolveLatestTag(true),
+		WithRegistryFilters(filters),
 		WithResolveTimeout(10 * time.Minute),
 		WithTransport(transport),
 		WithBasicAuth("foo", "bar"),
@@ -34,11 +35,84 @@ func TestRegistryOptions(t *testing.T) {
 	err := cfg.Apply(opts...)
 	require.NoError(t, err)
 	require.Equal(t, 5, cfg.ResolveRetries)
-	require.True(t, cfg.ResolveLatestTag)
+	require.Equal(t, filters, cfg.Filters)
 	require.Equal(t, 10*time.Minute, cfg.ResolveTimeout)
 	require.Equal(t, transport, cfg.Transport)
 	require.Equal(t, "foo", cfg.Username)
 	require.Equal(t, "bar", cfg.Password)
+}
+
+func TestShouldMirrorImage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		image    string
+		filters  []string
+		expected bool
+	}{
+		{
+			name:     "image matches filter - should not mirror",
+			filters:  []string{"^docker\\.io/"},
+			image:    "docker.io/library/nginx:latest",
+			expected: false,
+		},
+		{
+			name:     "image does not match filter - should mirror",
+			filters:  []string{"^docker\\.io/"},
+			image:    "ghcr.io/project/image:latest",
+			expected: true,
+		},
+		{
+			name:     "image matches one of multiple filters - should not mirror",
+			filters:  []string{"^docker\\.io/", "^gcr\\.io/"},
+			image:    "docker.io/library/nginx:latest",
+			expected: false,
+		},
+		{
+			name:     "image matches one of multiple filters - should not mirror",
+			filters:  []string{"^docker\\.io/", "^gcr\\.io/"},
+			image:    "gcr.io/project/image:latest",
+			expected: false,
+		},
+		{
+			name:     "image does not match any filter - should mirror",
+			filters:  []string{"^docker\\.io/", "^gcr\\.io/"},
+			image:    "quay.io/namespace/repo:latest",
+			expected: true,
+		},
+		{
+			name:     "case insensitive filter match - should not mirror",
+			filters:  []string{"(?i)^docker\\.io/"},
+			image:    "DOCKER.IO/library/nginx:latest",
+			expected: false,
+		},
+		{
+			name:     "wildcard filter match - should not mirror",
+			filters:  []string{".*\\.io/"},
+			image:    "docker.io/library/nginx:latest",
+			expected: false,
+		},
+		{
+			name:     "invalid regex pattern - should be ignored",
+			filters:  []string{"[invalid", "^docker\\.io/"},
+			image:    "docker.io/library/nginx:latest",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:8080"))
+			reg, err := NewRegistry(nil, router, WithRegistryFilters(tt.filters))
+			require.NoError(t, err)
+
+			result := reg.shouldMirrorImage(tt.image)
+			require.Equal(t, tt.expected, result)
+		})
+	}
 }
 
 func TestProbeHandlers(t *testing.T) {

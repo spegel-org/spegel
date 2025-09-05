@@ -101,7 +101,12 @@ spec:
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
           - --bootstrap-kind=dns
           - --dns-bootstrap-domain={{ include "spegel.fullname" . }}-bootstrap.{{ include "spegel.namespace" . }}.svc.{{ .Values.clusterDomain }}
-          - --resolve-latest-tag={{ .Values.spegel.resolveLatestTag }}
+          {{- with .Values.spegel.registryFilters }}
+          - --registry-filters
+          {{- range . }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- end }}
           {{- with .Values.spegel.containerdContentPath }}
           - --containerd-content-path={{ . }}
           {{- end }}
