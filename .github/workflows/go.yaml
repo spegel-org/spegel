@@ -28,8 +28,6 @@ jobs:
         with:
           go-version-file: go.mod
       # https://github.com/golang/go/issues/75031
-      - name: Set toolchain version
-        run: go env -w GOTOOLCHAIN=go1.25.0+auto
       - name: Run tests
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
       - name: Upload coverage reports to Codecov
