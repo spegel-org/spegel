@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/spegel-org/spegel/pkg/filter"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -27,12 +28,12 @@ const (
 )
 
 type RegistryConfig struct {
-	Transport        http.RoundTripper
-	Username         string
-	Password         string
-	ResolveRetries   int
-	ResolveLatestTag bool
-	ResolveTimeout   time.Duration
+	Transport      http.RoundTripper
+	Username       string
+	Password       string
+	Filters        []string
+	ResolveTimeout time.Duration
+	ResolveRetries int
 }
 
 func (cfg *RegistryConfig) Apply(opts ...RegistryOption) error {
@@ -56,9 +57,9 @@ func WithResolveRetries(resolveRetries int) RegistryOption {
 	}
 }
 
-func WithResolveLatestTag(resolveLatestTag bool) RegistryOption {
+func WithRegistryFilters(filters []string) RegistryOption {
 	return func(cfg *RegistryConfig) error {
-		cfg.ResolveLatestTag = resolveLatestTag
+		cfg.Filters = filters
 		return nil
 	}
 }
@@ -86,22 +87,21 @@ func WithBasicAuth(username, password string) RegistryOption {
 }
 
 type Registry struct {
-	bufferPool       *sync.Pool
-	ociStore         oci.Store
-	ociClient        *oci.Client
-	router           routing.Router
-	username         string
-	password         string
-	resolveRetries   int
-	resolveTimeout   time.Duration
-	resolveLatestTag bool
+	bufferPool     *sync.Pool
+	ociStore       oci.Store
+	ociClient      *oci.Client
+	router         routing.Router
+	username       string
+	password       string
+	filters        []string
+	resolveTimeout time.Duration
+	resolveRetries int
 }
 
 func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
 	cfg := RegistryConfig{
-		ResolveRetries:   3,
-		ResolveLatestTag: true,
-		ResolveTimeout:   20 * time.Millisecond,
+		ResolveRetries: 3,
+		ResolveTimeout: 20 * time.Millisecond,
 	}
 	err := cfg.Apply(opts...)
 	if err != nil {
@@ -128,15 +128,15 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 	}
 
 	r := &Registry{
-		ociStore:         ociStore,
-		router:           router,
-		ociClient:        ociClient,
-		resolveRetries:   cfg.ResolveRetries,
-		resolveLatestTag: cfg.ResolveLatestTag,
-		resolveTimeout:   cfg.ResolveTimeout,
-		username:         cfg.Username,
-		password:         cfg.Password,
-		bufferPool:       bufferPool,
+		ociStore:       ociStore,
+		router:         router,
+		ociClient:      ociClient,
+		resolveRetries: cfg.ResolveRetries,
+		filters:        cfg.Filters,
+		resolveTimeout: cfg.ResolveTimeout,
+		username:       cfg.Username,
+		password:       cfg.Password,
+		bufferPool:     bufferPool,
 	}
 	return r, nil
 }
@@ -201,6 +201,17 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		rw.SetAttrs(RegistryAttrKey, dist.Registry)
 	}
 
+	// Apply registry filters to determine if this image should be mirrored
+	// Only apply filters if they are provided
+	if len(r.filters) > 0 {
+		shouldMirror := r.shouldMirrorImage(dist.Reference())
+		if !shouldMirror {
+			rw.WriteError(http.StatusNotFound, fmt.Errorf("image %s is filtered out by registry filters", dist.Reference()))
+
+			return
+		}
+	}
+
 	// Request with mirror header are proxied.
 	if req.Header.Get(HeaderSpegelMirrored) != "true" {
 		// If content is present locally we should skip the mirroring and just serve it.
@@ -255,12 +266,6 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		oci.DistributionKindBlob:     oci.ErrCodeManifestUnknown,
 		oci.DistributionKindManifest: oci.ErrCodeBlobUnknown,
 	}[dist.Kind]
-
-	if !r.resolveLatestTag && dist.IsLatestTag() {
-		respErr := oci.NewDistributionError(errCode, "latest tag resolving is disabled", mirrorDetails)
-		rw.WriteError(http.StatusNotFound, respErr)
-		return
-	}
 
 	// Resolve mirror with the requested reference
 	resolveCtx, resolveCancel := context.WithTimeout(req.Context(), r.resolveTimeout)
@@ -451,4 +456,11 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 	}
 	defer rc.Close()
 	http.ServeContent(rw, req, "", time.Time{}, rc)
+}
+
+func (r *Registry) shouldMirrorImage(imageName string) bool {
+	// This method is only called when len(r.filters) > 0
+	// Return true if the image should be mirrored (i.e., does NOT match any filter)
+	// FilterString returns true if it matches a pattern, so we negate it
+	return !filter.FilterString(imageName, r.filters)
 }
