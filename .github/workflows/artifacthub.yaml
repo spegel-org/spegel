@@ -25,6 +25,6 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup ORAS
-        uses: oras-project/setup-oras@8d34698a59f5ffe24821f0b48ab62a3de8b64b20 #v1.2.3
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 #v1.2.4
       - name: Push Artifact Hub metadata
         run: oras push ghcr.io/spegel-org/helm-charts/spegel:artifacthub.io --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml charts/spegel/artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
