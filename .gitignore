@@ -22,3 +22,7 @@ go.work
 
 # Added by goreleaser init:
 dist/
+
+# IDEs
+.vscode/
+.idea/

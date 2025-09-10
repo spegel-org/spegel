@@ -164,6 +164,11 @@ spegel:
   resolveTags: true
   # -- When true latest tags will be resolved to digests.
   resolveLatestTag: true
+  # -- Regular expressions to filter out tags/registries. If empty, all registries/tags are resolved.
+  registryFilters: []
+    # - ".*:latest$"
+    # - "^docker\\.io/"
+    # - "^ghcr\\.io/"
   # -- When true existing mirror configuration will be kept and Spegel will prepend it's configuration.
   prependExisting: false
   # -- When true enables debug web page.

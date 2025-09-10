@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -30,9 +31,10 @@ type RegistryConfig struct {
 	Transport        http.RoundTripper
 	Username         string
 	Password         string
-	ResolveRetries   int
+	Filters          []*regexp.Regexp
 	ResolveLatestTag bool
 	ResolveTimeout   time.Duration
+	ResolveRetries   int
 }
 
 func (cfg *RegistryConfig) Apply(opts ...RegistryOption) error {
@@ -59,6 +61,13 @@ func WithResolveRetries(resolveRetries int) RegistryOption {
 func WithResolveLatestTag(resolveLatestTag bool) RegistryOption {
 	return func(cfg *RegistryConfig) error {
 		cfg.ResolveLatestTag = resolveLatestTag
+		return nil
+	}
+}
+
+func WithRegistryFilters(filters []*regexp.Regexp) RegistryOption {
+	return func(cfg *RegistryConfig) error {
+		cfg.Filters = filters
 		return nil
 	}
 }
@@ -92,8 +101,9 @@ type Registry struct {
 	router           routing.Router
 	username         string
 	password         string
-	resolveRetries   int
+	filters          []*regexp.Regexp
 	resolveTimeout   time.Duration
+	resolveRetries   int
 	resolveLatestTag bool
 }
 
@@ -133,6 +143,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		ociClient:        ociClient,
 		resolveRetries:   cfg.ResolveRetries,
 		resolveLatestTag: cfg.ResolveLatestTag,
+		filters:          cfg.Filters,
 		resolveTimeout:   cfg.ResolveTimeout,
 		username:         cfg.Username,
 		password:         cfg.Password,
@@ -199,6 +210,18 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 	if dist.Registry != "" {
 		rw.SetAttrs(RegistryAttrKey, dist.Registry)
+	}
+
+	// Apply registry filters to determine if this image should be mirrored
+	// Only apply filters if they are provided
+	if len(r.filters) > 0 {
+		for _, f := range r.filters {
+			if f.MatchString(dist.Reference()) {
+				rw.WriteError(http.StatusNotFound, fmt.Errorf("image %s is filtered out by registry filters", dist.Reference()))
+
+				return
+			}
+		}
 	}
 
 	// Request with mirror header are proxied.

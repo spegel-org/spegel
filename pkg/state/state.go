@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"errors"
+	"regexp"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -13,7 +14,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
-func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resolveLatestTag bool) error {
+func Track(ctx context.Context, ociStore oci.Store, router routing.Router, registryFilters []*regexp.Regexp, resolveLatestTag bool) error {
 	log := logr.FromContextOrDiscard(ctx)
 	eventCh, err := ociStore.Subscribe(ctx)
 	if err != nil {
@@ -31,7 +32,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resol
 			return ctx.Err()
 		case <-tickerCh:
 			log.Info("running state update")
-			err := tick(ctx, ociStore, router, resolveLatestTag)
+			err := tick(ctx, ociStore, router, registryFilters, resolveLatestTag)
 			if err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
@@ -50,7 +51,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, resol
 	}
 }
 
-func tick(ctx context.Context, ociStore oci.Store, router routing.Router, resolveLatest bool) error {
+func tick(ctx context.Context, ociStore oci.Store, router routing.Router, registryFilters []*regexp.Regexp, resolveLatest bool) error {
 	advertisedImages := map[string]float64{}
 	advertisedImageDigests := map[string]float64{}
 	advertisedImageTags := map[string]float64{}
@@ -63,7 +64,22 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, resolv
 	for _, img := range imgs {
 		advertisedImages[img.Registry] += 1
 		advertisedImageDigests[img.Registry] += 1
+
 		if !resolveLatest && img.IsLatestTag() {
+			continue
+		}
+		filtered := false
+		// Apply registry filters to determine if this image should be advertised
+		// Only apply filters if they are provided
+		if len(registryFilters) > 0 {
+			for _, f := range registryFilters {
+				if f.MatchString(img.String()) {
+					filtered = true
+					break
+				}
+			}
+		}
+		if filtered {
 			continue
 		}
 		tagName, ok := img.TagName()
