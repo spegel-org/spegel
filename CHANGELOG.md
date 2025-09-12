@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- [#1009](https://github.com/spegel-org/spegel/pull/1009) Deprecate resolve latest in favor of registry filters.
+
 ### Removed
 
 ### Fixed
