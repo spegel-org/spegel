@@ -64,6 +64,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | spegel.mirrorResolveTimeout | string | `"20ms"` | Max duration spent finding a mirror. |
 | spegel.mirroredRegistries | list | `[]` | Registries for which mirror configuration will be created. Empty means all registires will be mirrored. |
 | spegel.prependExisting | bool | `false` | When true existing mirror configuration will be kept and Spegel will prepend it's configuration. |
+| spegel.registryFilters | list | `[]` | Regular expressions to filter out tags/registries. If empty, all registries/tags are resolved. |
 | spegel.resolveLatestTag | bool | `true` | When true latest tags will be resolved to digests. |
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |
 | tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
