@@ -58,6 +58,7 @@ func WithResolveRetries(resolveRetries int) RegistryOption {
 	}
 }
 
+// Deprecated: Resolve latest tag is replaced by registry filter which offers more customizable behavior. Use the filter `:latest$` to achieve the same behavior.
 func WithResolveLatestTag(resolveLatestTag bool) RegistryOption {
 	return func(cfg *RegistryConfig) error {
 		cfg.ResolveLatestTag = resolveLatestTag

@@ -33,6 +33,7 @@ func (cfg *TrackerConfig) Apply(opts ...TrackerOption) error {
 
 type TrackerOption func(t *TrackerConfig) error
 
+// Deprecated: Resolve latest tag is replaced by registry filter which offers more customizable behavior. Use the filter `:latest$` to achieve the same behavior.
 func WithResolveLatestTag(resolveLatestTag bool) TrackerOption {
 	return func(cfg *TrackerConfig) error {
 		cfg.ResolveLatestTag = resolveLatestTag

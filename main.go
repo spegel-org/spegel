@@ -131,13 +131,22 @@ func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	return nil
 }
 
-func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
+func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	log := logr.FromContextOrDiscard(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
 	username, password, err := loadBasicAuth()
 	if err != nil {
 		return err
+	}
+	if !args.ResolveLatestTag {
+		log.Error(errors.New("deprecated argument"), "Resolve latest tag is replaced by registry filter which offers more customizable behavior. Use the filter `:latest$` to achieve the same behavior.")
+		//nolint: gocritic // We want to avoid panics and instead return errors.
+		latestFilter, err := regexp.Compile(`:latest$`)
+		if err != nil {
+			return err
+		}
+		args.RegistryFilters = append(args.RegistryFilters, latestFilter)
 	}
 
 	// OCI Store
@@ -172,7 +181,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 
 	// State tracking
 	g.Go(func() error {
-		err := state.Track(ctx, ociStore, router, state.WithRegistryFilters(args.RegistryFilters), state.WithResolveLatestTag(args.ResolveLatestTag))
+		err := state.Track(ctx, ociStore, router, state.WithRegistryFilters(args.RegistryFilters))
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -181,7 +190,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) (err error) {
 
 	// Registry
 	registryOpts := []registry.RegistryOption{
-		registry.WithResolveLatestTag(args.ResolveLatestTag),
 		registry.WithRegistryFilters(args.RegistryFilters),
 		registry.WithResolveRetries(args.MirrorResolveRetries),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
