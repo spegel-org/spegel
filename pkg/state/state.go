@@ -14,7 +14,48 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
-func Track(ctx context.Context, ociStore oci.Store, router routing.Router, registryFilters []*regexp.Regexp, resolveLatestTag bool) error {
+type TrackerConfig struct {
+	RegistryFilters  []*regexp.Regexp
+	ResolveLatestTag bool
+}
+
+func (cfg *TrackerConfig) Apply(opts ...TrackerOption) error {
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type TrackerOption func(t *TrackerConfig) error
+
+func WithResolveLatestTag(resolveLatestTag bool) TrackerOption {
+	return func(cfg *TrackerConfig) error {
+		cfg.ResolveLatestTag = resolveLatestTag
+		return nil
+	}
+}
+
+func WithRegistryFilters(registryFilters []*regexp.Regexp) TrackerOption {
+	return func(cfg *TrackerConfig) error {
+		cfg.RegistryFilters = registryFilters
+		return nil
+	}
+}
+
+func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts ...TrackerOption) error {
+	cfg := TrackerConfig{
+		ResolveLatestTag: true,
+	}
+	err := cfg.Apply(opts...)
+	if err != nil {
+		return err
+	}
+
 	log := logr.FromContextOrDiscard(ctx)
 	eventCh, err := ociStore.Subscribe(ctx)
 	if err != nil {
@@ -32,7 +73,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, regis
 			return ctx.Err()
 		case <-tickerCh:
 			log.Info("running state update")
-			err := tick(ctx, ociStore, router, registryFilters, resolveLatestTag)
+			err := tick(ctx, ociStore, router, cfg.RegistryFilters, cfg.ResolveLatestTag)
 			if err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
@@ -68,20 +109,19 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, regist
 		if !resolveLatest && img.IsLatestTag() {
 			continue
 		}
+
+		// Do not advertise images that match registry filter.
 		filtered := false
-		// Apply registry filters to determine if this image should be advertised
-		// Only apply filters if they are provided
-		if len(registryFilters) > 0 {
-			for _, f := range registryFilters {
-				if f.MatchString(img.String()) {
-					filtered = true
-					break
-				}
+		for _, f := range registryFilters {
+			if f.MatchString(img.String()) {
+				filtered = true
+				break
 			}
 		}
 		if filtered {
 			continue
 		}
+
 		tagName, ok := img.TagName()
 		if !ok {
 			continue
