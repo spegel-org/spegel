@@ -27,7 +27,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.etcd.io/bbolt v1.4.3
 	golang.org/x/sync v0.17.0
-	google.golang.org/grpc v1.75.0
+	google.golang.org/grpc v1.75.1
 	k8s.io/apimachinery v0.34.0
 	k8s.io/cri-api v0.34.0
 )
