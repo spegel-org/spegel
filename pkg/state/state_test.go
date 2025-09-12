@@ -61,19 +61,19 @@ func TestTrack(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		registryFilters  []string
+		registryFilters  []*regexp.Regexp
 		expectedImages   []string // Images that should be advertised
 		resolveLatestTag bool
 	}{
 		{
 			name:             "no filters, resolve latest - all images advertised",
-			registryFilters:  []string{},
+			registryFilters:  []*regexp.Regexp{},
 			resolveLatestTag: true,
 			expectedImages:   []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
 			name:             "no filters, skip latest - only non-latest images advertised",
-			registryFilters:  []string{},
+			registryFilters:  []*regexp.Regexp{},
 			resolveLatestTag: false,
 			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
 		},
@@ -91,75 +91,63 @@ func TestTrack(t *testing.T) {
 		},
 		{
 			name:             "filter docker.io only, resolve latest",
-			registryFilters:  []string{`^docker\.io/`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`)},
 			resolveLatestTag: true,
 			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
 			name:             "filter docker.io only, skip latest",
-			registryFilters:  []string{`^docker\.io/`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`)},
 			resolveLatestTag: false,
 			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
 		},
 		{
 			name:             "filter multiple registries, resolve latest",
-			registryFilters:  []string{`^docker\.io/`, `^ghcr\.io/`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`)},
 			resolveLatestTag: true,
 			expectedImages:   []string{"quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
 			name:             "filter multiple registries, skip latest",
-			registryFilters:  []string{`^docker\.io/`, `^ghcr\.io/`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`)},
 			resolveLatestTag: false,
 			expectedImages:   []string{},
 		},
 		{
 			name:             "filter all registries, resolve latest",
-			registryFilters:  []string{`^docker\.io/`, `^ghcr\.io/`, `^quay\.io/`, `^localhost:`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`), regexp.MustCompile(`^quay\.io/`), regexp.MustCompile(`^localhost:`)},
 			resolveLatestTag: true,
 			expectedImages:   []string{},
 		},
 		{
 			name:             "filter all registries, skip latest",
-			registryFilters:  []string{`^docker\.io/`, `^ghcr\.io/`, `^quay\.io/`, `^localhost:`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`), regexp.MustCompile(`^quay\.io/`), regexp.MustCompile(`^localhost:`)},
 			resolveLatestTag: false,
 			expectedImages:   []string{},
 		},
 		{
 			name:             "filter with case insensitive pattern, resolve latest",
-			registryFilters:  []string{`(?i)^docker\.io/`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`(?i)^docker\.io/`)},
 			resolveLatestTag: true,
 			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
 			name:             "filter with case insensitive pattern, skip latest",
-			registryFilters:  []string{`(?i)^docker\.io/`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`(?i)^docker\.io/`)},
 			resolveLatestTag: false,
 			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
 		},
 		{
 			name:             "filter with wildcard pattern, resolve latest",
-			registryFilters:  []string{`.*\.io/`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`.*\.io/`)},
 			resolveLatestTag: true,
 			expectedImages:   []string{"localhost:5000/test:latest"},
 		},
 		{
 			name:             "filter with wildcard pattern, skip latest",
-			registryFilters:  []string{`.*\.io/`},
+			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`.*\.io/`)},
 			resolveLatestTag: false,
 			expectedImages:   []string{},
-		},
-		{
-			name:             "filter with invalid regex - should be ignored, resolve latest",
-			registryFilters:  []string{`[invalid`, `^docker\.io/`},
-			resolveLatestTag: true,
-			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
-		},
-		{
-			name:             "filter with invalid regex - should be ignored, skip latest",
-			registryFilters:  []string{`[invalid`, `^docker\.io/`},
-			resolveLatestTag: false,
-			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
 		},
 	}
 
@@ -171,21 +159,10 @@ func TestTrack(t *testing.T) {
 			ctx := logr.NewContext(t.Context(), log)
 			ctx, cancel := context.WithCancel(ctx)
 
-			// Compile regex patterns
-			var compiledFilters []*regexp.Regexp
-			if tt.registryFilters != nil {
-				for _, pattern := range tt.registryFilters {
-					if compiled, err := regexp.Compile(pattern); err == nil {
-						compiledFilters = append(compiledFilters, compiled)
-					}
-					// Invalid patterns are ignored (no error returned)
-				}
-			}
-
 			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
 			g, gCtx := errgroup.WithContext(ctx)
 			g.Go(func() error {
-				return Track(gCtx, ociStore, router, compiledFilters, tt.resolveLatestTag)
+				return Track(gCtx, ociStore, router, WithRegistryFilters(tt.registryFilters), WithResolveLatestTag(tt.resolveLatestTag))
 			})
 			time.Sleep(100 * time.Millisecond)
 

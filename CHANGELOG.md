@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#975](https://github.com/spegel-org/spegel/pull/975) Update Go to 1.25.0.
 - [#995](https://github.com/spegel-org/spegel/pull/995) Cleanup http logger to allow generic attribute.
 - [#1000](https://github.com/spegel-org/spegel/pull/1000) Update Go to 1.25.1.
+- [#1008](https://github.com/spegel-org/spegel/pull/1008) Add options to state tracker.
 
 ### Deprecated
 
