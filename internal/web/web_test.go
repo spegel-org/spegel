@@ -62,11 +62,11 @@ func TestDuration(t *testing.T) {
 		},
 		{
 			duration: 5*time.Minute + 128*time.Second,
-			expected: "7m8s",
+			expected: "7m 8s",
 		},
 		{
 			duration: 2 * time.Hour,
-			expected: "120m",
+			expected: "2h",
 		},
 	}
 	for _, tt := range tests {

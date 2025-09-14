@@ -1,10 +1,18 @@
 <div>
   <div class="stat-container">
-    <div class="stat-box">
+    <div class="stat-box" style="background-color: {{if .MirrorLastSuccess}}#81C784{{else}}#FAA93B{{end}};">
+      <div class="stat-title">Last Mirror Success</div>
+      {{- if .MirrorLastSuccess }}
+      <div class="stat-value">{{ .MirrorLastSuccess | formatDuration }} ago</div>
+      {{- else }}
+      <div class="stat-value">Pending</div>
+      {{- end }}
+    </div>
+    <div class="stat-box" style="background-color: {{if .ImageCount}}#81C784{{else}}#E57373{{end}};">
       <div class="stat-title">Images</div>
       <div class="stat-value">{{ .ImageCount }}</div>
     </div>
-    <div class="stat-box">
+    <div class="stat-box" style="background-color: {{if .LayerCount}}#81C784{{else}}#E57373{{end}};">
       <div class="stat-title">Layers</div>
       <div class="stat-value">{{ .LayerCount }}</div>
     </div>

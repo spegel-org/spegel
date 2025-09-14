@@ -21,6 +21,10 @@ var (
 		Name: "spegel_mirror_requests_total",
 		Help: "Total number of mirror requests.",
 	}, []string{"registry", "cache"})
+	MirrorLastSuccessTimestamp = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "spegel_mirror_last_success_timestamp_seconds",
+		Help: "The timestamp of the last successful mirror request.",
+	})
 	ResolveDurHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "spegel_resolve_duration_seconds",
 		Help: "The duration for router to resolve a peer.",
@@ -45,6 +49,7 @@ var (
 
 func Register() {
 	DefaultRegisterer.MustRegister(MirrorRequestsTotal)
+	DefaultRegisterer.MustRegister(MirrorLastSuccessTimestamp)
 	DefaultRegisterer.MustRegister(ResolveDurHistogram)
 	DefaultRegisterer.MustRegister(AdvertisedImages)
 	DefaultRegisterer.MustRegister(AdvertisedImageTags)
