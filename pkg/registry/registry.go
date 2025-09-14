@@ -270,6 +270,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 			cacheType = "miss"
 		}
 		metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, cacheType).Inc()
+		metrics.MirrorLastSuccessTimestamp.SetToCurrentTime()
 	}()
 
 	mirrorDetails := MirrorErrorDetails{

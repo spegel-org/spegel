@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -77,7 +79,7 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 	defer httpx.DrainAndClose(resp.Body)
 
-	parser := expfmt.TextParser{}
+	parser := expfmt.NewTextParser(model.UTF8Validation)
 	metricFamilies, err := parser.TextToMetricFamilies(resp.Body)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
@@ -85,8 +87,9 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 
 	data := struct {
-		ImageCount int64
-		LayerCount int64
+		MirrorLastSuccess time.Duration
+		ImageCount        int64
+		LayerCount        int64
 	}{}
 	for _, metric := range metricFamilies["spegel_advertised_images"].Metric {
 		data.ImageCount += int64(*metric.Gauge.Value)
@@ -94,6 +97,11 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	for _, metric := range metricFamilies["spegel_advertised_keys"].Metric {
 		data.LayerCount += int64(*metric.Gauge.Value)
 	}
+	mirrorLastSuccess := int64(*metricFamilies["spegel_mirror_last_success_timestamp_seconds"].Metric[0].Gauge.Value)
+	if mirrorLastSuccess > 0 {
+		data.MirrorLastSuccess = time.Since(time.Unix(mirrorLastSuccess, 0))
+	}
+
 	err = w.tmpls.ExecuteTemplate(rw, "stats.html", data)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
@@ -201,20 +209,33 @@ func formatDuration(d time.Duration) string {
 		return "<1ms"
 	}
 
-	totalMs := int64(d / time.Millisecond)
-	minutes := totalMs / 60000
-	seconds := (totalMs % 60000) / 1000
-	milliseconds := totalMs % 1000
+	values := []int64{
+		int64(d / (24 * time.Hour)),
+		int64((d % (24 * time.Hour)) / time.Hour),
+		int64((d % time.Hour) / time.Minute),
+		int64((d % time.Minute) / time.Second),
+		int64((d % time.Second) / time.Millisecond),
+	}
+	units := []string{
+		"d",
+		"h",
+		"m",
+		"s",
+		"ms",
+	}
 
-	out := ""
-	if minutes > 0 {
-		out += fmt.Sprintf("%dm", minutes)
+	comps := []string{}
+	for i, v := range values {
+		if v == 0 {
+			if len(comps) > 0 {
+				break
+			}
+			continue
+		}
+		comps = append(comps, fmt.Sprintf("%d%s", v, units[i]))
+		if len(comps) == 2 {
+			break
+		}
 	}
-	if seconds > 0 {
-		out += fmt.Sprintf("%ds", seconds)
-	}
-	if milliseconds > 0 {
-		out += fmt.Sprintf("%dms", milliseconds)
-	}
-	return out
+	return strings.Join(comps, " ")
 }
