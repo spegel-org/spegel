@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## v0.4.0
+
+### Added
+
 - [#1003](https://github.com/spegel-org/spegel/pull/905) Add support for filtering registries/tags
 - [#905](https://github.com/spegel-org/spegel/pull/905) Change mirror type to url and add byte range parameter.
 - [#909](https://github.com/spegel-org/spegel/pull/909) Add base http client and transport.
@@ -38,8 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#1009](https://github.com/spegel-org/spegel/pull/1009) Deprecate resolve latest in favor of registry filters.
 
-### Removed
-
 ### Fixed
 
 - [#911](https://github.com/spegel-org/spegel/pull/911) Enforce use of request contexts and fix response closing.
@@ -51,8 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#956](https://github.com/spegel-org/spegel/pull/956) Remove setting logger for klog.
 - [#984](https://github.com/spegel-org/spegel/pull/984) Fix host matches to support dual stack deployments.
 - [#996](https://github.com/spegel-org/spegel/pull/996) Return state context error and text shutdown exit code.
-
-### Security
 
 ## v0.3.0
 
