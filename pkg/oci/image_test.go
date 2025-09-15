@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseImageRequireDigest(t *testing.T) {
+func TestParseImageStrict(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -78,7 +78,7 @@ func TestParseImageRequireDigest(t *testing.T) {
 				t.Parallel()
 
 				for _, extraDgst := range []string{tt.expectedDigest.String(), ""} {
-					img, err := ParseImageRequireDigest(fmt.Sprintf("%s/%s", registry, tt.image), digest.Digest(extraDgst))
+					img, err := ParseImage(fmt.Sprintf("%s/%s", registry, tt.image), WithStrict(), WithDigest(digest.Digest(extraDgst)))
 					if !tt.digestInImage && extraDgst == "" {
 						require.EqualError(t, err, "image needs to contain a digest")
 						continue
@@ -104,7 +104,7 @@ func TestParseImageRequireDigest(t *testing.T) {
 	}
 }
 
-func TestParseImageRequireDigestErrors(t *testing.T) {
+func TestParseImageStrictErrors(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -142,7 +142,7 @@ func TestParseImageRequireDigestErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := ParseImageRequireDigest(tt.s, tt.dgst)
+			_, err := ParseImage(tt.s, WithStrict(), WithDigest(tt.dgst))
 			require.EqualError(t, err, tt.expectedError)
 		})
 	}
@@ -151,7 +151,6 @@ func TestParseImageRequireDigestErrors(t *testing.T) {
 func TestNewImageErrors(t *testing.T) {
 	t.Parallel()
 
-	// TODO (phillebaba): Add test case for no digest or tag. One needs to be set.
 	tests := []struct {
 		name          string
 		registry      string
@@ -183,6 +182,14 @@ func TestNewImageErrors(t *testing.T) {
 			tag:           "latest",
 			dgst:          digest.Digest("test"),
 			expectedError: "invalid checksum digest format",
+		},
+		{
+			name:          "missing tag and digest",
+			registry:      "example.com",
+			repository:    "foo/bar",
+			tag:           "",
+			dgst:          "",
+			expectedError: "either tag or digest has to be set",
 		},
 	}
 	for _, tt := range tests {

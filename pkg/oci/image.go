@@ -29,6 +29,9 @@ func NewImage(registry, repository, tag string, dgst digest.Digest) (Image, erro
 			return Image{}, err
 		}
 	}
+	if dgst == "" && tag == "" {
+		return Image{}, errors.New("either tag or digest has to be set")
+	}
 	return Image{
 		Registry:   registry,
 		Repository: repository,
@@ -62,19 +65,84 @@ func (i Image) TagName() (string, bool) {
 
 var splitRe = regexp.MustCompile(`[:@]`)
 
-func ParseImage(s string) (Image, error) {
-	if strings.Contains(s, "://") {
-		return Image{}, errors.New("invalid reference")
+type ParseImageConfig struct {
+	Digest digest.Digest
+	Strict bool
+}
+
+func (cfg *ParseImageConfig) Apply(opts ...ParseImageOption) error {
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		if err := opt(cfg); err != nil {
+			return err
+		}
 	}
-	u, err := url.Parse("dummy://" + s)
+	return nil
+}
+
+type ParseImageOption func(cfg *ParseImageConfig) error
+
+// Enforces the presence of digest in the image.
+func WithStrict() ParseImageOption {
+	return func(cfg *ParseImageConfig) error {
+		cfg.Strict = true
+		return nil
+	}
+}
+
+// Adds an additional digest outside of the parsed string.
+func WithDigest(dgst digest.Digest) ParseImageOption {
+	return func(cfg *ParseImageConfig) error {
+		cfg.Digest = dgst
+		return nil
+	}
+}
+
+// ParseImage parses the image reference.
+func ParseImage(s string, opts ...ParseImageOption) (Image, error) {
+	cfg := ParseImageConfig{}
+	err := cfg.Apply(opts...)
 	if err != nil {
 		return Image{}, err
 	}
+
+	registry, repository, tag, dgst, err := parseImage(s)
+	if err != nil {
+		return Image{}, err
+	}
+	if cfg.Digest != "" {
+		if dgst != "" && dgst != cfg.Digest {
+			return Image{}, fmt.Errorf("invalid digest set does not match parsed digest: %v %v", s, dgst)
+		}
+		dgst = cfg.Digest
+	}
+	if cfg.Strict {
+		if dgst == "" {
+			return Image{}, errors.New("image needs to contain a digest")
+		}
+	}
+	img, err := NewImage(registry, repository, tag, dgst)
+	if err != nil {
+		return Image{}, err
+	}
+	return img, nil
+}
+
+func parseImage(s string) (string, string, string, digest.Digest, error) {
+	if strings.Contains(s, "://") {
+		return "", "", "", "", errors.New("invalid reference")
+	}
+	u, err := url.Parse("dummy://" + s)
+	if err != nil {
+		return "", "", "", "", err
+	}
 	if u.Scheme != "dummy" {
-		return Image{}, errors.New("invalid reference")
+		return "", "", "", "", errors.New("invalid reference")
 	}
 	if u.Host == "" {
-		return Image{}, errors.New("hostname required")
+		return "", "", "", "", errors.New("hostname required")
 	}
 	var object string
 	if idx := splitRe.FindStringIndex(u.Path); idx != nil {
@@ -86,38 +154,13 @@ func ParseImage(s string) (Image, error) {
 		}
 		u.Path = u.Path[:idx[0]]
 	}
-	tag, dgst := splitObject(object)
+	tag, dgst := splitTagAndDigest(object)
 	tag, _, _ = strings.Cut(tag, "@")
 	repository := strings.TrimPrefix(u.Path, "/")
-
-	img, err := NewImage(u.Host, repository, tag, dgst)
-	if err != nil {
-		return Image{}, err
-	}
-	return img, nil
+	return u.Host, repository, tag, dgst, nil
 }
 
-func ParseImageRequireDigest(s string, dgst digest.Digest) (Image, error) {
-	img, err := ParseImage(s)
-	if err != nil {
-		return Image{}, err
-	}
-	if img.Digest != "" && dgst == "" {
-		return img, nil
-	}
-	if img.Digest == "" && dgst == "" {
-		return Image{}, errors.New("image needs to contain a digest")
-	}
-	if img.Digest == "" && dgst != "" {
-		return NewImage(img.Registry, img.Repository, img.Tag, dgst)
-	}
-	if img.Digest != dgst {
-		return Image{}, fmt.Errorf("invalid digest set does not match parsed digest: %v %v", s, img.Digest)
-	}
-	return img, nil
-}
-
-func splitObject(obj string) (tag string, dgst digest.Digest) {
+func splitTagAndDigest(obj string) (tag string, dgst digest.Digest) {
 	parts := strings.SplitAfterN(obj, "@", 2)
 	if len(parts) < 2 {
 		return parts[0], ""

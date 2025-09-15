@@ -309,7 +309,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	}
 	imgs := []Image{}
 	for _, cImg := range cImgs {
-		img, err := ParseImageRequireDigest(cImg.Name(), cImg.Target().Digest)
+		img, err := ParseImage(cImg.Name(), WithStrict(), WithDigest(cImg.Target().Digest))
 		if err != nil {
 			return nil, err
 		}
