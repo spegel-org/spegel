@@ -115,13 +115,6 @@ spec:
         env:
         - name: DATA_DIR
           value: ""
-        {{- if ((.Values.resources).limits).cpu }}
-        - name: GOMAXPROCS
-          valueFrom:
-            resourceFieldRef:
-              resource: limits.cpu
-              divisor: 1
-        {{- end }}
         {{- if ((.Values.resources).limits).memory }}
         - name: GOMEMLIMIT
           valueFrom:
