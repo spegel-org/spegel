@@ -65,7 +65,7 @@ func TestStore(t *testing.T) {
 		_, err = imageStore.Create(ctx, cImg)
 		require.NoError(t, err)
 
-		img, err := ParseImage(k, WithStrict(), WithDigest(desc.Digest))
+		img, err := ParseImage(k, WithDigest(desc.Digest))
 		require.NoError(t, err)
 		memoryStore.AddImage(img)
 	}
@@ -275,7 +275,7 @@ func TestStore(t *testing.T) {
 				t.Run(tt.imageName, func(t *testing.T) {
 					t.Parallel()
 
-					img, err := ParseImage(tt.imageName, WithStrict(), WithDigest(digest.Digest(tt.imageDigest)))
+					img, err := ParseImage(tt.imageName, WithDigest(digest.Digest(tt.imageDigest)))
 					require.NoError(t, err)
 					dgsts, err := WalkImage(ctx, ociStore, img)
 					require.NoError(t, err)

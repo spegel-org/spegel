@@ -52,7 +52,7 @@ func TestTrack(t *testing.T) {
 		require.NoError(t, err)
 		dgst := digest.NewDigest(digest.SHA256, hash)
 		ociStore.Write(ocispec.Descriptor{Digest: dgst}, b)
-		img, err := oci.ParseImage(imageStr, oci.WithStrict(), oci.WithDigest(dgst))
+		img, err := oci.ParseImage(imageStr, oci.WithDigest(dgst))
 		require.NoError(t, err)
 		ociStore.AddImage(img)
 

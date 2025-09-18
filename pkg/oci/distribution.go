@@ -13,11 +13,13 @@ import (
 )
 
 var (
-	nameRegex           = regexp.MustCompile(`([a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*)`)
-	tagRegex            = regexp.MustCompile(`([a-zA-Z0-9_][a-zA-Z0-9._-]{0,127})`)
-	manifestRegexTag    = regexp.MustCompile(`/v2/` + nameRegex.String() + `/manifests/` + tagRegex.String() + `$`)
-	manifestRegexDigest = regexp.MustCompile(`/v2/` + nameRegex.String() + `/manifests/(.*)`)
-	blobsRegexDigest    = regexp.MustCompile(`/v2/` + nameRegex.String() + `/blobs/(.*)`)
+	nameRegexStr        = `([a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*)`
+	tagRegexStr         = `([a-zA-Z0-9_][a-zA-Z0-9._-]{0,127})`
+	nameRegex           = regexp.MustCompile(`^` + nameRegexStr + `$`)
+	tagRegex            = regexp.MustCompile(`^` + tagRegexStr + `$`)
+	manifestRegexTag    = regexp.MustCompile(`/v2/` + nameRegexStr + `/manifests/` + tagRegexStr + `$`)
+	manifestRegexDigest = regexp.MustCompile(`/v2/` + nameRegexStr + `/manifests/(.*)`)
+	blobsRegexDigest    = regexp.MustCompile(`/v2/` + nameRegexStr + `/blobs/(.*)`)
 )
 
 // DistributionKind represents the kind of content.
