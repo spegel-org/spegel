@@ -22,7 +22,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | image.repository | string | `"ghcr.io/spegel-org/spegel"` | Image repository. |
 | image.tag | string | `""` | Overrides the image tag whose default is the chart appVersion. |
 | imagePullSecrets | list | `[]` | Image Pull Secrets |
-| livenessProbe.enabled | bool | `false` | When enabled a liveness probe will be added to the registry.  |
+| livenessProbe.enabled | bool | `false` | When enabled a liveness probe will be added to the registry. |
 | nameOverride | string | `""` | Overrides the name of the chart. |
 | namespaceOverride | string | `""` | Overrides the namespace where spegel resources are installed. |
 | nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for pod assignment. |
@@ -69,6 +69,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |
 | tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoExecute","operator":"Exists"},{"effect":"NoSchedule","operator":"Exists"}]` | Tolerations for pod assignment. |
 | updateStrategy | object | `{}` | An update strategy to replace existing pods with new pods. |
+| usePreferSameNodeTrafficDistribution | bool | `false` | Use PreferSameNode traffic distribution on the node port service instead of using an additional mirror registry on a container host port. |
 | verticalPodAutoscaler.controlledResources | list | `[]` | List of resources that the vertical pod autoscaler can control. Defaults to cpu and memory |
 | verticalPodAutoscaler.controlledValues | string | `"RequestsAndLimits"` | Specifies which resource values should be controlled: RequestsOnly or RequestsAndLimits. |
 | verticalPodAutoscaler.enabled | bool | `false` | If true creates a Vertical Pod Autoscaler. |
