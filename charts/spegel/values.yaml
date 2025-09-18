@@ -28,14 +28,15 @@ serviceAccount:
 podAnnotations: {}
 
 # -- Security context for the pod.
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
 
 # -- The number of old history to retain to allow rollback.
 revisionHistoryLimit: 10
 
 # -- Security context for the Spegel container.
-securityContext: 
+securityContext:
   readOnlyRootFilesystem: true
 
 service:
@@ -81,7 +82,8 @@ nodeSelector:
   kubernetes.io/os: linux
 
 # -- An update strategy to replace existing pods with new pods.
-updateStrategy: {}
+updateStrategy:
+  {}
   # type: RollingUpdate
   # rollingUpdate:
   #   maxSurge: 0
@@ -141,7 +143,8 @@ spegel:
   # -- Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR.
   logLevel: "INFO"
   # -- Registries for which mirror configuration will be created. Empty means all registires will be mirrored.
-  mirroredRegistries: []
+  mirroredRegistries:
+    []
     # - https://docker.io
     # - https://ghcr.io
   # -- Additional target mirror registries other than Spegel.
@@ -165,7 +168,8 @@ spegel:
   # -- When true latest tags will be resolved to digests.
   resolveLatestTag: true
   # -- Regular expressions to filter out tags/registries. If empty, all registries/tags are resolved.
-  registryFilters: []
+  registryFilters:
+    []
     # - ".*:latest$"
     # - "^docker\\.io/"
     # - "^ghcr\\.io/"
@@ -207,5 +211,9 @@ verticalPodAutoscaler:
     updateMode: Auto
 
 livenessProbe:
-  # -- When enabled a liveness probe will be added to the registry. 
+  # -- When enabled a liveness probe will be added to the registry.
   enabled: false
+
+# -- Use PreferSameNode traffic distribution on the node port service instead of
+# using an additional mirror registry on a container host port.
+usePreferSameNodeTrafficDistribution: false

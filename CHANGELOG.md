@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - [#1013](https://github.com/spegel-org/spegel/pull/1013) Refactor image parsing to include options.
 - [#1015](https://github.com/spegel-org/spegel/pull/1015) Remove explicit GOMAXPROCS
+- [#1017](https://github.com/spegel-org/spegel/pull/1017) Use prefer same node traffic distribution.
 
 ### Deprecated
 
