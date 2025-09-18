@@ -35,7 +35,7 @@ podSecurityContext: {}
 revisionHistoryLimit: 10
 
 # -- Security context for the Spegel container.
-securityContext: 
+securityContext:
   readOnlyRootFilesystem: true
 
 service:
@@ -52,6 +52,10 @@ service:
     topologyAwareHintsEnabled: true
     # -- Annotations to add to the registry service
     annotations: {}
+    # -- Use PreferSameNode traffic distribution on the node port service
+    # instead of using an additional mirror registry on a container host port.
+    usePreferSameNodeTrafficDistribution: false
+
   router:
     # -- Port to expose the router via the service.
     port: 5001
@@ -207,5 +211,5 @@ verticalPodAutoscaler:
     updateMode: Auto
 
 livenessProbe:
-  # -- When enabled a liveness probe will be added to the registry. 
+  # -- When enabled a liveness probe will be added to the registry.
   enabled: false

@@ -22,7 +22,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | image.repository | string | `"ghcr.io/spegel-org/spegel"` | Image repository. |
 | image.tag | string | `""` | Overrides the image tag whose default is the chart appVersion. |
 | imagePullSecrets | list | `[]` | Image Pull Secrets |
-| livenessProbe.enabled | bool | `false` | When enabled a liveness probe will be added to the registry.  |
+| livenessProbe.enabled | bool | `false` | When enabled a liveness probe will be added to the registry. |
 | nameOverride | string | `""` | Overrides the name of the chart. |
 | namespaceOverride | string | `""` | Overrides the namespace where spegel resources are installed. |
 | nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for pod assignment. |
@@ -43,6 +43,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | service.registry.nodePort | int | `30021` | Node port to expose the registry via the service. |
 | service.registry.port | int | `5000` | Port to expose the registry via the service. |
 | service.registry.topologyAwareHintsEnabled | bool | `true` | If true adds topology aware hints annotation to node port service. |
+| service.registry.usePreferSameNodeTrafficDistribution | bool | `false` | Use PreferSameNode traffic distribution on the node port service instead of using an additional mirror registry on a container host port. |
 | service.router.port | int | `5001` | Port to expose the router via the service. |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
 | serviceAccount.name | string | `""` | The name of the service account to use. If not set and create is true, a name is generated using the fullname template. |
