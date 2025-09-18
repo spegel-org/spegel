@@ -141,7 +141,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 		rw.WriteError(http.StatusBadRequest, errors.New("image name cannot be empty"))
 		return
 	}
-	img, err := oci.ParseImage(imgName)
+	img, err := oci.ParseImage(imgName, oci.AllowDefaults(), oci.AllowTagOnly())
 	if err != nil {
 		rw.WriteError(http.StatusBadRequest, err)
 		return

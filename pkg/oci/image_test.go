@@ -78,7 +78,7 @@ func TestParseImageStrict(t *testing.T) {
 				t.Parallel()
 
 				for _, extraDgst := range []string{tt.expectedDigest.String(), ""} {
-					img, err := ParseImage(fmt.Sprintf("%s/%s", registry, tt.image), WithStrict(), WithDigest(digest.Digest(extraDgst)))
+					img, err := ParseImage(fmt.Sprintf("%s/%s", registry, tt.image), WithDigest(digest.Digest(extraDgst)))
 					if !tt.digestInImage && extraDgst == "" {
 						require.EqualError(t, err, "image needs to contain a digest")
 						continue
@@ -129,20 +129,20 @@ func TestParseImageStrictErrors(t *testing.T) {
 			name:          "reference contains protocol",
 			s:             "https://example.com/test:latest",
 			dgst:          "",
-			expectedError: "invalid reference",
+			expectedError: "invalid reference format",
 		},
 		{
 			name:          "unparsable url",
 			s:             "example%#$.com/foo",
 			dgst:          "",
-			expectedError: "parse \"dummy://example%\": invalid URL escape \"%\"",
+			expectedError: "repository example%#$.com/foo is invalid",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := ParseImage(tt.s, WithStrict(), WithDigest(tt.dgst))
+			_, err := ParseImage(tt.s, WithDigest(tt.dgst))
 			require.EqualError(t, err, tt.expectedError)
 		})
 	}
@@ -198,6 +198,49 @@ func TestNewImageErrors(t *testing.T) {
 
 			_, err := NewImage(tt.registry, tt.repository, tt.tag, tt.dgst)
 			require.EqualError(t, err, tt.expectedError)
+		})
+	}
+}
+
+func TestParseImageDefaults(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			input:    "ubuntu",
+			expected: "docker.io/library/ubuntu:latest",
+		},
+		{
+			input:    "ubuntu:18.04",
+			expected: "docker.io/library/ubuntu:18.04",
+		},
+		{
+			input:    "library/ubuntu",
+			expected: "docker.io/library/ubuntu:latest",
+		},
+		{
+			input:    "docker.io/library/ubuntu",
+			expected: "docker.io/library/ubuntu:latest",
+		},
+		{
+			input:    "docker.io/ubuntu",
+			expected: "docker.io/library/ubuntu:latest",
+		},
+		{
+			input:    "phillebaba/spegel:test@sha256:08d6a6bec0b8d4f0946b6eb22239d8b4a00edb0674307fdf76ad23f9ae77040b",
+			expected: "docker.io/phillebaba/spegel:test@sha256:08d6a6bec0b8d4f0946b6eb22239d8b4a00edb0674307fdf76ad23f9ae77040b",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+
+			img, err := ParseImage(tt.input, AllowDefaults(), AllowTagOnly())
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, img.String())
 		})
 	}
 }

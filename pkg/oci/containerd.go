@@ -34,8 +34,8 @@ import (
 )
 
 const (
-	backupDir       = "_backup"
-	defaultRegistry = "_default"
+	backupDir              = "_backup"
+	wildcardRegistryMirror = "_default"
 )
 
 type Feature uint32
@@ -309,7 +309,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	}
 	imgs := []Image{}
 	for _, cImg := range cImgs {
-		img, err := ParseImage(cImg.Name(), WithStrict(), WithDigest(cImg.Target().Digest))
+		img, err := ParseImage(cImg.Name(), WithDigest(cImg.Target().Digest))
 		if err != nil {
 			return nil, err
 		}
@@ -449,7 +449,7 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 		}
 		return []OCIEvent{{Type: CreateEvent, Key: e.GetDigest()}}, nil
 	case *eventtypes.ImageCreate:
-		img, err := ParseImage(e.GetName())
+		img, err := ParseImage(e.GetName(), AllowTagOnly())
 		if err != nil {
 			return nil, err
 		}
@@ -519,7 +519,7 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 
 	// Parse and verify mirror urls.
 	if len(mirroredRegistries) == 0 {
-		mirroredRegistries = append(mirroredRegistries, defaultRegistry)
+		mirroredRegistries = append(mirroredRegistries, wildcardRegistryMirror)
 	}
 	parsedMirroredRegistries, err := parseMirroredRegistries(mirroredRegistries)
 	if err != nil {
@@ -625,8 +625,8 @@ func CleanupMirrorConfiguration(ctx context.Context, configPath string) error {
 func parseMirroredRegistries(mirroredRegistries []string) ([]url.URL, error) {
 	mru := []url.URL{}
 	for _, s := range mirroredRegistries {
-		if s == defaultRegistry {
-			mru = append(mru, url.URL{Host: defaultRegistry})
+		if s == wildcardRegistryMirror {
+			mru = append(mru, url.URL{Host: wildcardRegistryMirror})
 			continue
 		}
 		u, err := url.Parse(s)
@@ -727,7 +727,7 @@ func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, 
 	if parsedMirrorRegistry.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
 	}
-	if parsedMirrorRegistry.Host == defaultRegistry {
+	if parsedMirrorRegistry.Host == wildcardRegistryMirror {
 		server = ""
 	}
 
