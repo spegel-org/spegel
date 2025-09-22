@@ -223,7 +223,7 @@ func TestRegistryHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   []byte("first peer"),
 			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {"application/octet-stream"},
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
 				httpx.HeaderContentLength: {"10"},
 				oci.HeaderDockerDigest:    {"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67"},
 			},
@@ -234,7 +234,7 @@ func TestRegistryHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   []byte("second peer"),
 			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {"application/octet-stream"},
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
 				httpx.HeaderContentLength: {"11"},
 				oci.HeaderDockerDigest:    {"sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2"},
 			},
@@ -245,7 +245,7 @@ func TestRegistryHandler(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   []byte("last peer working"),
 			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {"application/octet-stream"},
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
 				httpx.HeaderContentLength: {"17"},
 				oci.HeaderDockerDigest:    {"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba"},
 			},

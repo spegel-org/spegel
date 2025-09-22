@@ -27,12 +27,12 @@ func TestClient(t *testing.T) {
 	mem := ocimem.New()
 	blobs := []ocispec.Descriptor{
 		{
-			MediaType: "application/vnd.oci.image.config.v1+json",
+			MediaType: ocispec.MediaTypeImageConfig,
 			Digest:    digest.Digest("sha256:68b8a989a3e08ddbdb3a0077d35c0d0e59c9ecf23d0634584def8bdbb7d6824f"),
 			Size:      529,
 		},
 		{
-			MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+			MediaType: ocispec.MediaTypeImageLayerGzip,
 			Digest:    digest.Digest("sha256:3caa2469de2a23cbcc209dd0b9d01cd78ff9a0f88741655991d36baede5b0996"),
 			Size:      118,
 		},
@@ -46,7 +46,7 @@ func TestClient(t *testing.T) {
 	}
 	manifests := []ocispec.Descriptor{
 		{
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
+			MediaType: ocispec.MediaTypeImageManifest,
 			Digest:    digest.Digest("sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9"),
 		},
 	}

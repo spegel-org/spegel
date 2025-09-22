@@ -24,7 +24,7 @@ func TestStatusError(t *testing.T) {
 	}{
 		{
 			name:          "status code matches one of expected",
-			contentType:   "text/plain",
+			contentType:   ContentTypeText,
 			body:          "Hello World",
 			statusCode:    http.StatusOK,
 			expectedCodes: []int{http.StatusNotFound, http.StatusOK},
@@ -33,14 +33,14 @@ func TestStatusError(t *testing.T) {
 		},
 		{
 			name:          "no expected status codes",
-			contentType:   "text/plain",
+			contentType:   ContentTypeText,
 			statusCode:    http.StatusOK,
 			expectedCodes: []int{},
 			expectedError: "expected codes cannot be empty",
 		},
 		{
 			name:          "wrong code with text content and GET request",
-			contentType:   "text/plain",
+			contentType:   ContentTypeText,
 			body:          "Hello World",
 			statusCode:    http.StatusNotFound,
 			expectedCodes: []int{http.StatusOK},
@@ -49,7 +49,7 @@ func TestStatusError(t *testing.T) {
 		},
 		{
 			name:          "wrong code with text content and HEAD request",
-			contentType:   "text/plain",
+			contentType:   ContentTypeText,
 			body:          "Hello World",
 			statusCode:    http.StatusNotFound,
 			expectedCodes: []int{http.StatusOK, http.StatusPartialContent},
@@ -58,7 +58,7 @@ func TestStatusError(t *testing.T) {
 		},
 		{
 			name:          "wrong code with text content and GET request but octet stream",
-			contentType:   "application/octet-stream",
+			contentType:   ContentTypeBinary,
 			body:          "Hello World",
 			statusCode:    http.StatusNotFound,
 			expectedCodes: []int{http.StatusOK},

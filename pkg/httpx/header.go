@@ -16,8 +16,11 @@ const (
 )
 
 const (
+	ContentTypeText   = "text/plain"
+	ContentTypeHTML   = "text/html"
 	ContentTypeBinary = "application/octet-stream"
 	ContentTypeJSON   = "application/json"
+	ContentTypeXML    = "application/xml"
 )
 
 // CopyHeader copies header from source to destination.

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const rangeUnit = "bytes"
+const RangeUnit = "bytes"
 
 type Range struct {
 	Start int64 `json:"start"`
@@ -15,7 +15,7 @@ type Range struct {
 }
 
 func (rng Range) String() string {
-	return fmt.Sprintf("%s=%d-%d", rangeUnit, rng.Start, rng.End)
+	return fmt.Sprintf("%s=%d-%d", RangeUnit, rng.Start, rng.End)
 }
 
 func (rng Range) Size() int64 {
@@ -26,7 +26,7 @@ func ParseRangeHeader(h string, size int64) (Range, error) {
 	if size <= 0 {
 		return Range{}, fmt.Errorf("size %d cannot be equal or less than zero", size)
 	}
-	rangeUnitPrefix := rangeUnit + "="
+	rangeUnitPrefix := RangeUnit + "="
 	if !strings.HasPrefix(h, rangeUnitPrefix) {
 		return Range{}, errors.New("invalid range unit")
 	}
@@ -100,5 +100,5 @@ func ContentRangeFromRange(rng Range, size int64) ContentRange {
 }
 
 func (crng ContentRange) String() string {
-	return fmt.Sprintf("%s %d-%d/%d", rangeUnit, crng.Start, crng.End, crng.Size)
+	return fmt.Sprintf("%s %d-%d/%d", RangeUnit, crng.Start, crng.End, crng.Size)
 }

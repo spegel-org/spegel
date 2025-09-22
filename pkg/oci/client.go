@@ -234,10 +234,10 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		httpx.CopyHeader(req.Header, cfg.Header)
 		req.SetBasicAuth(cfg.Username, cfg.Password)
 		req.Header.Set(httpx.HeaderUserAgent, "spegel")
-		req.Header.Add(httpx.HeaderAccept, "application/vnd.oci.image.manifest.v1+json")
-		req.Header.Add(httpx.HeaderAccept, "application/vnd.docker.distribution.manifest.v2+json")
-		req.Header.Add(httpx.HeaderAccept, "application/vnd.oci.image.index.v1+json")
-		req.Header.Add(httpx.HeaderAccept, "application/vnd.docker.distribution.manifest.list.v2+json")
+		req.Header.Add(httpx.HeaderAccept, ocispec.MediaTypeImageManifest)
+		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2Manifest)
+		req.Header.Add(httpx.HeaderAccept, ocispec.MediaTypeImageIndex)
+		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2ManifestList)
 		if br != nil {
 			req.Header.Add(httpx.HeaderRange, br.String())
 		}
