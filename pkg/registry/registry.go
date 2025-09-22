@@ -459,8 +459,8 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 		return
 	}
 
-	rw.Header().Set(httpx.HeaderAcceptRanges, "bytes")
-	rw.Header().Set(httpx.HeaderContentType, "application/octet-stream")
+	rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
+	rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
 	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(size, 10))
 	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
 	if req.Method == http.MethodHead {

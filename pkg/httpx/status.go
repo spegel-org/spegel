@@ -48,10 +48,10 @@ func getErrorMessage(resp *http.Response) (string, error) {
 		return "", nil
 	}
 	contentTypes := []string{
-		"text/plain",
-		"text/html",
-		"application/json",
-		"application/xml",
+		ContentTypeText,
+		ContentTypeHTML,
+		ContentTypeJSON,
+		ContentTypeXML,
 	}
 	if !slices.Contains(contentTypes, resp.Header.Get(HeaderContentType)) {
 		return "", nil

@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- [#1019](https://github.com/spegel-org/spegel/pull/1019) Fix media type strings to use constants.
+
 ### Security
 
 ## v0.4.0
