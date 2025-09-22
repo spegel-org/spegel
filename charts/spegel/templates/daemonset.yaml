@@ -53,7 +53,9 @@ spec:
           {{- end }}
           {{- end }}
           - --mirror-targets
+          {{- if not .Values.service.registry.usePreferSameNodeTrafficDistribution }}
           - http://$(NODE_IP):{{ .Values.service.registry.hostPort }}
+          {{- end }}
           - http://$(NODE_IP):{{ .Values.service.registry.nodePort }}
           {{- with .Values.spegel.additionalMirrorTargets }}
           {{- range . }}
@@ -127,7 +129,9 @@ spec:
         ports:
           - name: registry
             containerPort: {{ .Values.service.registry.port }}
+            {{- if not .Values.service.registry.usePreferSameNodeTrafficDistribution }}
             hostPort: {{ .Values.service.registry.hostPort }}
+            {{- end }}
             protocol: TCP
           - name: router
             containerPort: {{ .Values.service.router.port }}
