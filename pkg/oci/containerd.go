@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -37,8 +38,11 @@ import (
 )
 
 const (
-	backupDir              = "_backup"
-	wildcardRegistryMirror = "_default"
+	backupDir = "_backup"
+)
+
+var (
+	wildcardRegistryMirrors = []string{"_default", "*"}
 )
 
 type Feature uint32
@@ -527,7 +531,7 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 
 	// Parse and verify mirror urls.
 	if len(mirroredRegistries) == 0 {
-		mirroredRegistries = append(mirroredRegistries, wildcardRegistryMirror)
+		mirroredRegistries = append(mirroredRegistries, wildcardRegistryMirrors[0])
 	}
 	parsedMirroredRegistries, err := parseMirroredRegistries(mirroredRegistries)
 	if err != nil {
@@ -633,8 +637,8 @@ func CleanupMirrorConfiguration(ctx context.Context, configPath string) error {
 func parseMirroredRegistries(mirroredRegistries []string) ([]url.URL, error) {
 	mru := []url.URL{}
 	for _, s := range mirroredRegistries {
-		if s == wildcardRegistryMirror {
-			mru = append(mru, url.URL{Host: wildcardRegistryMirror})
+		if slices.Contains(wildcardRegistryMirrors, s) {
+			mru = append(mru, url.URL{Host: wildcardRegistryMirrors[0]})
 			continue
 		}
 		u, err := url.Parse(s)
@@ -735,7 +739,7 @@ func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, 
 	if parsedMirrorRegistry.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
 	}
-	if parsedMirrorRegistry.Host == wildcardRegistryMirror {
+	if slices.Contains(wildcardRegistryMirrors, parsedMirrorRegistry.Host) {
 		server = ""
 	}
 

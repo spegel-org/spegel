@@ -350,7 +350,7 @@ dial_timeout = '200ms'`,
 		{
 			name:               "default is explicitly set",
 			resolveTags:        true,
-			mirroredRegistries: []string{wildcardRegistryMirror},
+			mirroredRegistries: []string{wildcardRegistryMirrors[0]},
 			mirrorTargets:      []string{"http://127.0.0.1:5000"},
 			prependExisting:    false,
 			expectedFiles: map[string]string{
