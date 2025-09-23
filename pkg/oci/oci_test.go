@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/containerd/containerd/v2/client"
@@ -286,7 +287,7 @@ func TestStore(t *testing.T) {
 	}
 }
 
-func TestDetermineMediaType(t *testing.T) {
+func TestFingerprintMediaType(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -324,15 +325,16 @@ func TestDetermineMediaType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			b, err := os.ReadFile(filepath.Join("testdata", "blobs", tt.dgst.Algorithm().String(), tt.dgst.Encoded()))
+			f, err := os.Open(filepath.Join("testdata", "blobs", tt.dgst.Algorithm().String(), tt.dgst.Encoded()))
 			require.NoError(t, err)
-			mt, err := DetermineMediaType(b)
+			defer f.Close()
+			mt, err := FingerprintMediaType(f)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedMediaType, mt)
 		})
 	}
 
-	mt, err := DetermineMediaType([]byte("{}"))
-	require.EqualError(t, err, "not able to determine media type")
+	mt, err := FingerprintMediaType(strings.NewReader("{}"))
+	require.EqualError(t, err, "could not determine media type")
 	require.Empty(t, mt)
 }
