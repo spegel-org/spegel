@@ -9,8 +9,8 @@ import (
 
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/opencontainers/go-digest"
-	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
 var (
@@ -67,38 +67,106 @@ type Store interface {
 	GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
 }
 
-type UnknownDocument struct {
-	MediaType string `json:"mediaType"`
-	specs.Versioned
-}
+// FingerprintMediaType attempts to determine the media type based on the json structure.
+func FingerprintMediaType(r io.Reader) (string, error) {
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	tok, err := dec.Token()
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		return httpx.ContentTypeBinary, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if tok != json.Delim('{') {
+		return "", errors.New("expected object start")
+	}
 
-func DetermineMediaType(b []byte) (string, error) {
-	var ud UnknownDocument
-	if err := json.Unmarshal(b, &ud); err != nil {
-		return "", err
+	schemaVersion := 0
+	mediaType := ""
+
+	indexKeys := 0
+	manifestKeys := 0
+	configKeys := 0
+
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return "", err
+		}
+		key, ok := tok.(string)
+		if !ok {
+			return "", errors.New("unexpected token type")
+		}
+		switch key {
+		case "schemaVersion":
+			//nolint: errcheck // Allow other value types.
+			dec.Decode(&schemaVersion)
+		case "mediaType":
+			//nolint: errcheck // Allow other value types.
+			dec.Decode(&mediaType)
+		// Index.
+		case "manifests":
+			err = dec.Decode(&[]ocispec.Descriptor{})
+			if err == nil {
+				indexKeys += 1
+			}
+		// Manifest.
+		case "config":
+			err = dec.Decode(&ocispec.Descriptor{})
+			if err == nil {
+				manifestKeys += 1
+			}
+		case "layers":
+			err = dec.Decode(&[]ocispec.Descriptor{})
+			if err == nil {
+				manifestKeys += 1
+			}
+		// Image Config.
+		case "architecture":
+			var arch string
+			err = dec.Decode(&arch)
+			if err == nil {
+				configKeys += 1
+			}
+		case "os":
+			var os string
+			err = dec.Decode(&os)
+			if err == nil {
+				configKeys += 1
+			}
+		case "rootfs":
+			configKeys += 1
+			var discard any
+			err = dec.Decode(&discard)
+			if err != nil {
+				return "", err
+			}
+		default:
+			var discard any
+			err = dec.Decode(&discard)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		// Return immediately if schema version and media type is set.
+		if schemaVersion == 2 && mediaType != "" {
+			return mediaType, nil
+		}
 	}
-	if ud.SchemaVersion == 2 && ud.MediaType != "" {
-		return ud.MediaType, nil
-	}
-	data := map[string]json.RawMessage{}
-	if err := json.Unmarshal(b, &data); err != nil {
-		return "", err
-	}
-	_, architectureOk := data["architecture"]
-	_, osOk := data["os"]
-	_, rootfsOk := data["rootfs"]
-	if architectureOk && osOk && rootfsOk {
-		return ocispec.MediaTypeImageConfig, nil
-	}
-	_, manifestsOk := data["manifests"]
-	if ud.SchemaVersion == 2 && manifestsOk {
+
+	if indexKeys == 1 {
 		return ocispec.MediaTypeImageIndex, nil
 	}
-	_, configOk := data["config"]
-	if ud.SchemaVersion == 2 && configOk {
+	if manifestKeys == 2 {
 		return ocispec.MediaTypeImageManifest, nil
 	}
-	return "", errors.New("not able to determine media type")
+	if configKeys == 3 {
+		return ocispec.MediaTypeImageConfig, nil
+	}
+	return "", errors.New("could not determine media type")
 }
 
 func WalkImage(ctx context.Context, store Store, img Image) ([]digest.Digest, error) {

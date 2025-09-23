@@ -378,7 +378,7 @@ func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byt
 	if err != nil {
 		return nil, "", err
 	}
-	mt, err := DetermineMediaType(b)
+	mt, err := FingerprintMediaType(bytes.NewReader(b))
 	if err != nil {
 		return nil, "", err
 	}
