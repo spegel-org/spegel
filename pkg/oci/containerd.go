@@ -24,10 +24,12 @@ import (
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
 	tomlu "github.com/pelletier/go-toml/v2/unstable"
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"google.golang.org/grpc"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -96,6 +98,7 @@ type Containerd struct {
 	registryConfigPath string
 	client             *client.Client
 	clientGetter       func() (*client.Client, error)
+	mtCache            *lru.Cache[digest.Digest, string]
 	features           *Feature
 	imageFilter        []string
 	eventFilter        []string
@@ -115,6 +118,11 @@ func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistrie
 	}
 	imageFilter, eventFilter, contentFilter := createFilters(parsedMirroredRegistries)
 
+	mtCache, err := lru.New[digest.Digest, string](100)
+	if err != nil {
+		return nil, err
+	}
+
 	c := &Containerd{
 		contentPath: cfg.ContentPath,
 		clientGetter: func() (*client.Client, error) {
@@ -124,6 +132,7 @@ func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistrie
 		eventFilter:        eventFilter,
 		contentFilter:      contentFilter,
 		registryConfigPath: registryConfigPath,
+		mtCache:            mtCache,
 	}
 	return c, nil
 }
@@ -318,18 +327,6 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	return imgs, nil
 }
 
-func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
-	client, err := c.Client()
-	if err != nil {
-		return "", err
-	}
-	cImg, err := client.GetImage(ctx, ref)
-	if err != nil {
-		return "", err
-	}
-	return cImg.Target().Digest, nil
-}
-
 func (c *Containerd) ListContents(ctx context.Context) ([]Content, error) {
 	client, err := c.Client()
 	if err != nil {
@@ -351,41 +348,63 @@ func (c *Containerd) ListContents(ctx context.Context) ([]Content, error) {
 	return contents, nil
 }
 
-func (c *Containerd) Size(ctx context.Context, dgst digest.Digest) (int64, error) {
+func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
 	client, err := c.Client()
 	if err != nil {
-		return 0, err
+		return "", err
+	}
+	cImg, err := client.GetImage(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	return cImg.Target().Digest, nil
+}
+
+func (c *Containerd) Descriptor(ctx context.Context, dgst digest.Digest) (ocispec.Descriptor, error) {
+	client, err := c.Client()
+	if err != nil {
+		return ocispec.Descriptor{}, err
 	}
 	info, err := client.ContentStore().Info(ctx, dgst)
 	if errors.Is(err, errdefs.ErrNotFound) {
-		return 0, errors.Join(ErrNotFound, err)
+		return ocispec.Descriptor{}, errors.Join(ErrNotFound, err)
 	}
 	if err != nil {
-		return 0, err
+		return ocispec.Descriptor{}, err
 	}
-	return info.Size, nil
+
+	mt, ok := c.mtCache.Get(dgst)
+	if !ok {
+		mt, err = func() (string, error) {
+			if info.Size > ManifestMaxSize {
+				return httpx.ContentTypeBinary, nil
+			}
+			rc, err := c.Open(ctx, dgst)
+			if err != nil {
+				return "", err
+			}
+			defer rc.Close()
+			mt, err := FingerprintMediaType(rc)
+			if err != nil {
+				return "", err
+			}
+			return mt, nil
+		}()
+		if err != nil {
+			return ocispec.Descriptor{}, err
+		}
+		c.mtCache.Add(dgst, mt)
+	}
+
+	desc := ocispec.Descriptor{
+		Size:      info.Size,
+		Digest:    dgst,
+		MediaType: mt,
+	}
+	return desc, nil
 }
 
-func (c *Containerd) GetManifest(ctx context.Context, dgst digest.Digest) ([]byte, string, error) {
-	client, err := c.Client()
-	if err != nil {
-		return nil, "", err
-	}
-	b, err := content.ReadBlob(ctx, client.ContentStore(), ocispec.Descriptor{Digest: dgst})
-	if errors.Is(err, errdefs.ErrNotFound) {
-		return nil, "", errors.Join(ErrNotFound, err)
-	}
-	if err != nil {
-		return nil, "", err
-	}
-	mt, err := FingerprintMediaType(bytes.NewReader(b))
-	if err != nil {
-		return nil, "", err
-	}
-	return b, mt, nil
-}
-
-func (c *Containerd) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
+func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
 	if c.contentPath != "" {
 		path := filepath.Join(c.contentPath, "blobs", dgst.Algorithm().String(), dgst.Encoded())
 		file, err := os.Open(path)

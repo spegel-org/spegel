@@ -13,6 +13,12 @@ import (
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
+const (
+	// Most registries do not accept manifests larger than 4MB.
+	// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-manifests
+	ManifestMaxSize = 4 * 1024 * 1024
+)
+
 var (
 	ErrNotFound = errors.New("content not found")
 )
@@ -47,24 +53,18 @@ type Store interface {
 	// ListImages returns a list of all local images.
 	ListImages(ctx context.Context) ([]Image, error)
 
+	// ListContents returns a list of all the contents.
+	ListContents(ctx context.Context) ([]Content, error)
+
 	// Resolve returns the digest for the tagged image name reference.
 	// The ref is expected to be in the format `registry/name:tag`.
 	Resolve(ctx context.Context, ref string) (digest.Digest, error)
 
-	// ListContents returns a list of all the contents.
-	ListContents(ctx context.Context) ([]Content, error)
+	// Descriptor returns the OCI descriptor for the given digest.
+	Descriptor(ctx context.Context, dgst digest.Digest) (ocispec.Descriptor, error)
 
-	// Size returns the content byte size for the given digest.
-	// Will return ErrNotFound if the digest cannot be found.
-	Size(ctx context.Context, dgst digest.Digest) (int64, error)
-
-	// GetManifest returns the manifest content for the given digest.
-	// Will return ErrNotFound if the digest cannot be found.
-	GetManifest(ctx context.Context, dgst digest.Digest) ([]byte, string, error)
-
-	// GetBlob returns a stream of the blob content for the given digest.
-	// Will return ErrNotFound if the digest cannot be found.
-	GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
+	// Open returns the streamable content for the given digest.
+	Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
 }
 
 // FingerprintMediaType attempts to determine the media type based on the json structure.
@@ -172,20 +172,30 @@ func FingerprintMediaType(r io.Reader) (string, error) {
 func WalkImage(ctx context.Context, store Store, img Image) ([]digest.Digest, error) {
 	dgsts := []digest.Digest{}
 	err := walk(ctx, []digest.Digest{img.Digest}, func(dgst digest.Digest) ([]digest.Digest, error) {
-		b, mt, err := store.GetManifest(ctx, dgst)
+		desc, err := store.Descriptor(ctx, dgst)
 		if err != nil {
 			return nil, err
 		}
+		if desc.MediaType == "" {
+			return nil, fmt.Errorf("descriptor media type is empty for digest %s", dgst)
+		}
 		dgsts = append(dgsts, dgst)
-		switch mt {
+		switch desc.MediaType {
 		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+			rc, err := store.Open(ctx, dgst)
+			if err != nil {
+				return nil, err
+			}
+			defer rc.Close()
+			decoder := json.NewDecoder(rc)
 			var idx ocispec.Index
-			if err := json.Unmarshal(b, &idx); err != nil {
+			err = decoder.Decode(&idx)
+			if err != nil {
 				return nil, err
 			}
 			manifestDgsts := []digest.Digest{}
 			for _, m := range idx.Manifests {
-				_, err := store.Size(ctx, m.Digest)
+				_, err := store.Descriptor(ctx, m.Digest)
 				if errors.Is(err, ErrNotFound) {
 					continue
 				}
@@ -199,8 +209,14 @@ func WalkImage(ctx context.Context, store Store, img Image) ([]digest.Digest, er
 			}
 			return manifestDgsts, nil
 		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+			rc, err := store.Open(ctx, dgst)
+			if err != nil {
+				return nil, err
+			}
+			defer rc.Close()
+			decoder := json.NewDecoder(rc)
 			var manifest ocispec.Manifest
-			err := json.Unmarshal(b, &manifest)
+			err = decoder.Decode(&manifest)
 			if err != nil {
 				return nil, err
 			}
@@ -210,7 +226,7 @@ func WalkImage(ctx context.Context, store Store, img Image) ([]digest.Digest, er
 			}
 			return nil, nil
 		default:
-			return nil, fmt.Errorf("unexpected media type %s for digest %s", mt, dgst)
+			return nil, fmt.Errorf("unexpected media type %s for digest %s", desc.MediaType, dgst)
 		}
 	})
 	if err != nil {

@@ -69,6 +69,8 @@ linters:
           alias: ocispec
         - pkg: k8s.io/apimachinery/pkg/util/version
           alias: utilversion
+        - pkg: github.com/hashicorp/golang-lru/v2
+          alias: lru
       no-extra-aliases: true
     nolintlint:
       require-explanation: true

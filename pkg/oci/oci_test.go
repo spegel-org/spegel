@@ -43,13 +43,13 @@ func TestStore(t *testing.T) {
 	ctx := namespaces.WithNamespace(t.Context(), "k8s.io")
 	containerdClient, err := client.New("", client.WithServices(client.WithImageStore(imageStore), client.WithContentStore(contentStore)))
 	require.NoError(t, err)
-	remoteContainerd := &Containerd{
-		client: containerdClient,
-	}
-	localContainerd := &Containerd{
-		contentPath: contentPath,
-		client:      containerdClient,
-	}
+	remoteContainerd, err := NewContainerd("", "", "", nil)
+	require.NoError(t, err)
+	remoteContainerd.client = containerdClient
+	localContainerd, err := NewContainerd("", "", "", nil)
+	require.NoError(t, err)
+	localContainerd.contentPath = contentPath
+	localContainerd.client = containerdClient
 
 	memoryStore := NewMemory()
 
@@ -81,22 +81,18 @@ func TestStore(t *testing.T) {
 		require.NoError(t, err)
 		writer.Close()
 
-		memoryStore.Write(desc, b)
+		err = memoryStore.Write(desc, b)
+		require.NoError(t, err)
 	}
 
 	for _, ociStore := range []Store{remoteContainerd, localContainerd, memoryStore} {
 		t.Run(ociStore.Name(), func(t *testing.T) {
 			t.Parallel()
 
-			b, mt, err := ociStore.GetManifest(ctx, digest.FromString("foo"))
-			require.Empty(t, b)
-			require.Empty(t, mt)
+			_, err := ociStore.Descriptor(ctx, digest.FromString("foo"))
 			require.ErrorIs(t, err, ErrNotFound)
-			rc, err := ociStore.GetBlob(ctx, digest.FromString("foo"))
+			rc, err := ociStore.Open(ctx, digest.FromString("foo"))
 			require.Empty(t, rc)
-			require.ErrorIs(t, err, ErrNotFound)
-			size, err := ociStore.Size(ctx, digest.FromString("foo"))
-			require.Empty(t, size)
 			require.ErrorIs(t, err, ErrNotFound)
 
 			imgs, err := ociStore.ListImages(ctx)
@@ -152,25 +148,19 @@ func TestStore(t *testing.T) {
 				t.Run(tt.mediaType, func(t *testing.T) {
 					t.Parallel()
 
-					size, err := ociStore.Size(ctx, tt.dgst)
+					desc, err := ociStore.Descriptor(ctx, tt.dgst)
 					require.NoError(t, err)
-					require.Equal(t, tt.size, size)
+					require.Equal(t, tt.size, desc.Size)
 
 					expected, err := os.ReadFile(path.Join("testdata", "blobs", "sha256", tt.dgst.Encoded()))
 					require.NoError(t, err)
-					if tt.mediaType != ocispec.MediaTypeImageLayer {
-						b, mediaType, err := ociStore.GetManifest(ctx, tt.dgst)
-						require.NoError(t, err)
-						require.Equal(t, tt.mediaType, mediaType)
-						require.Equal(t, expected, b)
-					} else {
-						rc, err := ociStore.GetBlob(ctx, tt.dgst)
-						require.NoError(t, err)
-						defer rc.Close()
-						b, err := io.ReadAll(rc)
-						require.NoError(t, err)
-						require.Equal(t, expected, b)
-					}
+
+					rc, err := ociStore.Open(ctx, tt.dgst)
+					require.NoError(t, err)
+					defer rc.Close()
+					b, err := io.ReadAll(rc)
+					require.NoError(t, err)
+					require.Equal(t, expected, b)
 				})
 			}
 
