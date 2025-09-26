@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 )
 
 type ResponseWriter interface {
@@ -54,25 +55,41 @@ func (r *response) Write(b []byte) (int, error) {
 }
 
 func (r *response) WriteError(statusCode int, err error) {
+	if r.wroteHeader {
+		return
+	}
+
 	r.error = err
+
+	b, ct, rbErr := func() ([]byte, string, error) {
+		var respErr ResponseError
+		if !errors.As(err, &respErr) {
+			return nil, "", nil
+		}
+		b, ct, err := respErr.ResponseBody()
+		if err != nil {
+			return nil, "", err
+		}
+		return b, ct, err
+	}()
+	if rbErr != nil {
+		r.error = errors.Join(r.error, rbErr)
+	}
+
+	if ct != "" {
+		r.Header().Set(HeaderContentType, ct)
+	}
+	r.Header().Set(HeaderContentLength, strconv.FormatInt(int64(len(b)), 10))
 	r.WriteHeader(statusCode)
 
 	if r.method == http.MethodHead {
 		return
 	}
 
-	var respErr ResponseError
-	if errors.As(err, &respErr) {
-		b, rbErr := respErr.ResponseBody()
-		if rbErr != nil {
-			r.error = errors.Join(r.error, rbErr)
-			return
-		}
-		_, wErr := r.Write(b)
-		if wErr != nil {
-			r.error = errors.Join(r.error, wErr)
-			return
-		}
+	_, wErr := r.Write(b)
+	if wErr != nil {
+		r.error = errors.Join(r.error, wErr)
+		return
 	}
 }
 

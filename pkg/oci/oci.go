@@ -70,7 +70,6 @@ type Store interface {
 // FingerprintMediaType attempts to determine the media type based on the json structure.
 func FingerprintMediaType(r io.Reader) (string, error) {
 	dec := json.NewDecoder(r)
-	dec.DisallowUnknownFields()
 	tok, err := dec.Token()
 	var syntaxErr *json.SyntaxError
 	if errors.As(err, &syntaxErr) {
@@ -167,6 +166,18 @@ func FingerprintMediaType(r io.Reader) (string, error) {
 		return ocispec.MediaTypeImageConfig, nil
 	}
 	return "", errors.New("could not determine media type")
+}
+
+func IsManifestsMediatype(mt string) bool {
+	switch mt {
+	case ocispec.MediaTypeImageIndex,
+		ocispec.MediaTypeImageManifest,
+		images.MediaTypeDockerSchema2ManifestList,
+		images.MediaTypeDockerSchema2Manifest:
+		return true
+	default:
+		return false
+	}
 }
 
 func WalkImage(ctx context.Context, store Store, img Image) ([]digest.Digest, error) {

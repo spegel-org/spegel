@@ -213,15 +213,11 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		rw.SetAttrs(RegistryAttrKey, dist.Registry)
 	}
 
-	// Apply registry filters to determine if this image should be mirrored
-	// Only apply filters if they are provided
-	if len(r.filters) > 0 {
-		for _, f := range r.filters {
-			if f.MatchString(dist.Reference()) {
-				rw.WriteError(http.StatusNotFound, fmt.Errorf("image %s is filtered out by registry filters", dist.Reference()))
-
-				return
-			}
+	// Apply registry filters to determine if the request should be mirrored.
+	for _, f := range r.filters {
+		if f.MatchString(dist.Reference()) {
+			rw.WriteError(http.StatusNotFound, fmt.Errorf("request %s is filtered out by registry filters", dist.Reference()))
+			return
 		}
 	}
 
@@ -277,8 +273,8 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		Attempts: 0,
 	}
 	errCode := map[oci.DistributionKind]oci.DistributionErrorCode{
-		oci.DistributionKindBlob:     oci.ErrCodeManifestUnknown,
-		oci.DistributionKindManifest: oci.ErrCodeBlobUnknown,
+		oci.DistributionKindBlob:     oci.ErrCodeBlobUnknown,
+		oci.DistributionKindManifest: oci.ErrCodeManifestUnknown,
 	}[dist.Kind]
 
 	if !r.resolveLatestTag && dist.IsLatestTag() {
@@ -431,7 +427,14 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
+		return
 	}
+	if !oci.IsManifestsMediatype(desc.MediaType) {
+		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
+		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
+		return
+	}
+
 	rw.Header().Set(httpx.HeaderContentType, desc.MediaType)
 	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
 	rw.Header().Set(oci.HeaderDockerDigest, desc.Digest.String())
@@ -444,6 +447,7 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
+		return
 	}
 	defer rc.Close()
 	_, err = io.Copy(rw, rc)
@@ -458,10 +462,16 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 
 	desc, err := r.ociStore.Descriptor(req.Context(), dist.Digest)
 	if err != nil {
-		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not determine size of blob %s", dist.Digest), nil)
+		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get blob %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 		return
 	}
+	if oci.IsManifestsMediatype(desc.MediaType) {
+		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get blob %s", dist.Digest), nil)
+		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
+		return
+	}
+
 	rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
 	rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
 	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))

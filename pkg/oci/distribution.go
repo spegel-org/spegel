@@ -154,7 +154,7 @@ func (e *DistributionError) Error() string {
 	return fmt.Sprintf("%s %s", e.Code, e.Message)
 }
 
-func (e *DistributionError) ResponseBody() ([]byte, error) {
+func (e *DistributionError) ResponseBody() ([]byte, string, error) {
 	errResp := struct {
 		Errors []DistributionError `json:"errors"`
 	}{
@@ -162,7 +162,7 @@ func (e *DistributionError) ResponseBody() ([]byte, error) {
 	}
 	b, err := json.Marshal(errResp)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return b, nil
+	return b, httpx.ContentTypeJSON, nil
 }
