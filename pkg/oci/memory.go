@@ -50,17 +50,6 @@ func (m *Memory) ListImages(ctx context.Context) ([]Image, error) {
 	return m.images, nil
 }
 
-func (m *Memory) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
-	m.mx.RLock()
-	defer m.mx.RUnlock()
-
-	dgst, ok := m.tags[ref]
-	if !ok {
-		return "", fmt.Errorf("could not resolve tag %s to a digest", ref)
-	}
-	return dgst, nil
-}
-
 func (m *Memory) ListContents(ctx context.Context) ([]Content, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
@@ -72,33 +61,29 @@ func (m *Memory) ListContents(ctx context.Context) ([]Content, error) {
 	return contents, nil
 }
 
-func (m *Memory) Size(ctx context.Context, dgst digest.Digest) (int64, error) {
+func (m *Memory) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
-	b, ok := m.blobs[dgst]
+	dgst, ok := m.tags[ref]
 	if !ok {
-		return 0, errors.Join(ErrNotFound, fmt.Errorf("size information for digest %s not found", dgst))
+		return "", fmt.Errorf("could not resolve tag %s to a digest", ref)
 	}
-	return int64(len(b)), nil
+	return dgst, nil
 }
 
-func (m *Memory) GetManifest(ctx context.Context, dgst digest.Digest) ([]byte, string, error) {
+func (m *Memory) Descriptor(ctx context.Context, dgst digest.Digest) (ocispec.Descriptor, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
 	desc, ok := m.descs[dgst]
 	if !ok {
-		return nil, "", errors.Join(ErrNotFound, fmt.Errorf("manifest with digest %s not found", dgst))
+		return ocispec.Descriptor{}, errors.Join(ErrNotFound, fmt.Errorf("size information for digest %s not found", dgst))
 	}
-	b, ok := m.blobs[dgst]
-	if !ok {
-		return nil, "", errors.Join(ErrNotFound, fmt.Errorf("manifest with digest %s not found", dgst))
-	}
-	return b, desc.MediaType, nil
+	return desc, nil
 }
 
-func (m *Memory) GetBlob(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
+func (m *Memory) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
@@ -128,10 +113,24 @@ func (m *Memory) AddImage(img Image) {
 	m.tags[tagName] = img.Digest
 }
 
-func (m *Memory) Write(desc ocispec.Descriptor, b []byte) {
+func (m *Memory) Write(desc ocispec.Descriptor, b []byte) error {
 	m.mx.Lock()
 	defer m.mx.Unlock()
 
+	if desc.Size == 0 {
+		desc.Size = int64(len(b))
+	}
+	if desc.Size != int64(len(b)) {
+		return errors.New("descriptor size and byte size do not match")
+	}
+	if desc.Digest == "" {
+		return errors.New("digest cannot be empty")
+	}
+	if desc.MediaType == "" {
+		return errors.New("media type cannot be empty")
+	}
+
 	m.descs[desc.Digest] = desc
 	m.blobs[desc.Digest] = b
+	return nil
 }

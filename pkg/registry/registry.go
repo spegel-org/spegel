@@ -232,7 +232,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		if dist.Digest == "" {
 			_, ociErr = r.ociStore.Resolve(req.Context(), dist.Reference())
 		} else {
-			_, ociErr = r.ociStore.Size(req.Context(), dist.Digest)
+			_, ociErr = r.ociStore.Descriptor(req.Context(), dist.Digest)
 		}
 		if ociErr != nil {
 			r.mirrorHandler(rw, req, dist)
@@ -427,22 +427,26 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 		}
 		dist.Digest = dgst
 	}
-	b, mediaType, err := r.ociStore.GetManifest(req.Context(), dist.Digest)
+	desc, err := r.ociStore.Descriptor(req.Context(), dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
-		return
 	}
-
-	rw.Header().Set(httpx.HeaderContentType, mediaType)
-	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(int64(len(b)), 10))
-	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
+	rw.Header().Set(httpx.HeaderContentType, desc.MediaType)
+	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
+	rw.Header().Set(oci.HeaderDockerDigest, desc.Digest.String())
 	rw.WriteHeader(http.StatusOK)
 	if req.Method == http.MethodHead {
 		return
 	}
 
-	_, err = rw.Write(b)
+	rc, err := r.ociStore.Open(req.Context(), dist.Digest)
+	if err != nil {
+		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
+		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
+	}
+	defer rc.Close()
+	_, err = io.Copy(rw, rc)
 	if err != nil {
 		logr.FromContextOrDiscard(req.Context()).Error(err, "error occurred when writing manifest")
 		return
@@ -452,23 +456,22 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "blob")
 
-	size, err := r.ociStore.Size(req.Context(), dist.Digest)
+	desc, err := r.ociStore.Descriptor(req.Context(), dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not determine size of blob %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 		return
 	}
-
 	rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
 	rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
-	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(size, 10))
+	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
 	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
 	if req.Method == http.MethodHead {
 		rw.WriteHeader(http.StatusOK)
 		return
 	}
 
-	rc, err := r.ociStore.GetBlob(req.Context(), dist.Digest)
+	rc, err := r.ociStore.Open(req.Context(), dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get reader for blob %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
