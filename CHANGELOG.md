@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1018](https://github.com/spegel-org/spegel/pull/1018) Add optional default values when parting image reference.
 - [#1022](https://github.com/spegel-org/spegel/pull/1022) Refactor and rename fingerprint media type.
 - [#1024](https://github.com/spegel-org/spegel/pull/1024) Refactor OCI store to use descriptor.
+- [#1025](https://github.com/spegel-org/spegel/pull/1025) Add unit tests for serving manifests through mirror.
 
 ### Deprecated
 

@@ -328,3 +328,41 @@ func TestFingerprintMediaType(t *testing.T) {
 	require.EqualError(t, err, "could not determine media type")
 	require.Empty(t, mt)
 }
+
+func TestIsManifestMediatype(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		mt       string
+		expected bool
+	}{
+		{
+			mt:       ocispec.MediaTypeImageIndex,
+			expected: true,
+		},
+		{
+			mt:       ocispec.MediaTypeImageManifest,
+			expected: true,
+		},
+		{
+			mt:       images.MediaTypeDockerSchema2ManifestList,
+			expected: true,
+		},
+		{
+			mt:       images.MediaTypeDockerSchema2Manifest,
+			expected: true,
+		},
+		{
+			mt:       "foo",
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mt, func(t *testing.T) {
+			t.Parallel()
+
+			ok := IsManifestsMediatype(tt.mt)
+			require.Equal(t, tt.expected, ok)
+		})
+	}
+}
