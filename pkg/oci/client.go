@@ -18,6 +18,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
+	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
@@ -48,19 +49,7 @@ type FetchConfig struct {
 	Password string
 }
 
-func (cfg *FetchConfig) Apply(opts ...FetchOption) error {
-	for _, opt := range opts {
-		if opt == nil {
-			continue
-		}
-		if err := opt(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type FetchOption func(cfg *FetchConfig) error
+type FetchOption = option.Option[FetchConfig]
 
 func WithFetchMirror(mirror *url.URL) FetchOption {
 	return func(cfg *FetchConfig) error {
@@ -209,7 +198,7 @@ func (c *Client) Get(ctx context.Context, dist DistributionPath, br *httpx.Range
 
 func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, br *httpx.Range, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
 	cfg := FetchConfig{}
-	err := cfg.Apply(opts...)
+	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}

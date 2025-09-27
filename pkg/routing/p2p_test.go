@@ -13,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/spegel-org/spegel/internal/option"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 )
@@ -28,7 +29,7 @@ func TestP2PRouterOptions(t *testing.T) {
 		WithDataDir("foobar"),
 	}
 	cfg := P2PRouterConfig{}
-	err := cfg.Apply(opts...)
+	err := option.Apply(&cfg, opts...)
 	require.NoError(t, err)
 	require.Equal(t, libp2pOpts, cfg.Libp2pOpts)
 	require.Equal(t, "foobar", cfg.DataDir)

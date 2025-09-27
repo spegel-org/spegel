@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -37,19 +38,7 @@ type RegistryConfig struct {
 	ResolveRetries   int
 }
 
-func (cfg *RegistryConfig) Apply(opts ...RegistryOption) error {
-	for _, opt := range opts {
-		if opt == nil {
-			continue
-		}
-		if err := opt(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type RegistryOption func(cfg *RegistryConfig) error
+type RegistryOption = option.Option[RegistryConfig]
 
 func WithResolveRetries(resolveRetries int) RegistryOption {
 	return func(cfg *RegistryConfig) error {
@@ -114,7 +103,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		ResolveLatestTag: true,
 		ResolveTimeout:   20 * time.Millisecond,
 	}
-	err := cfg.Apply(opts...)
+	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
 	}

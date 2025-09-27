@@ -29,6 +29,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
 	tomlu "github.com/pelletier/go-toml/v2/unstable"
+	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"google.golang.org/grpc"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
@@ -70,19 +71,7 @@ type ContainerdConfig struct {
 	ContentPath string
 }
 
-func (cfg *ContainerdConfig) Apply(opts ...ContainerdOption) error {
-	for _, opt := range opts {
-		if opt == nil {
-			continue
-		}
-		if err := opt(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type ContainerdOption func(*ContainerdConfig) error
+type ContainerdOption = option.Option[ContainerdConfig]
 
 func WithContentPath(path string) ContainerdOption {
 	return func(c *ContainerdConfig) error {
@@ -106,8 +95,8 @@ type Containerd struct {
 }
 
 func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistries []string, opts ...ContainerdOption) (*Containerd, error) {
-	cfg := &ContainerdConfig{}
-	err := cfg.Apply(opts...)
+	cfg := ContainerdConfig{}
+	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
