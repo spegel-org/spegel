@@ -14,7 +14,7 @@ build-image: build
 	docker build -t ${IMG_REF} .
 
 test-unit:
-	go test ./...
+	go test ./... -race
 
 test-e2e: build-image
 	IMG_REF=${IMG_REF} \
