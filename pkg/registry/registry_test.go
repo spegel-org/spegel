@@ -15,6 +15,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
@@ -41,7 +42,7 @@ func TestRegistryOptions(t *testing.T) {
 		WithBasicAuth("foo", "bar"),
 	}
 	cfg := RegistryConfig{}
-	err := cfg.Apply(opts...)
+	err := option.Apply(&cfg, opts...)
 	require.NoError(t, err)
 	require.Equal(t, 5, cfg.ResolveRetries)
 	require.Equal(t, filters, cfg.Filters)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
+	"github.com/spegel-org/spegel/internal/option"
 )
 
 const (
@@ -74,19 +75,7 @@ type ParseImageConfig struct {
 	Strict        bool
 }
 
-func (cfg *ParseImageConfig) Apply(opts ...ParseImageOption) error {
-	for _, opt := range opts {
-		if opt == nil {
-			continue
-		}
-		if err := opt(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type ParseImageOption func(cfg *ParseImageConfig) error
+type ParseImageOption = option.Option[ParseImageConfig]
 
 // WithDigest adds an additional digest outside of the parsed string.
 func WithDigest(dgst digest.Digest) ParseImageOption {
@@ -118,7 +107,7 @@ func ParseImage(s string, opts ...ParseImageOption) (Image, error) {
 		RequireDigest: true,
 		Strict:        true,
 	}
-	err := cfg.Apply(opts...)
+	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return Image{}, err
 	}

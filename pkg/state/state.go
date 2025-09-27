@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/spegel-org/spegel/internal/channel"
+	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
@@ -19,19 +20,7 @@ type TrackerConfig struct {
 	ResolveLatestTag bool
 }
 
-func (cfg *TrackerConfig) Apply(opts ...TrackerOption) error {
-	for _, opt := range opts {
-		if opt == nil {
-			continue
-		}
-		if err := opt(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type TrackerOption func(t *TrackerConfig) error
+type TrackerOption = option.Option[TrackerConfig]
 
 // Deprecated: Resolve latest tag is replaced by registry filter which offers more customizable behavior. Use the filter `:latest$` to achieve the same behavior.
 func WithResolveLatestTag(resolveLatestTag bool) TrackerOption {
@@ -52,7 +41,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 	cfg := TrackerConfig{
 		ResolveLatestTag: true,
 	}
-	err := cfg.Apply(opts...)
+	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return err
 	}

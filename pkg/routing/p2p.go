@@ -31,6 +31,7 @@ import (
 	mh "github.com/multiformats/go-multihash"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
@@ -41,19 +42,7 @@ type P2PRouterConfig struct {
 	Libp2pOpts []libp2p.Option
 }
 
-func (cfg *P2PRouterConfig) Apply(opts ...P2PRouterOption) error {
-	for _, opt := range opts {
-		if opt == nil {
-			continue
-		}
-		if err := opt(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type P2PRouterOption func(cfg *P2PRouterConfig) error
+type P2PRouterOption = option.Option[P2PRouterConfig]
 
 func WithLibP2POptions(opts ...libp2p.Option) P2PRouterOption {
 	return func(cfg *P2PRouterConfig) error {
@@ -81,7 +70,7 @@ type P2PRouter struct {
 
 func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
 	cfg := P2PRouterConfig{}
-	err := cfg.Apply(opts...)
+	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
