@@ -8,13 +8,13 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/platforms"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
@@ -42,11 +42,52 @@ func NewClient(httpClient *http.Client) *Client {
 	}
 }
 
-type FetchConfig struct {
+type CommonConfig struct {
 	Mirror   *url.URL
 	Header   http.Header
 	Username string
 	Password string
+}
+
+type PullConfig struct {
+	CommonConfig
+	Platform ocispec.Platform
+}
+
+type PullOption = option.Option[PullConfig]
+
+func WithPullMirror(mirror *url.URL) PullOption {
+	return func(cfg *PullConfig) error {
+		cfg.Mirror = mirror
+		return nil
+	}
+}
+
+func WithPullHeader(header http.Header) PullOption {
+	return func(cfg *PullConfig) error {
+		cfg.Header = header
+		return nil
+	}
+}
+
+func WithPullBasicAuth(username, password string) PullOption {
+	return func(cfg *PullConfig) error {
+		cfg.Username = username
+		cfg.Password = password
+		return nil
+	}
+}
+
+func WithPullPlatform(platform ocispec.Platform) PullOption {
+	return func(cfg *PullConfig) error {
+		cfg.Platform = platform
+		return nil
+	}
+}
+
+type FetchConfig struct {
+	Range *httpx.Range
+	CommonConfig
 }
 
 type FetchOption = option.Option[FetchConfig]
@@ -65,10 +106,17 @@ func WithFetchHeader(header http.Header) FetchOption {
 	}
 }
 
-func WithBasicAuth(username, password string) FetchOption {
+func WithFetchBasicAuth(username, password string) FetchOption {
 	return func(cfg *FetchConfig) error {
 		cfg.Username = username
 		cfg.Password = password
+		return nil
+	}
+}
+
+func WithFetchRange(rng httpx.Range) FetchOption {
+	return func(cfg *FetchConfig) error {
+		cfg.Range = &rng
 		return nil
 	}
 }
@@ -80,9 +128,20 @@ type PullMetric struct {
 	Duration      time.Duration
 }
 
-func (c *Client) Pull(ctx context.Context, img Image, opts ...FetchOption) ([]PullMetric, error) {
-	pullMetrics := []PullMetric{}
+func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]PullMetric, error) {
+	cfg := PullConfig{
+		Platform: platforms.DefaultSpec(),
+	}
+	err := option.Apply(&cfg, opts...)
+	if err != nil {
+		return nil, err
+	}
+	fetchOpt := func(fetchCfg *FetchConfig) error {
+		fetchCfg.CommonConfig = cfg.CommonConfig
+		return nil
+	}
 
+	pullMetrics := []PullMetric{}
 	queue := []DistributionPath{
 		{
 			Kind:     DistributionKindManifest,
@@ -98,7 +157,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...FetchOption) ([]Pu
 
 		start := time.Now()
 		desc, err := func() (ocispec.Descriptor, error) {
-			rc, desc, err := c.Get(ctx, dist, nil, opts...)
+			rc, desc, err := c.Get(ctx, dist, fetchOpt)
 			if err != nil {
 				return ocispec.Descriptor{}, err
 			}
@@ -127,9 +186,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...FetchOption) ([]Pu
 						return ocispec.Descriptor{}, err
 					}
 					for _, m := range idx.Manifests {
-						// TODO: Add platform option.
-						//nolint: staticcheck // Simplify in the future.
-						if !(m.Platform.OS == runtime.GOOS && m.Platform.Architecture == runtime.GOARCH) {
+						if !platforms.Only(cfg.Platform).Match(*m.Platform) {
 							continue
 						}
 						queue = append(queue, DistributionPath{
@@ -180,7 +237,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...FetchOption) ([]Pu
 }
 
 func (c *Client) Head(ctx context.Context, dist DistributionPath, opts ...FetchOption) (ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodHead, dist, nil, opts...)
+	rc, desc, err := c.fetch(ctx, http.MethodHead, dist, opts...)
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -188,19 +245,22 @@ func (c *Client) Head(ctx context.Context, dist DistributionPath, opts ...FetchO
 	return desc, nil
 }
 
-func (c *Client) Get(ctx context.Context, dist DistributionPath, br *httpx.Range, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, br, opts...)
+func (c *Client) Get(ctx context.Context, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, opts...)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}
 	return rc, desc, nil
 }
 
-func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, br *httpx.Range, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
 	cfg := FetchConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
+	}
+	if dist.Kind == DistributionKindManifest && cfg.Range != nil {
+		return nil, ocispec.Descriptor{}, errors.New("cannot make range requests for manifests")
 	}
 
 	tcKey := dist.Registry + dist.Name
@@ -227,8 +287,8 @@ func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2Manifest)
 		req.Header.Add(httpx.HeaderAccept, ocispec.MediaTypeImageIndex)
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2ManifestList)
-		if br != nil {
-			req.Header.Add(httpx.HeaderRange, br.String())
+		if cfg.Range != nil {
+			req.Header.Add(httpx.HeaderRange, cfg.Range.String())
 		}
 		token, ok := c.tc.Load(tcKey)
 		if ok {
@@ -282,7 +342,7 @@ func getBearerToken(ctx context.Context, wwwAuth string, client *http.Client) (s
 	}
 
 	params := map[string]string{}
-	for _, part := range strings.Split(wwwAuth[len("Bearer "):], ",") {
+	for part := range strings.SplitSeq(wwwAuth[len("Bearer "):], ",") {
 		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
 		if len(kv) == 2 {
 			params[kv[0]] = strings.Trim(kv[1], `"`)
