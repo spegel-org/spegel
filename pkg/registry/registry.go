@@ -314,7 +314,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 			fetchOpts := []oci.FetchOption{
 				oci.WithFetchHeader(http.Header{HeaderSpegelMirrored: []string{"true"}}),
 				oci.WithFetchMirror(mirror),
-				oci.WithBasicAuth(r.username, r.password),
+				oci.WithFetchBasicAuth(r.username, r.password),
 			}
 
 			err := func() error {
@@ -335,7 +335,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 				if dist.Kind == oci.DistributionKindManifest {
 					manifestCtx, manifestCancel := context.WithTimeout(req.Context(), 2*time.Second)
 					defer manifestCancel()
-					rc, desc, err := r.ociClient.Get(manifestCtx, dist, nil, fetchOpts...)
+					rc, desc, err := r.ociClient.Get(manifestCtx, dist, fetchOpts...)
 					if err != nil {
 						return err
 					}
@@ -378,7 +378,12 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 					rw.WriteHeader(status)
 				}
 
-				rc, _, err := r.ociClient.Get(req.Context(), dist, rng, fetchOpts...)
+				blobOpts := make([]oci.FetchOption, len(fetchOpts))
+				copy(blobOpts, fetchOpts)
+				if rng != nil {
+					blobOpts = append(blobOpts, oci.WithFetchRange(*rng))
+				}
+				rc, _, err := r.ociClient.Get(req.Context(), dist, blobOpts...)
 				if err != nil {
 					return err
 				}
