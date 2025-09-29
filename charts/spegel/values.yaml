@@ -25,7 +25,7 @@ serviceAccount:
   name: ""
 
 # -- Annotations to add to the DaemonSet.
-annotations: {}
+daemonsetAnnotations: {}
 
 # -- Annotations to add to the pod.
 podAnnotations: {}
