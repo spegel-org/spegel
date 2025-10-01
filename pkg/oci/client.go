@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -99,9 +100,12 @@ func WithFetchMirror(mirror *url.URL) FetchOption {
 	}
 }
 
-func WithFetchHeader(header http.Header) FetchOption {
+func WithFetchHeader(k, v string) FetchOption {
 	return func(cfg *FetchConfig) error {
-		cfg.Header = header
+		if cfg.Header == nil {
+			cfg.Header = http.Header{}
+		}
+		cfg.Header.Set(k, v)
 		return nil
 	}
 }
@@ -237,7 +241,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 }
 
 func (c *Client) Head(ctx context.Context, dist DistributionPath, opts ...FetchOption) (ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodHead, dist, opts...)
+	rc, desc, err := c.Fetch(ctx, http.MethodHead, dist, opts...)
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -246,14 +250,18 @@ func (c *Client) Head(ctx context.Context, dist DistributionPath, opts ...FetchO
 }
 
 func (c *Client) Get(ctx context.Context, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
-	rc, desc, err := c.fetch(ctx, http.MethodGet, dist, opts...)
+	rc, desc, err := c.Fetch(ctx, http.MethodGet, dist, opts...)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}
 	return rc, desc, nil
 }
 
-func (c *Client) fetch(ctx context.Context, method string, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+	if method != http.MethodHead && method != http.MethodGet {
+		return nil, ocispec.Descriptor{}, errors.New("fetch only supports HEAD and GET requests")
+	}
+
 	cfg := FetchConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
@@ -389,27 +397,48 @@ func getBearerToken(ctx context.Context, wwwAuth string, client *http.Client) (s
 }
 
 func DescriptorFromHeader(header http.Header) (ocispec.Descriptor, error) {
+	desc := ocispec.Descriptor{}
+
 	mediaType := header.Get(httpx.HeaderContentType)
 	if mediaType == "" {
 		return ocispec.Descriptor{}, errors.New("content type cannot be empty")
 	}
-	contentLength := header.Get(httpx.HeaderContentLength)
-	if contentLength == "" {
-		return ocispec.Descriptor{}, errors.New("content length cannot be empty")
+	desc.MediaType = mediaType
+
+	if contentRange := header.Get(httpx.HeaderContentRange); contentRange != "" {
+		if !strings.HasPrefix(contentRange, httpx.RangeUnit) {
+			return ocispec.Descriptor{}, fmt.Errorf("unsupported content range unit %s", contentRange)
+		}
+		_, after, ok := strings.Cut(contentRange, "/")
+		if !ok {
+			return ocispec.Descriptor{}, fmt.Errorf("unexpected content range format %s", contentRange)
+		}
+		if after == "*" {
+			return ocispec.Descriptor{}, fmt.Errorf("content range expected to specify size %s", contentRange)
+		}
+		size, err := strconv.ParseInt(after, 10, 64)
+		if err != nil {
+			return ocispec.Descriptor{}, err
+		}
+		desc.Size = size
+	} else {
+		contentLength := header.Get(httpx.HeaderContentLength)
+		if contentLength == "" {
+			return ocispec.Descriptor{}, errors.New("content length cannot be empty")
+		}
+		size, err := strconv.ParseInt(contentLength, 10, 64)
+		if err != nil {
+			return ocispec.Descriptor{}, err
+		}
+		desc.Size = size
 	}
-	size, err := strconv.ParseInt(contentLength, 10, 64)
-	if err != nil {
-		return ocispec.Descriptor{}, err
-	}
+
 	dgst, err := digest.Parse(header.Get(HeaderDockerDigest))
 	if err != nil {
 		return ocispec.Descriptor{}, err
 	}
-	desc := ocispec.Descriptor{
-		MediaType: mediaType,
-		Size:      size,
-		Digest:    dgst,
-	}
+	desc.Digest = dgst
+
 	return desc, nil
 }
 

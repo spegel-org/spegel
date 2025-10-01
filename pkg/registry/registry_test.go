@@ -178,6 +178,8 @@ func TestRegistryHandler(t *testing.T) {
 	require.NoError(t, err)
 	err = memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d"), MediaType: "application/vnd.oci.image.index.v1+json"}, []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`))
 	require.NoError(t, err)
+	err = memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"), MediaType: "application/vnd.oci.image.layer.v1.tar+gzip"}, []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+	require.NoError(t, err)
 	goodReg, err := NewRegistry(memStore, routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.AddrPort{}))
 	require.NoError(t, err)
 	goodSvr := httptest.NewServer(goodReg.Handler(logr.Discard()))
@@ -197,8 +199,9 @@ func TestRegistryHandler(t *testing.T) {
 		"sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2": {unreachableAddrPort, goodAddrPort},
 		// Last peer working.
 		"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba": {badAddrPort, badAddrPort, goodAddrPort},
-		// Valid manifest.
+		// Valid manifest and blob.
 		"sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d": {goodAddrPort},
+		"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83": {goodAddrPort},
 	}
 	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
 	reg, err := NewRegistry(oci.NewMemory(), router, WithRegistryFilters([]*regexp.Regexp{regexp.MustCompile(`:latest$`)}))
@@ -210,6 +213,7 @@ func TestRegistryHandler(t *testing.T) {
 		name             string
 		key              string
 		distributionKind oci.DistributionKind
+		rng              *httpx.Range
 		expectedStatus   int
 		expectedHeaders  http.Header
 		expectedBody     []byte
@@ -243,7 +247,8 @@ func TestRegistryHandler(t *testing.T) {
 			expectedStatus:   http.StatusOK,
 			expectedBody:     []byte("first peer"),
 			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+				httpx.HeaderContentType:   {"dummy"},
 				httpx.HeaderContentLength: {"10"},
 				oci.HeaderDockerDigest:    {"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67"},
 			},
@@ -255,7 +260,8 @@ func TestRegistryHandler(t *testing.T) {
 			expectedStatus:   http.StatusOK,
 			expectedBody:     []byte("second peer"),
 			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+				httpx.HeaderContentType:   {"dummy"},
 				httpx.HeaderContentLength: {"11"},
 				oci.HeaderDockerDigest:    {"sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2"},
 			},
@@ -267,7 +273,8 @@ func TestRegistryHandler(t *testing.T) {
 			expectedStatus:   http.StatusOK,
 			expectedBody:     []byte("last peer working"),
 			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+				httpx.HeaderContentType:   {"dummy"},
 				httpx.HeaderContentLength: {"17"},
 				oci.HeaderDockerDigest:    {"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba"},
 			},
@@ -312,6 +319,33 @@ func TestRegistryHandler(t *testing.T) {
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {"application/vnd.oci.image.index.v1+json"},
 				httpx.HeaderContentLength: {"88"},
+				oci.HeaderDockerDigest:    {"sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d"},
+			},
+		},
+		{
+			name:             "blob requested as manifest should not be found",
+			key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
+			distributionKind: oci.DistributionKindManifest,
+			expectedStatus:   http.StatusNotFound,
+			expectedBody:     []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":1},"message":"mirror with image component sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83 could not be found requests to 1 mirrors failed, all attempts have been exhausted or timeout has been reached"}]}`),
+			expectedHeaders: http.Header{
+				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
+				httpx.HeaderContentLength: {"286"},
+			},
+		},
+		{
+			name:             "blob request with range",
+			key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
+			distributionKind: oci.DistributionKindBlob,
+			rng:              &httpx.Range{Start: 1, End: 3},
+			expectedStatus:   http.StatusPartialContent,
+			expectedBody:     []byte{0x8b, 0x8, 0x0},
+			expectedHeaders: http.Header{
+				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderContentLength: {"3"},
+				httpx.HeaderContentRange:  {"bytes 1-3/20"},
+				oci.HeaderDockerDigest:    {"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"},
 			},
 		},
 	}
@@ -323,6 +357,9 @@ func TestRegistryHandler(t *testing.T) {
 				target := fmt.Sprintf("http://example.com/v2/foo/bar/%s/%s?ns=docker.io", tt.distributionKind, tt.key)
 				rw := httptest.NewRecorder()
 				req := httptest.NewRequest(method, target, nil)
+				if tt.rng != nil {
+					req.Header.Set(httpx.HeaderRange, tt.rng.String())
+				}
 				handler.ServeHTTP(rw, req)
 
 				resp := rw.Result()
@@ -343,9 +380,7 @@ func TestRegistryHandler(t *testing.T) {
 				if tt.expectedHeaders == nil {
 					require.Empty(t, resp.Header)
 				}
-				for k, v := range tt.expectedHeaders {
-					require.Equal(t, v, resp.Header.Values(k))
-				}
+				require.Equal(t, tt.expectedHeaders, resp.Header)
 			})
 		}
 	}

@@ -282,7 +282,9 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		return
 	}
 
-	var rng *httpx.Range
+	// Resume range for when blobs fail midway through copying.
+	var resumeRng *httpx.Range
+
 	for {
 		select {
 		case <-req.Context().Done():
@@ -311,96 +313,95 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 			if req.TLS != nil {
 				mirror.Scheme = "https"
 			}
+
 			fetchOpts := []oci.FetchOption{
-				oci.WithFetchHeader(http.Header{HeaderSpegelMirrored: []string{"true"}}),
+				oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
 				oci.WithFetchMirror(mirror),
 				oci.WithFetchBasicAuth(r.username, r.password),
 			}
 
-			err := func() error {
+			// Override range header with resume range if set.
+			if resumeRng != nil {
+				fetchOpts = append(fetchOpts, oci.WithFetchRange(*resumeRng))
+			} else if h := req.Header.Get(httpx.HeaderRange); h != "" {
+				fetchOpts = append(fetchOpts, oci.WithFetchHeader(httpx.HeaderRange, h))
+			}
+
+			done := func() bool {
+				log := log.WithValues("attempt", mirrorDetails.Attempts, "path", req.URL.Path, "mirror", peer)
+
+				fetchCtx := req.Context()
 				if req.Method == http.MethodHead {
-					headCtx, headCancel := context.WithTimeout(req.Context(), 1*time.Second)
-					defer headCancel()
-					desc, err := r.ociClient.Head(headCtx, dist, fetchOpts...)
-					if err != nil {
-						return err
-					}
-					if !rw.HeadersWritten() {
-						oci.WriteDescriptorToHeader(desc, rw.Header())
-						rw.WriteHeader(http.StatusOK)
-					}
-					return nil
+					var reqCancel context.CancelFunc
+					fetchCtx, reqCancel = context.WithTimeout(req.Context(), 1*time.Second)
+					defer reqCancel()
+				} else if req.Method == http.MethodGet && dist.Kind == oci.DistributionKindManifest {
+					var reqCancel context.CancelFunc
+					fetchCtx, reqCancel = context.WithTimeout(req.Context(), 2*time.Second)
+					defer reqCancel()
 				}
 
-				if dist.Kind == oci.DistributionKindManifest {
-					manifestCtx, manifestCancel := context.WithTimeout(req.Context(), 2*time.Second)
-					defer manifestCancel()
-					rc, desc, err := r.ociClient.Get(manifestCtx, dist, fetchOpts...)
-					if err != nil {
-						return err
-					}
-					if !rw.HeadersWritten() {
-						oci.WriteDescriptorToHeader(desc, rw.Header())
-						rw.WriteHeader(http.StatusOK)
-					}
-					//nolint: errcheck // Ignore
-					buf := r.bufferPool.Get().(*[]byte)
-					defer r.bufferPool.Put(buf)
-					_, err = io.CopyBuffer(rw, rc, *buf)
-					if err != nil {
-						return err
-					}
-					return nil
+				rc, desc, err := r.ociClient.Fetch(fetchCtx, req.Method, dist, fetchOpts...)
+				if err != nil {
+					log.Error(err, "request to mirror failed, retryign with next")
+					return false
 				}
+				defer httpx.DrainAndClose(rc)
 
 				if !rw.HeadersWritten() {
-					headCtx, headCancel := context.WithTimeout(req.Context(), 1*time.Second)
-					defer headCancel()
-					desc, err := r.ociClient.Head(headCtx, dist, fetchOpts...)
-					if err != nil {
-						return err
-					}
 					oci.WriteDescriptorToHeader(desc, rw.Header())
 
-					status := http.StatusOK
-					rangeHeader := req.Header.Get(httpx.HeaderRange)
-					if rangeHeader != "" {
-						parsedRng, err := httpx.ParseRangeHeader(rangeHeader, desc.Size)
+					switch dist.Kind {
+					case oci.DistributionKindManifest:
+						rw.WriteHeader(http.StatusOK)
+					case oci.DistributionKindBlob:
+						rng, err := httpx.ParseRangeHeader(req.Header, desc.Size)
 						if err != nil {
-							return err
+							rw.WriteError(http.StatusBadRequest, err)
+							return true
 						}
-						rng = &parsedRng
-						crng := httpx.ContentRangeFromRange(*rng, desc.Size)
-						rw.Header().Set(httpx.HeaderContentRange, crng.String())
-						rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(rng.Size(), 10))
-						status = http.StatusPartialContent
+						resumeRng = rng
+
+						rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
+						if rng == nil {
+							rw.WriteHeader(http.StatusOK)
+						} else {
+							rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
+							rw.Header().Set(httpx.HeaderContentRange, httpx.ContentRangeFromRange(*rng, desc.Size).String())
+							rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(rng.Size(), 10))
+							rw.WriteHeader(http.StatusPartialContent)
+						}
 					}
-					rw.WriteHeader(status)
+				}
+				if req.Method == http.MethodHead {
+					return true
 				}
 
-				blobOpts := make([]oci.FetchOption, len(fetchOpts))
-				copy(blobOpts, fetchOpts)
-				if rng != nil {
-					blobOpts = append(blobOpts, oci.WithFetchRange(*rng))
-				}
-				rc, _, err := r.ociClient.Get(req.Context(), dist, blobOpts...)
-				if err != nil {
-					return err
-				}
 				//nolint: errcheck // Ignore
 				buf := r.bufferPool.Get().(*[]byte)
 				defer r.bufferPool.Put(buf)
-				_, err = io.CopyBuffer(rw, rc, *buf)
+				n, err := io.CopyBuffer(rw, rc, *buf)
 				if err != nil {
-					return err
+					switch dist.Kind {
+					case oci.DistributionKindManifest:
+						log.Error(err, "copying of manifest data failed")
+						return true
+					case oci.DistributionKindBlob:
+						if resumeRng == nil {
+							resumeRng = &httpx.Range{
+								End: desc.Size - 1,
+							}
+						}
+						resumeRng.Start += n
+						log.Error(err, "copying of blob data failed, retrying with offset")
+						return false
+					}
 				}
-				return nil
+				return true
 			}()
-			if err != nil {
-				log.Error(err, "request to mirror failed", "attempt", mirrorDetails.Attempts, "path", req.URL.Path, "mirror", peer)
-				continue
+			if done {
+				return
 			}
-			return
 		}
 	}
 }
@@ -432,8 +433,8 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	rw.Header().Set(httpx.HeaderContentType, desc.MediaType)
 	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
 	rw.Header().Set(oci.HeaderDockerDigest, desc.Digest.String())
-	rw.WriteHeader(http.StatusOK)
 	if req.Method == http.MethodHead {
+		rw.WriteHeader(http.StatusOK)
 		return
 	}
 
@@ -444,6 +445,7 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 		return
 	}
 	defer rc.Close()
+	rw.WriteHeader(http.StatusOK)
 	_, err = io.Copy(rw, rc)
 	if err != nil {
 		logr.FromContextOrDiscard(req.Context()).Error(err, "error occurred when writing manifest")
@@ -466,12 +468,26 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 		return
 	}
 
-	rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
-	rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
-	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
+	rng, err := httpx.ParseRangeHeader(req.Header, desc.Size)
+	if err != nil {
+		rw.WriteError(http.StatusBadRequest, err)
+		return
+	}
 	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
+	rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
+	var status int
+	if rng == nil {
+		status = http.StatusOK
+		rw.Header().Set(httpx.HeaderContentType, desc.MediaType)
+		rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
+	} else {
+		status = http.StatusPartialContent
+		rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
+		rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(rng.Size(), 10))
+		rw.Header().Set(httpx.HeaderContentRange, httpx.ContentRangeFromRange(*rng, desc.Size).String())
+	}
 	if req.Method == http.MethodHead {
-		rw.WriteHeader(http.StatusOK)
+		rw.WriteHeader(status)
 		return
 	}
 
@@ -482,5 +498,19 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 		return
 	}
 	defer rc.Close()
-	http.ServeContent(rw, req, "", time.Time{}, rc)
+	var src io.Reader = rc
+	if rng != nil {
+		_, err := rc.Seek(rng.Start, io.SeekStart)
+		if err != nil {
+			rw.WriteError(http.StatusInternalServerError, err)
+			return
+		}
+		src = io.LimitReader(rc, rng.Size())
+	}
+	rw.WriteHeader(status)
+	_, err = io.Copy(rw, src)
+	if err != nil {
+		logr.FromContextOrDiscard(req.Context()).Error(err, "failed to write blob")
+		return
+	}
 }

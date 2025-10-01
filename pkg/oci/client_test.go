@@ -78,6 +78,9 @@ func TestClient(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dist.Digest, desc.Digest)
 	require.Equal(t, httpx.ContentTypeBinary, desc.MediaType)
+
+	client = NewClient(nil)
+	require.NotNil(t, client.httpClient)
 }
 
 func TestDescriptorHeader(t *testing.T) {
@@ -89,7 +92,6 @@ func TestDescriptorHeader(t *testing.T) {
 		Size:      909,
 		Digest:    digest.Digest("sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9"),
 	}
-
 	WriteDescriptorToHeader(desc, header)
 	require.Equal(t, "foo", header.Get(httpx.HeaderContentType))
 	require.Equal(t, "909", header.Get(httpx.HeaderContentLength))
@@ -98,19 +100,90 @@ func TestDescriptorHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, desc, headerDesc)
 
-	header = http.Header{}
-	_, err = DescriptorFromHeader(header)
-	require.EqualError(t, err, "content type cannot be empty")
-	header.Set(httpx.HeaderContentType, "test")
-	_, err = DescriptorFromHeader(header)
-	require.EqualError(t, err, "content length cannot be empty")
-	header.Set(httpx.HeaderContentLength, "wrong")
-	_, err = DescriptorFromHeader(header)
-	require.EqualError(t, err, "strconv.ParseInt: parsing \"wrong\": invalid syntax")
-	header.Set(httpx.HeaderContentLength, "250000")
-	_, err = DescriptorFromHeader(header)
-	require.EqualError(t, err, "invalid checksum digest format")
-	header.Set(HeaderDockerDigest, "foobar")
-	_, err = DescriptorFromHeader(header)
-	require.EqualError(t, err, "invalid checksum digest format")
+	tests := []struct {
+		name     string
+		header   http.Header
+		expected string
+	}{
+		{
+			name: "missing content type",
+			header: http.Header{
+				httpx.HeaderContentLength: {"1"},
+				HeaderDockerDigest:        {"sha256:9fccb471b0f2482af80f8bd7b198dfe3afedb16e683fdd30a17423a32be54d10"},
+			},
+			expected: "content type cannot be empty",
+		},
+		{
+			name: "missing content length",
+			header: http.Header{
+				httpx.HeaderContentType: {httpx.ContentTypeBinary},
+				HeaderDockerDigest:      {"sha256:9fccb471b0f2482af80f8bd7b198dfe3afedb16e683fdd30a17423a32be54d10"},
+			},
+			expected: "content length cannot be empty",
+		},
+		{
+			name: "non int content length",
+			header: http.Header{
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderContentLength: {"bar"},
+				HeaderDockerDigest:        {"sha256:9fccb471b0f2482af80f8bd7b198dfe3afedb16e683fdd30a17423a32be54d10"},
+			},
+			expected: "strconv.ParseInt: parsing \"bar\": invalid syntax",
+		},
+		{
+			name: "missing digest",
+			header: http.Header{
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderContentLength: {"1"},
+			},
+			expected: "invalid checksum digest format",
+		},
+		{
+			name: "invalid digest format",
+			header: http.Header{
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderContentLength: {"1"},
+				HeaderDockerDigest:        {"foo"},
+			},
+			expected: "invalid checksum digest format",
+		},
+		{
+			name: "invalid content range unit",
+			header: http.Header{
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderContentLength: {"1"},
+				HeaderDockerDigest:        {"sha256:9fccb471b0f2482af80f8bd7b198dfe3afedb16e683fdd30a17423a32be54d10"},
+				httpx.HeaderContentRange:  {"foo 1-3/40"},
+			},
+			expected: "unsupported content range unit foo 1-3/40",
+		},
+		{
+			name: "invalid content range format",
+			header: http.Header{
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderContentLength: {"1"},
+				HeaderDockerDigest:        {"sha256:9fccb471b0f2482af80f8bd7b198dfe3afedb16e683fdd30a17423a32be54d10"},
+				httpx.HeaderContentRange:  {"bytes 1-3 40"},
+			},
+			expected: "unexpected content range format bytes 1-3 40",
+		},
+		{
+			name: "undefined size",
+			header: http.Header{
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderContentLength: {"1"},
+				HeaderDockerDigest:        {"sha256:9fccb471b0f2482af80f8bd7b198dfe3afedb16e683fdd30a17423a32be54d10"},
+				httpx.HeaderContentRange:  {"bytes 1-3/*"},
+			},
+			expected: "content range expected to specify size bytes 1-3/*",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := DescriptorFromHeader(tt.header)
+			require.EqualError(t, err, tt.expected)
+		})
+	}
 }
