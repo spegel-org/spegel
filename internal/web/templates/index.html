@@ -7,6 +7,7 @@
 	<title>Spegel Debug</title>
 	<link rel="icon" href="https://spegel.dev/favicon.svg" type="image/svg+xml">
 	<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+	<script src="https://unpkg.com/htmx.org@1.9.11/dist/ext/response-targets.js"></script>
 
 	<style>
 		body {
@@ -75,6 +76,10 @@
 			margin-top: 8px;
 		}
 
+		.error {
+			color: red;
+		}
+
 		.measure-container {
 			padding: 16px;
 			border-radius: 8px;
@@ -108,7 +113,7 @@
 	</style>
 </head>
 
-<body>
+<body hx-ext="response-targets">
 	<div class="container">
 		<h1>Spegel</h1>
 
@@ -116,7 +121,7 @@
 
 		<div class="measure-container">
 			<h2>Measure Image Pull</h2>
-			<form hx-get="/debug/web/measure" hx-target="#measure-result">
+			<form hx-get="/debug/web/measure" hx-target="#measure-result" hx-target-error="#measure-result">
 				<input type="text" name="image" placeholder="ghcr.io/spegel-org/spegel:v0.30.0" />
 				<button>Pull</button>
 			</form>
