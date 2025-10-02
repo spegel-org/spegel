@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1027](https://github.com/spegel-org/spegel/pull/1027) Fix OCI client to take range requests for HEAD requests.
 - [#1029](https://github.com/spegel-org/spegel/pull/1029) Fix range request handling and add tests for range requests.
 - [#1030](https://github.com/spegel-org/spegel/pull/1030) Fix panic in debug web view when metrics are not set yet.
+- [#1033](https://github.com/spegel-org/spegel/pull/1033) Fix measuring pulls using digests in debug web view.
 
 ### Security
 
