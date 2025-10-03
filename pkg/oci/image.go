@@ -69,6 +69,14 @@ func (i Image) TagName() (string, bool) {
 	return fmt.Sprintf("%s/%s:%s", i.Registry, i.Repository, i.Tag), true
 }
 
+// Reference returns the digest if set or alternatively if not the full image reference with the tag.
+func (i Image) Reference() string {
+	if i.Digest != "" {
+		return i.Digest.String()
+	}
+	return fmt.Sprintf("%s/%s:%s", i.Registry, i.Repository, i.Tag)
+}
+
 type ParseImageConfig struct {
 	Digest        digest.Digest
 	RequireDigest bool
