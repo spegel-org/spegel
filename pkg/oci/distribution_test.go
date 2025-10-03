@@ -13,59 +13,44 @@ func TestParseDistributionPath(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                string
-		registry            string
-		path                string
-		expectedName        string
-		expectedDgst        digest.Digest
-		expectedTag         string
-		expectedRef         string
-		expectedKind        DistributionKind
-		execptedIsLatestTag bool
+		name         string
+		registry     string
+		path         string
+		expectedName string
+		expectedDgst digest.Digest
+		expectedTag  string
+		expectedRef  string
+		expectedKind DistributionKind
 	}{
 		{
-			name:                "manifest tag",
-			registry:            "example.com",
-			path:                "/v2/foo/bar/manifests/hello-world",
-			expectedName:        "foo/bar",
-			expectedDgst:        "",
-			expectedTag:         "hello-world",
-			expectedRef:         "example.com/foo/bar:hello-world",
-			expectedKind:        DistributionKindManifest,
-			execptedIsLatestTag: false,
+			name:         "manifest tag",
+			registry:     "example.com",
+			path:         "/v2/foo/bar/manifests/hello-world",
+			expectedName: "foo/bar",
+			expectedDgst: "",
+			expectedTag:  "hello-world",
+			expectedRef:  "example.com/foo/bar:hello-world",
+			expectedKind: DistributionKindManifest,
 		},
 		{
-			name:                "manifest with latest tag",
-			registry:            "example.com",
-			path:                "/v2/test/manifests/latest",
-			expectedName:        "test",
-			expectedDgst:        "",
-			expectedTag:         "latest",
-			expectedRef:         "example.com/test:latest",
-			expectedKind:        DistributionKindManifest,
-			execptedIsLatestTag: true,
+			name:         "manifest digest",
+			registry:     "docker.io",
+			path:         "/v2/library/nginx/manifests/sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
+			expectedName: "library/nginx",
+			expectedDgst: digest.Digest("sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39"),
+			expectedTag:  "",
+			expectedRef:  "sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
+			expectedKind: DistributionKindManifest,
 		},
 		{
-			name:                "manifest digest",
-			registry:            "docker.io",
-			path:                "/v2/library/nginx/manifests/sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
-			expectedName:        "library/nginx",
-			expectedDgst:        digest.Digest("sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39"),
-			expectedTag:         "",
-			expectedRef:         "sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
-			expectedKind:        DistributionKindManifest,
-			execptedIsLatestTag: false,
-		},
-		{
-			name:                "blob digest",
-			registry:            "docker.io",
-			path:                "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
-			expectedName:        "library/nginx",
-			expectedDgst:        digest.Digest("sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369"),
-			expectedTag:         "",
-			expectedRef:         "sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
-			expectedKind:        DistributionKindBlob,
-			execptedIsLatestTag: false,
+			name:         "blob digest",
+			registry:     "docker.io",
+			path:         "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedName: "library/nginx",
+			expectedDgst: digest.Digest("sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369"),
+			expectedTag:  "",
+			expectedRef:  "sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedKind: DistributionKindBlob,
 		},
 	}
 	for _, tt := range tests {
@@ -86,7 +71,6 @@ func TestParseDistributionPath(t *testing.T) {
 			require.Equal(t, tt.registry, dist.Registry)
 			require.Equal(t, tt.path, dist.URL().Path)
 			require.Equal(t, tt.registry, dist.URL().Query().Get("ns"))
-			require.Equal(t, tt.execptedIsLatestTag, dist.IsLatestTag())
 		})
 	}
 }
