@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1019](https://github.com/spegel-org/spegel/pull/1019) Fix media type strings to use constants.
 - [#1027](https://github.com/spegel-org/spegel/pull/1027) Fix OCI client to take range requests for HEAD requests.
 - [#1029](https://github.com/spegel-org/spegel/pull/1029) Fix range request handling and add tests for range requests.
+- [#1030](https://github.com/spegel-org/spegel/pull/1030) Fix panic in debug web view when metrics are not set yet.
 
 ### Security
 
