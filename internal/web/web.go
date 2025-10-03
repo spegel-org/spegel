@@ -25,13 +25,14 @@ import (
 var templatesFS embed.FS
 
 type Web struct {
-	router     routing.Router
-	ociClient  *oci.Client
-	httpClient *http.Client
-	tmpls      *template.Template
+	router          routing.Router
+	ociClient       *oci.Client
+	httpClient      *http.Client
+	tmpls           *template.Template
+	registryAddress string
 }
 
-func NewWeb(router routing.Router, ociClient *oci.Client) (*Web, error) {
+func NewWeb(router routing.Router, ociClient *oci.Client, registryAddr string) (*Web, error) {
 	funcs := template.FuncMap{
 		"formatBytes":    formatBytes,
 		"formatDuration": formatDuration,
@@ -41,10 +42,11 @@ func NewWeb(router routing.Router, ociClient *oci.Client) (*Web, error) {
 		return nil, err
 	}
 	return &Web{
-		router:     router,
-		ociClient:  ociClient,
-		httpClient: httpx.BaseClient(),
-		tmpls:      tmpls,
+		router:          router,
+		ociClient:       ociClient,
+		httpClient:      httpx.BaseClient(),
+		tmpls:           tmpls,
+		registryAddress: registryAddr,
 	}, nil
 }
 
@@ -136,7 +138,7 @@ type pullResult struct {
 func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	mirror := &url.URL{
 		Scheme: "http",
-		Host:   "localhost:5000",
+		Host:   w.registryAddress,
 	}
 
 	// Parse image name.
