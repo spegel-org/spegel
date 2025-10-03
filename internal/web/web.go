@@ -91,11 +91,15 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 		ImageCount        int64
 		LayerCount        int64
 	}{}
-	for _, metric := range metricFamilies["spegel_advertised_images"].Metric {
-		data.ImageCount += int64(*metric.Gauge.Value)
+	if family, ok := metricFamilies["spegel_advertised_images"]; ok {
+		for _, metric := range family.Metric {
+			data.ImageCount += int64(*metric.Gauge.Value)
+		}
 	}
-	for _, metric := range metricFamilies["spegel_advertised_keys"].Metric {
-		data.LayerCount += int64(*metric.Gauge.Value)
+	if family, ok := metricFamilies["spegel_advertised_keys"]; ok {
+		for _, metric := range family.Metric {
+			data.LayerCount += int64(*metric.Gauge.Value)
+		}
 	}
 	mirrorLastSuccess := int64(*metricFamilies["spegel_mirror_last_success_timestamp_seconds"].Metric[0].Gauge.Value)
 	if mirrorLastSuccess > 0 {
