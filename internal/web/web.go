@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
@@ -117,14 +118,14 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 type measureResult struct {
-	PeerResults  []peerResult
-	PullResults  []pullResult
-	PeerDuration time.Duration
-	PullDuration time.Duration
-	PullSize     int64
+	LookupResults []lookupResult
+	PullResults   []pullResult
+	PeerDuration  time.Duration
+	PullDuration  time.Duration
+	PullSize      int64
 }
 
-type peerResult struct {
+type lookupResult struct {
 	Peer     netip.AddrPort
 	Duration time.Duration
 }
@@ -156,23 +157,33 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	res := measureResult{}
 
-	// Resolve peers for the given image.
-	resolveStart := time.Now()
-	peerCh, err := w.router.Resolve(req.Context(), img.Identifier(), 0)
+	// Lookup peers for the given image.
+	lookupStart := time.Now()
+	lookupCtx, lookupCancel := context.WithTimeout(req.Context(), 1*time.Second)
+	defer lookupCancel()
+	rr, err := w.router.Lookup(lookupCtx, img.Identifier(), 0)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 		return
 	}
-	for peer := range peerCh {
-		d := time.Since(resolveStart)
+	for {
+		peer, err := rr.Next()
+		if err != nil {
+			break
+		}
+
+		// TODO(phillebaba): This isnt a great solution as removing the peers will affect caching.
+		rr.Remove(peer)
+
+		d := time.Since(lookupStart)
 		res.PeerDuration += d
-		res.PeerResults = append(res.PeerResults, peerResult{
+		res.LookupResults = append(res.LookupResults, lookupResult{
 			Peer:     peer,
 			Duration: d,
 		})
 	}
 
-	if len(res.PeerResults) > 0 {
+	if len(res.LookupResults) > 0 {
 		// Pull the image and measure performance.
 		pullMetrics, err := w.ociClient.Pull(req.Context(), img, oci.WithPullMirror(mirror))
 		if err != nil {

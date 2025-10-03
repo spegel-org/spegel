@@ -53,18 +53,23 @@ func TestP2PRouter(t *testing.T) {
 	// Flake results in a peer being returned without an address. Revisit in Go 1.24 to see if this can be solved better.
 	time.Sleep(1 * time.Second)
 
+	// Advertise nil keys.
 	err = router.Advertise(ctx, nil)
 	require.NoError(t, err)
-	peerCh, err := router.Resolve(ctx, "foo", 1)
-	require.NoError(t, err)
-	peer := <-peerCh
-	require.False(t, peer.IsValid())
 
+	// Lookup key that does not exist.
+	rr, err := router.Lookup(ctx, "foo", 1)
+	require.NoError(t, err)
+	_, err = rr.Next()
+	require.ErrorIs(t, err, ErrNoNext)
+
+	// Advertise and then resolve the key.
 	err = router.Advertise(ctx, []string{"foo"})
 	require.NoError(t, err)
-	peerCh, err = router.Resolve(ctx, "foo", 1)
+	rr, err = router.Lookup(ctx, "foo", 1)
 	require.NoError(t, err)
-	peer = <-peerCh
+	peer, err := rr.Next()
+	require.NoError(t, err)
 	require.True(t, peer.IsValid())
 
 	cancel()

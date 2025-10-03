@@ -154,16 +154,20 @@ func TestBasicAuth(t *testing.T) {
 func TestRegistryHandler(t *testing.T) {
 	t.Parallel()
 
-	badReg, err := NewRegistry(oci.NewMemory(), routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.AddrPort{}))
-	require.NoError(t, err)
-	badSvr := httptest.NewServer(badReg.Handler(logr.Discard()))
-	t.Cleanup(func() {
-		badSvr.Close()
-	})
-	badAddrPort := netip.MustParseAddrPort(badSvr.Listener.Addr().String())
+	badAddrPorts := []netip.AddrPort{}
+	for range 2 {
+		badReg, err := NewRegistry(oci.NewMemory(), routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.AddrPort{}))
+		require.NoError(t, err)
+		badSvr := httptest.NewServer(badReg.Handler(logr.Discard()))
+		t.Cleanup(func() {
+			badSvr.Close()
+		})
+		badAddrPort := netip.MustParseAddrPort(badSvr.Listener.Addr().String())
+		badAddrPorts = append(badAddrPorts, badAddrPort)
+	}
 
 	memStore := oci.NewMemory()
-	err = memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6"), MediaType: "dummy"}, []byte("no working peers"))
+	err := memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6"), MediaType: "dummy"}, []byte("no working peers"))
 	require.NoError(t, err)
 	err = memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67"), MediaType: "dummy"}, []byte("first peer"))
 	require.NoError(t, err)
@@ -187,13 +191,13 @@ func TestRegistryHandler(t *testing.T) {
 
 	resolver := map[string][]netip.AddrPort{
 		// No working peers.
-		"sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6": {badAddrPort, unreachableAddrPort, badAddrPort},
+		"sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6": {badAddrPorts[0], unreachableAddrPort, badAddrPorts[1]},
 		// First peer.
-		"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67": {goodAddrPort, badAddrPort, badAddrPort},
+		"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67": {goodAddrPort, badAddrPorts[0], badAddrPorts[1]},
 		// Second peer.
 		"sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2": {unreachableAddrPort, goodAddrPort},
 		// Last peer working.
-		"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba": {badAddrPort, badAddrPort, goodAddrPort},
+		"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba": {badAddrPorts[0], badAddrPorts[1], goodAddrPort},
 		// Valid manifest and blob.
 		"sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d": {goodAddrPort},
 		"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83": {goodAddrPort},
@@ -218,10 +222,10 @@ func TestRegistryHandler(t *testing.T) {
 			key:              "sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591",
 			distributionKind: oci.DistributionKindBlob,
 			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":0},"message":"mirror with image component sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591 could not be found"}]}`),
+			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":0},"message":"could not find peer for sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591"}]}`),
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"191"},
+				httpx.HeaderContentLength: {"168"},
 			},
 		},
 		{
@@ -229,10 +233,10 @@ func TestRegistryHandler(t *testing.T) {
 			key:              "sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6",
 			distributionKind: oci.DistributionKindBlob,
 			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":3},"message":"mirror with image component sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6 could not be found requests to 3 mirrors failed, all attempts have been exhausted or timeout has been reached"}]}`),
+			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":3},"message":"all request retries exhausted for sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6"}]}`),
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"282"},
+				httpx.HeaderContentLength: {"178"},
 			},
 		},
 		{
@@ -299,10 +303,10 @@ func TestRegistryHandler(t *testing.T) {
 			key:              "sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d",
 			distributionKind: oci.DistributionKindBlob,
 			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":1},"message":"mirror with image component sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d could not be found requests to 1 mirrors failed, all attempts have been exhausted or timeout has been reached"}]}`),
+			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":1},"message":"could not find peer for sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d"}]}`),
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"282"},
+				httpx.HeaderContentLength: {"168"},
 			},
 		},
 		{
@@ -322,10 +326,10 @@ func TestRegistryHandler(t *testing.T) {
 			key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
 			distributionKind: oci.DistributionKindManifest,
 			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":1},"message":"mirror with image component sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83 could not be found requests to 1 mirrors failed, all attempts have been exhausted or timeout has been reached"}]}`),
+			expectedBody:     []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":1},"message":"could not find peer for sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"}]}`),
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"286"},
+				httpx.HeaderContentLength: {"172"},
 			},
 		},
 		{

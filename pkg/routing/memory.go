@@ -29,24 +29,20 @@ func (m *MemoryRouter) Ready(ctx context.Context) (bool, error) {
 	return len(m.resolver) > 0, nil
 }
 
-func (m *MemoryRouter) Resolve(ctx context.Context, key string, count int) (<-chan netip.AddrPort, error) {
+func (m *MemoryRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) { //nolint: ireturn // Ignore.
 	m.mx.RLock()
-	peers, ok := m.resolver[key]
-	m.mx.RUnlock()
+	defer m.mx.RUnlock()
 
-	peerCh := make(chan netip.AddrPort, count)
-	// If no peers exist close the channel to stop any consumer.
+	peers, ok := m.resolver[key]
 	if !ok {
-		close(peerCh)
-		return peerCh, nil
+		return &RoundRobin{}, nil
 	}
-	go func() {
-		for _, peer := range peers {
-			peerCh <- peer
-		}
-		close(peerCh)
-	}()
-	return peerCh, nil
+
+	rr := NewRoundRobin()
+	for _, peer := range peers {
+		rr.Add(peer)
+	}
+	return rr, nil
 }
 
 func (m *MemoryRouter) Advertise(ctx context.Context, keys []string) error {
@@ -71,7 +67,7 @@ func (m *MemoryRouter) Add(key string, ap netip.AddrPort) {
 	m.resolver[key] = append(v, ap)
 }
 
-func (m *MemoryRouter) Lookup(key string) ([]netip.AddrPort, bool) {
+func (m *MemoryRouter) Get(key string) ([]netip.AddrPort, bool) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 

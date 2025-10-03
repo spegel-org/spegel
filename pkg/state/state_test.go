@@ -104,7 +104,7 @@ func TestTrack(t *testing.T) {
 
 			// Check that all images are advertised by digest (this should always happen)
 			for _, img := range imgs {
-				peers, ok := router.Lookup(img.Digest.String())
+				peers, ok := router.Get(img.Digest.String())
 				require.True(t, ok, "Image digest %s should be advertised", img.Digest.String())
 				require.Len(t, peers, 1)
 			}
@@ -115,7 +115,7 @@ func TestTrack(t *testing.T) {
 				if !ok {
 					continue
 				}
-				peers, ok := router.Lookup(tagName)
+				peers, ok := router.Get(tagName)
 				shouldBeAdvertised := slices.Contains(tt.expectedImages, tagName)
 				if shouldBeAdvertised {
 					require.True(t, ok, "Image %s should be advertised", tagName)

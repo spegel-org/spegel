@@ -193,24 +193,21 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func (r *P2PRouter) Resolve(ctx context.Context, key string, count int) (<-chan netip.AddrPort, error) {
+func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) { //nolint: ireturn // Ignore.
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
 	}
-	// If using unlimited retries (count=0), ensure that the peer address channel
-	// does not become blocking by using a reasonable non-zero buffer size.
-	peerBufferSize := count
-	if peerBufferSize == 0 {
-		peerBufferSize = 20
-	}
+
+	cb := NewClosableBalancer(NewRoundRobin())
 	addrInfoCh := r.rd.FindProvidersAsync(ctx, c, count)
-	peerCh := make(chan netip.AddrPort, peerBufferSize)
 	go func() {
-		resolveTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
+		defer cb.Close()
+
+		lookupTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
 		for addrInfo := range addrInfoCh {
-			resolveTimer.ObserveDuration()
+			lookupTimer.ObserveDuration()
 			if len(addrInfo.Addrs) != 1 {
 				addrs := []string{}
 				for _, addr := range addrInfo.Addrs {
@@ -219,6 +216,7 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, count int) (<-chan 
 				log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
 				continue
 			}
+
 			ip, err := manet.ToIP(addrInfo.Addrs[0])
 			if err != nil {
 				log.Error(err, "could not get IP address")
@@ -230,16 +228,10 @@ func (r *P2PRouter) Resolve(ctx context.Context, key string, count int) (<-chan 
 				continue
 			}
 			peer := netip.AddrPortFrom(ipAddr, r.registryPort)
-			// Don't block if the client has disconnected before reading all values from the channel
-			select {
-			case peerCh <- peer:
-			default:
-				log.V(4).Info("mirror endpoint dropped: peer channel is full")
-			}
+			cb.Add(peer)
 		}
-		close(peerCh)
 	}()
-	return peerCh, nil
+	return cb, nil
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
