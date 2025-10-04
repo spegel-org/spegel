@@ -158,7 +158,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	// Resolve peers for the given image.
 	resolveStart := time.Now()
-	peerCh, err := w.router.Resolve(req.Context(), img.Reference(), 0)
+	peerCh, err := w.router.Resolve(req.Context(), img.Identifier(), 0)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 		return

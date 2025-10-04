@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
+
 	"github.com/spegel-org/spegel/internal/option"
 )
 
@@ -17,37 +18,22 @@ const (
 )
 
 type Image struct {
-	Registry   string
-	Repository string
-	Tag        string
-	Digest     digest.Digest
+	Reference
 }
 
 func NewImage(registry, repository, tag string, dgst digest.Digest) (Image, error) {
-	if registry == "" {
-		return Image{}, errors.New("image needs to contain a registry")
-	}
-	if repository == "" {
-		return Image{}, errors.New("image needs to contain a repository")
-	}
-	if dgst != "" {
-		if err := dgst.Validate(); err != nil {
-			return Image{}, err
-		}
-	}
-	if dgst == "" && tag == "" {
-		return Image{}, errors.New("either tag or digest has to be set")
-	}
-	return Image{
+	ref := Reference{
 		Registry:   registry,
 		Repository: repository,
 		Tag:        tag,
 		Digest:     dgst,
+	}
+	if err := ref.Validate(); err != nil {
+		return Image{}, err
+	}
+	return Image{
+		Reference: ref,
 	}, nil
-}
-
-func (i Image) IsLatestTag() bool {
-	return i.Tag == "latest"
 }
 
 func (i Image) String() string {
@@ -62,6 +48,7 @@ func (i Image) String() string {
 	return fmt.Sprintf("%s/%s%s%s", i.Registry, i.Repository, tag, digest)
 }
 
+// TagName returns the full tag reference string if tag is set.
 func (i Image) TagName() (string, bool) {
 	if i.Tag == "" {
 		return "", false
@@ -69,12 +56,16 @@ func (i Image) TagName() (string, bool) {
 	return fmt.Sprintf("%s/%s:%s", i.Registry, i.Repository, i.Tag), true
 }
 
-// Reference returns the digest if set or alternatively if not the full image reference with the tag.
-func (i Image) Reference() string {
-	if i.Digest != "" {
-		return i.Digest.String()
+// DistributionPath returns the distribution path for the images top layer.
+func (i Image) DistributionPath() DistributionPath {
+	ref := i.Reference
+	if ref.Digest != "" {
+		ref.Tag = ""
 	}
-	return fmt.Sprintf("%s/%s:%s", i.Registry, i.Repository, i.Tag)
+	return DistributionPath{
+		Reference: ref,
+		Kind:      DistributionKindManifest,
+	}
 }
 
 type ParseImageConfig struct {

@@ -204,8 +204,8 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	// Apply registry filters to determine if the request should be mirrored.
 	for _, f := range r.filters {
-		if f.MatchString(dist.Reference()) {
-			rw.WriteError(http.StatusNotFound, fmt.Errorf("request %s is filtered out by registry filters", dist.Reference()))
+		if f.MatchString(dist.Identifier()) {
+			rw.WriteError(http.StatusNotFound, fmt.Errorf("request %s is filtered out by registry filters", dist.Identifier()))
 			return
 		}
 	}
@@ -215,7 +215,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		// If content is present locally we should skip the mirroring and just serve it.
 		var ociErr error
 		if dist.Digest == "" {
-			_, ociErr = r.ociStore.Resolve(req.Context(), dist.Reference())
+			_, ociErr = r.ociStore.Resolve(req.Context(), dist.Identifier())
 		} else {
 			_, ociErr = r.ociStore.Descriptor(req.Context(), dist.Digest)
 		}
@@ -247,7 +247,7 @@ type MirrorErrorDetails struct {
 func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "mirror")
 
-	log := logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Reference(), "path", req.URL.Path)
+	log := logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path)
 
 	defer func() {
 		cacheType := "hit"
@@ -275,7 +275,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 	// Resolve mirror with the requested reference
 	resolveCtx, resolveCancel := context.WithTimeout(req.Context(), r.resolveTimeout)
 	defer resolveCancel()
-	peerCh, err := r.router.Resolve(resolveCtx, dist.Reference(), r.resolveRetries)
+	peerCh, err := r.router.Resolve(resolveCtx, dist.Identifier(), r.resolveRetries)
 	if err != nil {
 		respErr := oci.NewDistributionError(errCode, "unable to resolve peers", mirrorDetails)
 		rw.WriteError(http.StatusNotFound, respErr)
@@ -295,7 +295,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		case peer, ok := <-peerCh:
 			// Channel closed means no more mirrors will be received and max retries has been reached.
 			if !ok {
-				msg := fmt.Sprintf("mirror with image component %s could not be found", dist.Reference())
+				msg := fmt.Sprintf("mirror with image component %s could not be found", dist.Identifier())
 				if mirrorDetails.Attempts > 0 {
 					msg = fmt.Sprintf("%s requests to %d mirrors failed, all attempts have been exhausted or timeout has been reached", msg, mirrorDetails.Attempts)
 				}
@@ -410,9 +410,9 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	rw.SetAttrs(HandlerAttrKey, "manifest")
 
 	if dist.Digest == "" {
-		dgst, err := r.ociStore.Resolve(req.Context(), dist.Reference())
+		dgst, err := r.ociStore.Resolve(req.Context(), dist.Identifier())
 		if err != nil {
-			respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get digest for image tag %s", dist.Reference()), nil)
+			respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get digest for image tag %s", dist.Identifier()), nil)
 			rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 			return
 		}

@@ -78,10 +78,10 @@ func TestParseDistributionPath(t *testing.T) {
 			}
 			dist, err := ParseDistributionPath(u)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedName, dist.Name)
+			require.Equal(t, tt.expectedName, dist.Repository)
 			require.Equal(t, tt.expectedDgst, dist.Digest)
 			require.Equal(t, tt.expectedTag, dist.Tag)
-			require.Equal(t, tt.expectedRef, dist.Reference())
+			require.Equal(t, tt.expectedRef, dist.Identifier())
 			require.Equal(t, tt.expectedKind, dist.Kind)
 			require.Equal(t, tt.registry, dist.Registry)
 			require.Equal(t, tt.path, dist.URL().Path)

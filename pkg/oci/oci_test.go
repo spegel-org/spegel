@@ -105,11 +105,8 @@ func TestStore(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			noPlatformImg := Image{
-				Registry:   "example.com",
-				Repository: "org/no-platform",
-				Tag:        "test",
-			}
+			noPlatformImg, err := ParseImage("example.com/org/no-platform:test", AllowTagOnly())
+			require.NoError(t, err)
 			tagName, ok := noPlatformImg.TagName()
 			require.True(t, ok)
 			dgst, err := ociStore.Resolve(ctx, tagName)
