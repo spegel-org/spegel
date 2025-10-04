@@ -100,15 +100,7 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, regist
 			continue
 		}
 
-		// Do not advertise images that match registry filter.
-		filtered := false
-		for _, f := range registryFilters {
-			if f.MatchString(img.String()) {
-				filtered = true
-				break
-			}
-		}
-		if filtered {
+		if oci.MatchesFilter(img.Reference, registryFilters) {
 			continue
 		}
 
