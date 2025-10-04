@@ -4,6 +4,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"net"
 	"net/http"
@@ -144,12 +145,12 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	// Parse image name.
 	imgName := req.URL.Query().Get("image")
 	if imgName == "" {
-		rw.WriteError(http.StatusBadRequest, errors.New("image name cannot be empty"))
+		rw.WriteError(http.StatusBadRequest, NewHTMLResponseError(errors.New("image name cannot be empty")))
 		return
 	}
 	img, err := oci.ParseImage(imgName, oci.AllowDefaults(), oci.AllowTagOnly())
 	if err != nil {
-		rw.WriteError(http.StatusBadRequest, err)
+		rw.WriteError(http.StatusBadRequest, NewHTMLResponseError(err))
 		return
 	}
 
@@ -159,7 +160,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	resolveStart := time.Now()
 	peerCh, err := w.router.Resolve(req.Context(), img.Reference(), 0)
 	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, err)
+		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 		return
 	}
 	for peer := range peerCh {
@@ -175,7 +176,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 		// Pull the image and measure performance.
 		pullMetrics, err := w.ociClient.Pull(req.Context(), img, oci.WithPullMirror(mirror))
 		if err != nil {
-			rw.WriteError(http.StatusInternalServerError, err)
+			rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 			return
 		}
 		for _, metric := range pullMetrics {
@@ -192,9 +193,26 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	err = w.tmpls.ExecuteTemplate(rw, "measure.html", res)
 	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, err)
+		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 		return
 	}
+}
+
+var _ httpx.ResponseError = &HTMLResponseError{}
+
+type HTMLResponseError struct {
+	error
+}
+
+func NewHTMLResponseError(err error) *HTMLResponseError {
+	return &HTMLResponseError{err}
+}
+
+func (e *HTMLResponseError) ResponseBody() ([]byte, string, error) {
+	if e.error == nil {
+		return nil, "", errors.New("no error set")
+	}
+	return fmt.Appendf(nil, `<p class="error">%s</p>`, html.EscapeString(e.Error())), httpx.ContentTypeText, nil
 }
 
 func formatBytes(size int64) string {
