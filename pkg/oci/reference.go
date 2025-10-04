@@ -41,8 +41,3 @@ func (r Reference) Identifier() string {
 	}
 	return fmt.Sprintf("%s/%s:%s", r.Registry, r.Repository, r.Tag)
 }
-
-// IsLatestTag returns true if the tag has the value latest.
-func (r Reference) IsLatestTag() bool {
-	return r.Tag == "latest"
-}

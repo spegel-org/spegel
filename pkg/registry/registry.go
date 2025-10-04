@@ -29,13 +29,12 @@ const (
 )
 
 type RegistryConfig struct {
-	Transport        http.RoundTripper
-	Username         string
-	Password         string
-	Filters          []*regexp.Regexp
-	ResolveLatestTag bool
-	ResolveTimeout   time.Duration
-	ResolveRetries   int
+	Transport      http.RoundTripper
+	Username       string
+	Password       string
+	Filters        []*regexp.Regexp
+	ResolveTimeout time.Duration
+	ResolveRetries int
 }
 
 type RegistryOption = option.Option[RegistryConfig]
@@ -43,14 +42,6 @@ type RegistryOption = option.Option[RegistryConfig]
 func WithResolveRetries(resolveRetries int) RegistryOption {
 	return func(cfg *RegistryConfig) error {
 		cfg.ResolveRetries = resolveRetries
-		return nil
-	}
-}
-
-// Deprecated: Resolve latest tag is replaced by registry filter which offers more customizable behavior. Use the filter `:latest$` to achieve the same behavior.
-func WithResolveLatestTag(resolveLatestTag bool) RegistryOption {
-	return func(cfg *RegistryConfig) error {
-		cfg.ResolveLatestTag = resolveLatestTag
 		return nil
 	}
 }
@@ -85,23 +76,21 @@ func WithBasicAuth(username, password string) RegistryOption {
 }
 
 type Registry struct {
-	bufferPool       *sync.Pool
-	ociStore         oci.Store
-	ociClient        *oci.Client
-	router           routing.Router
-	username         string
-	password         string
-	filters          []*regexp.Regexp
-	resolveTimeout   time.Duration
-	resolveRetries   int
-	resolveLatestTag bool
+	bufferPool     *sync.Pool
+	ociStore       oci.Store
+	ociClient      *oci.Client
+	router         routing.Router
+	username       string
+	password       string
+	filters        []*regexp.Regexp
+	resolveTimeout time.Duration
+	resolveRetries int
 }
 
 func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
 	cfg := RegistryConfig{
-		ResolveRetries:   3,
-		ResolveLatestTag: true,
-		ResolveTimeout:   20 * time.Millisecond,
+		ResolveRetries: 3,
+		ResolveTimeout: 20 * time.Millisecond,
 	}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
@@ -128,16 +117,15 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 	}
 
 	r := &Registry{
-		ociStore:         ociStore,
-		router:           router,
-		ociClient:        ociClient,
-		resolveRetries:   cfg.ResolveRetries,
-		resolveLatestTag: cfg.ResolveLatestTag,
-		filters:          cfg.Filters,
-		resolveTimeout:   cfg.ResolveTimeout,
-		username:         cfg.Username,
-		password:         cfg.Password,
-		bufferPool:       bufferPool,
+		ociStore:       ociStore,
+		router:         router,
+		ociClient:      ociClient,
+		resolveRetries: cfg.ResolveRetries,
+		filters:        cfg.Filters,
+		resolveTimeout: cfg.ResolveTimeout,
+		username:       cfg.Username,
+		password:       cfg.Password,
+		bufferPool:     bufferPool,
 	}
 	return r, nil
 }
@@ -262,12 +250,6 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		oci.DistributionKindBlob:     oci.ErrCodeBlobUnknown,
 		oci.DistributionKindManifest: oci.ErrCodeManifestUnknown,
 	}[dist.Kind]
-
-	if !r.resolveLatestTag && dist.IsLatestTag() {
-		respErr := oci.NewDistributionError(errCode, "latest tag resolving is disabled", mirrorDetails)
-		rw.WriteError(http.StatusNotFound, respErr)
-		return
-	}
 
 	// Resolve mirror with the requested reference
 	resolveCtx, resolveCancel := context.WithTimeout(req.Context(), r.resolveTimeout)

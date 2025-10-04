@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/netip"
 	"regexp"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -61,97 +62,31 @@ func TestTrack(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		registryFilters  []*regexp.Regexp
-		expectedImages   []string // Images that should be advertised
-		resolveLatestTag bool
+		name            string
+		registryFilters []*regexp.Regexp
+		expectedImages  []string
 	}{
 		{
-			name:             "no filters, resolve latest - all images advertised",
-			registryFilters:  []*regexp.Regexp{},
-			resolveLatestTag: true,
-			expectedImages:   []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
+			name:            "no filters",
+			registryFilters: []*regexp.Regexp{},
+			expectedImages:  []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
-			name:             "no filters, skip latest - only non-latest images advertised",
-			registryFilters:  []*regexp.Regexp{},
-			resolveLatestTag: false,
-			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
+			name:            "filter docker.io only",
+			registryFilters: []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`)},
+			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
-			name:             "nil filters, resolve latest - all images advertised",
-			registryFilters:  nil,
-			resolveLatestTag: true,
-			expectedImages:   []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
+			name:            "filter multiple registries",
+			registryFilters: []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`)},
+			expectedImages:  []string{"quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
-			name:             "nil filters, skip latest - only non-latest images advertised",
-			registryFilters:  nil,
-			resolveLatestTag: false,
-			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
-		},
-		{
-			name:             "filter docker.io only, resolve latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`)},
-			resolveLatestTag: true,
-			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
-		},
-		{
-			name:             "filter docker.io only, skip latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`)},
-			resolveLatestTag: false,
-			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
-		},
-		{
-			name:             "filter multiple registries, resolve latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`)},
-			resolveLatestTag: true,
-			expectedImages:   []string{"quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
-		},
-		{
-			name:             "filter multiple registries, skip latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`)},
-			resolveLatestTag: false,
-			expectedImages:   []string{},
-		},
-		{
-			name:             "filter all registries, resolve latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`), regexp.MustCompile(`^quay\.io/`), regexp.MustCompile(`^localhost:`)},
-			resolveLatestTag: true,
-			expectedImages:   []string{},
-		},
-		{
-			name:             "filter all registries, skip latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`), regexp.MustCompile(`^quay\.io/`), regexp.MustCompile(`^localhost:`)},
-			resolveLatestTag: false,
-			expectedImages:   []string{},
-		},
-		{
-			name:             "filter with case insensitive pattern, resolve latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`(?i)^docker\.io/`)},
-			resolveLatestTag: true,
-			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
-		},
-		{
-			name:             "filter with case insensitive pattern, skip latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`(?i)^docker\.io/`)},
-			resolveLatestTag: false,
-			expectedImages:   []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
-		},
-		{
-			name:             "filter with wildcard pattern, resolve latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`.*\.io/`)},
-			resolveLatestTag: true,
-			expectedImages:   []string{"localhost:5000/test:latest"},
-		},
-		{
-			name:             "filter with wildcard pattern, skip latest",
-			registryFilters:  []*regexp.Regexp{regexp.MustCompile(`.*\.io/`)},
-			resolveLatestTag: false,
-			expectedImages:   []string{},
+			name:            "filter latest tags",
+			registryFilters: []*regexp.Regexp{regexp.MustCompile(`:latest$`)},
+			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -163,7 +98,7 @@ func TestTrack(t *testing.T) {
 			router := routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.MustParseAddrPort("127.0.0.1:5000"))
 			g, gCtx := errgroup.WithContext(ctx)
 			g.Go(func() error {
-				return Track(gCtx, ociStore, router, WithRegistryFilters(tt.registryFilters), WithResolveLatestTag(tt.resolveLatestTag))
+				return Track(gCtx, ociStore, router, WithRegistryFilters(tt.registryFilters))
 			})
 			time.Sleep(100 * time.Millisecond)
 
@@ -174,20 +109,14 @@ func TestTrack(t *testing.T) {
 				require.Len(t, peers, 1)
 			}
 
-			// Check that only expected images are advertised by tag name
-			expectedTagNames := make(map[string]bool)
-			for _, expectedImg := range tt.expectedImages {
-				expectedTagNames[expectedImg] = true
-			}
-
+			// Check that images have been filtered
 			for _, img := range imgs {
 				tagName, ok := img.TagName()
 				if !ok {
 					continue
 				}
 				peers, ok := router.Lookup(tagName)
-				shouldBeAdvertised := expectedTagNames[tagName]
-
+				shouldBeAdvertised := slices.Contains(tt.expectedImages, tagName)
 				if shouldBeAdvertised {
 					require.True(t, ok, "Image %s should be advertised", tagName)
 					require.Len(t, peers, 1)

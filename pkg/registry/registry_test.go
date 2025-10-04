@@ -25,18 +25,14 @@ func TestRegistryOptions(t *testing.T) {
 	t.Parallel()
 
 	transport := &http.Transport{}
-	filterStrings := []string{"^docker\\.io/", "^gcr\\.io/"}
-	// Compile regex patterns
-	var filters []*regexp.Regexp
-	for _, pattern := range filterStrings {
-		if compiled, err := regexp.Compile(pattern); err == nil {
-			filters = append(filters, compiled)
-		}
+	filters := []*regexp.Regexp{
+		regexp.MustCompile(`^docker.io/`),
+		regexp.MustCompile(`^gcr.io/`),
 	}
+
 	opts := []RegistryOption{
 		WithResolveRetries(5),
 		WithRegistryFilters(filters),
-		WithResolveLatestTag(true),
 		WithResolveTimeout(10 * time.Minute),
 		WithTransport(transport),
 		WithBasicAuth("foo", "bar"),
@@ -46,7 +42,6 @@ func TestRegistryOptions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 5, cfg.ResolveRetries)
 	require.Equal(t, filters, cfg.Filters)
-	require.True(t, cfg.ResolveLatestTag)
 	require.Equal(t, 10*time.Minute, cfg.ResolveTimeout)
 	require.Equal(t, transport, cfg.Transport)
 	require.Equal(t, "foo", cfg.Username)

@@ -191,7 +191,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	// Registry
 	registryOpts := []registry.RegistryOption{
 		registry.WithRegistryFilters(args.RegistryFilters),
-		registry.WithResolveRetries(args.MirrorResolveRetries),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithBasicAuth(username, password),
 	}

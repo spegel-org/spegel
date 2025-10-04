@@ -18,19 +18,8 @@ func TestParseImageStrict(t *testing.T) {
 		expectedTag        string
 		expectedString     string
 		expectedDigest     digest.Digest
-		expectedIsLatest   bool
 		digestInImage      bool
 	}{
-		{
-			name:               "Latest tag",
-			image:              "library/ubuntu:latest",
-			digestInImage:      false,
-			expectedRepository: "library/ubuntu",
-			expectedTag:        "latest",
-			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
-			expectedIsLatest:   true,
-			expectedString:     "library/ubuntu:latest@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
-		},
 		{
 			name:               "Only tag",
 			image:              "library/alpine:3.18.0",
@@ -38,7 +27,6 @@ func TestParseImageStrict(t *testing.T) {
 			expectedRepository: "library/alpine",
 			expectedTag:        "3.18.0",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
-			expectedIsLatest:   false,
 			expectedString:     "library/alpine:3.18.0@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 		{
@@ -48,7 +36,6 @@ func TestParseImageStrict(t *testing.T) {
 			expectedRepository: "jetstack/cert-manager-controller",
 			expectedTag:        "3.18.0",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
-			expectedIsLatest:   false,
 			expectedString:     "jetstack/cert-manager-controller:3.18.0@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 		{
@@ -58,7 +45,6 @@ func TestParseImageStrict(t *testing.T) {
 			expectedRepository: "fluxcd/helm-controller",
 			expectedTag:        "",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
-			expectedIsLatest:   false,
 			expectedString:     "fluxcd/helm-controller@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 		{
@@ -67,7 +53,6 @@ func TestParseImageStrict(t *testing.T) {
 			digestInImage:      false,
 			expectedRepository: "foo/bar",
 			expectedDigest:     digest.Digest("sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda"),
-			expectedIsLatest:   false,
 			expectedString:     "foo/bar@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 	}
@@ -88,7 +73,6 @@ func TestParseImageStrict(t *testing.T) {
 					require.Equal(t, tt.expectedRepository, img.Repository)
 					require.Equal(t, tt.expectedTag, img.Tag)
 					require.Equal(t, tt.expectedDigest, img.Digest)
-					require.Equal(t, tt.expectedIsLatest, img.IsLatestTag())
 					tagName, ok := img.TagName()
 					if tt.expectedTag == "" {
 						require.False(t, ok)

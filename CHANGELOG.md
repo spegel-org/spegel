@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- [#1036](https://github.com/spegel-org/spegel/pull/1036) Remove is latest check in favor of registry filter.
+
 ### Fixed
 
 - [#1019](https://github.com/spegel-org/spegel/pull/1019) Fix media type strings to use constants.

@@ -16,19 +16,10 @@ import (
 )
 
 type TrackerConfig struct {
-	RegistryFilters  []*regexp.Regexp
-	ResolveLatestTag bool
+	RegistryFilters []*regexp.Regexp
 }
 
 type TrackerOption = option.Option[TrackerConfig]
-
-// Deprecated: Resolve latest tag is replaced by registry filter which offers more customizable behavior. Use the filter `:latest$` to achieve the same behavior.
-func WithResolveLatestTag(resolveLatestTag bool) TrackerOption {
-	return func(cfg *TrackerConfig) error {
-		cfg.ResolveLatestTag = resolveLatestTag
-		return nil
-	}
-}
 
 func WithRegistryFilters(registryFilters []*regexp.Regexp) TrackerOption {
 	return func(cfg *TrackerConfig) error {
@@ -38,9 +29,7 @@ func WithRegistryFilters(registryFilters []*regexp.Regexp) TrackerOption {
 }
 
 func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts ...TrackerOption) error {
-	cfg := TrackerConfig{
-		ResolveLatestTag: true,
-	}
+	cfg := TrackerConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return err
@@ -63,7 +52,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 			return ctx.Err()
 		case <-tickerCh:
 			log.Info("running state update")
-			err := tick(ctx, ociStore, router, cfg.RegistryFilters, cfg.ResolveLatestTag)
+			err := tick(ctx, ociStore, router, cfg.RegistryFilters)
 			if err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
@@ -82,7 +71,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 	}
 }
 
-func tick(ctx context.Context, ociStore oci.Store, router routing.Router, registryFilters []*regexp.Regexp, resolveLatest bool) error {
+func tick(ctx context.Context, ociStore oci.Store, router routing.Router, registryFilters []*regexp.Regexp) error {
 	advertisedImages := map[string]float64{}
 	advertisedImageDigests := map[string]float64{}
 	advertisedImageTags := map[string]float64{}
@@ -95,10 +84,6 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, regist
 	for _, img := range imgs {
 		advertisedImages[img.Registry] += 1
 		advertisedImageDigests[img.Registry] += 1
-
-		if !resolveLatest && img.IsLatestTag() {
-			continue
-		}
 
 		if oci.MatchesFilter(img.Reference, registryFilters) {
 			continue
