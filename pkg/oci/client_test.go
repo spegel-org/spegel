@@ -19,10 +19,8 @@ import (
 func TestClient(t *testing.T) {
 	t.Parallel()
 
-	img := Image{
-		Repository: "test/image",
-		Tag:        "latest",
-	}
+	img, err := ParseImage("docker.io/test/image:latest", AllowTagOnly())
+	require.NoError(t, err)
 
 	mem := ocimem.New()
 	blobs := []ocispec.Descriptor{
@@ -69,11 +67,13 @@ func TestClient(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, pullResults, 3)
 
-	dist := DistributionPath{
-		Kind:   DistributionKindBlob,
-		Name:   img.Repository,
-		Digest: blobs[0].Digest,
+	ref := Reference{
+		Registry:   img.Registry,
+		Repository: img.Repository,
+		Digest:     blobs[0].Digest,
 	}
+	dist, err := NewDistributionPath(ref, DistributionKindBlob)
+	require.NoError(t, err)
 	desc, err := client.Head(t.Context(), dist, WithFetchMirror(mirror))
 	require.NoError(t, err)
 	require.Equal(t, dist.Digest, desc.Digest)

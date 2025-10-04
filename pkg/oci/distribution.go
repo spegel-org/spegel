@@ -32,24 +32,29 @@ const (
 
 // DistributionPath contains the individual parameters from a OCI distribution spec request.
 type DistributionPath struct {
-	Kind     DistributionKind
-	Name     string
-	Digest   digest.Digest
-	Tag      string
-	Registry string
+	Reference
+	Kind DistributionKind
 }
 
-// Reference returns the digest if set or alternatively if not the full image reference with the tag.
-func (d DistributionPath) Reference() string {
-	if d.Digest != "" {
-		return d.Digest.String()
+func NewDistributionPath(ref Reference, kind DistributionKind) (DistributionPath, error) {
+	if err := ref.Validate(); err != nil {
+		return DistributionPath{}, err
 	}
-	return fmt.Sprintf("%s/%s:%s", d.Registry, d.Name, d.Tag)
+	if ref.Tag != "" && ref.Digest != "" {
+		return DistributionPath{}, errors.New("tag and digest cant both be set")
+	}
+	if kind == DistributionKindBlob && ref.Tag != "" {
+		return DistributionPath{}, errors.New("tag reference cannot be used for blobs")
+	}
+	dist := DistributionPath{
+		Kind:      kind,
+		Reference: ref,
+	}
+	return dist, nil
 }
 
-// IsLatestTag returns true if the tag has the value latest.
-func (d DistributionPath) IsLatestTag() bool {
-	return d.Tag == "latest"
+func (d DistributionPath) String() string {
+	return d.URL().String()
 }
 
 // URL returns the reconstructed URL containing the path and query parameters.
@@ -61,7 +66,7 @@ func (d DistributionPath) URL() *url.URL {
 	return &url.URL{
 		Scheme:   "https",
 		Host:     d.Registry,
-		Path:     fmt.Sprintf("/v2/%s/%s/%s", d.Name, d.Kind, ref),
+		Path:     fmt.Sprintf("/v2/%s/%s/%s", d.Repository, d.Kind, ref),
 		RawQuery: fmt.Sprintf("ns=%s", d.Registry),
 	}
 }
@@ -76,11 +81,14 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 		if registry == "" {
 			return DistributionPath{}, errors.New("registry parameter needs to be set for tag references")
 		}
-		dist := DistributionPath{
-			Kind:     DistributionKindManifest,
-			Name:     comps[1],
-			Tag:      comps[5],
-			Registry: registry,
+		ref := Reference{
+			Registry:   registry,
+			Repository: comps[1],
+			Tag:        comps[5],
+		}
+		dist, err := NewDistributionPath(ref, DistributionKindManifest)
+		if err != nil {
+			return DistributionPath{}, err
 		}
 		return dist, nil
 	}
@@ -90,11 +98,14 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 		if err != nil {
 			return DistributionPath{}, err
 		}
-		dist := DistributionPath{
-			Kind:     DistributionKindManifest,
-			Name:     comps[1],
-			Digest:   dgst,
-			Registry: registry,
+		ref := Reference{
+			Registry:   registry,
+			Repository: comps[1],
+			Digest:     dgst,
+		}
+		dist, err := NewDistributionPath(ref, DistributionKindManifest)
+		if err != nil {
+			return DistributionPath{}, err
 		}
 		return dist, nil
 	}
@@ -104,11 +115,14 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 		if err != nil {
 			return DistributionPath{}, err
 		}
-		dist := DistributionPath{
-			Kind:     DistributionKindBlob,
-			Name:     comps[1],
-			Digest:   dgst,
-			Registry: registry,
+		ref := Reference{
+			Registry:   registry,
+			Repository: comps[1],
+			Digest:     dgst,
+		}
+		dist, err := NewDistributionPath(ref, DistributionKindBlob)
+		if err != nil {
+			return DistributionPath{}, err
 		}
 		return dist, nil
 	}

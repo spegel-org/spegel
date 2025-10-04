@@ -147,13 +147,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 
 	pullMetrics := []PullMetric{}
 	queue := []DistributionPath{
-		{
-			Kind:     DistributionKindManifest,
-			Name:     img.Repository,
-			Digest:   img.Digest,
-			Tag:      img.Tag,
-			Registry: img.Registry,
-		},
+		img.DistributionPath(),
 	}
 	for len(queue) > 0 {
 		dist := queue[0]
@@ -194,10 +188,12 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 							continue
 						}
 						queue = append(queue, DistributionPath{
-							Kind:     DistributionKindManifest,
-							Name:     dist.Name,
-							Digest:   m.Digest,
-							Registry: dist.Registry,
+							Kind: DistributionKindManifest,
+							Reference: Reference{
+								Registry:   dist.Registry,
+								Repository: dist.Repository,
+								Digest:     m.Digest,
+							},
 						})
 					}
 				case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
@@ -207,17 +203,21 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 						return ocispec.Descriptor{}, err
 					}
 					queue = append(queue, DistributionPath{
-						Kind:     DistributionKindBlob,
-						Name:     dist.Name,
-						Digest:   manifest.Config.Digest,
-						Registry: dist.Registry,
+						Kind: DistributionKindBlob,
+						Reference: Reference{
+							Registry:   dist.Registry,
+							Repository: dist.Repository,
+							Digest:     manifest.Config.Digest,
+						},
 					})
 					for _, layer := range manifest.Layers {
 						queue = append(queue, DistributionPath{
-							Kind:     DistributionKindBlob,
-							Name:     dist.Name,
-							Digest:   layer.Digest,
-							Registry: dist.Registry,
+							Kind: DistributionKindBlob,
+							Reference: Reference{
+								Registry:   dist.Registry,
+								Repository: dist.Repository,
+								Digest:     layer.Digest,
+							},
 						})
 					}
 				}
@@ -271,7 +271,7 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 		return nil, ocispec.Descriptor{}, errors.New("cannot make range requests for manifests")
 	}
 
-	tcKey := dist.Registry + dist.Name
+	tcKey := dist.Registry + dist.Repository
 
 	u := dist.URL()
 	if cfg.Mirror != nil {
