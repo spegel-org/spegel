@@ -202,12 +202,9 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		rw.SetAttrs(RegistryAttrKey, dist.Registry)
 	}
 
-	// Apply registry filters to determine if the request should be mirrored.
-	for _, f := range r.filters {
-		if f.MatchString(dist.Identifier()) {
-			rw.WriteError(http.StatusNotFound, fmt.Errorf("request %s is filtered out by registry filters", dist.Identifier()))
-			return
-		}
+	if oci.MatchesFilter(dist.Reference, r.filters) {
+		rw.WriteError(http.StatusNotFound, fmt.Errorf("request %s is filtered out by registry filters", dist.String()))
+		return
 	}
 
 	// Request with mirror header are proxied.

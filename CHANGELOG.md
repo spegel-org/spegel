@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1030](https://github.com/spegel-org/spegel/pull/1030) Fix panic in debug web view when metrics are not set yet.
 - [#1033](https://github.com/spegel-org/spegel/pull/1033) Fix measuring pulls using digests in debug web view.
 - [#1032](https://github.com/spegel-org/spegel/pull/1032) Fix measuring pulls in debug web view with non default registry address configured.
+- [#1035](https://github.com/spegel-org/spegel/pull/1035) Implement single registry filter using reference.
 
 ### Security
 
