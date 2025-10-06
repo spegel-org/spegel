@@ -251,138 +251,126 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		oci.DistributionKindManifest: oci.ErrCodeManifestUnknown,
 	}[dist.Kind]
 
-	// Resolve mirror with the requested reference
-	resolveCtx, resolveCancel := context.WithTimeout(req.Context(), r.resolveTimeout)
-	defer resolveCancel()
-	peerCh, err := r.router.Resolve(resolveCtx, dist.Identifier(), r.resolveRetries)
-	if err != nil {
-		respErr := oci.NewDistributionError(errCode, "unable to resolve peers", mirrorDetails)
-		rw.WriteError(http.StatusNotFound, respErr)
-		return
-	}
-
 	// Resume range for when blobs fail midway through copying.
 	var resumeRng *httpx.Range
 
-	for {
-		select {
-		case <-req.Context().Done():
-			// Request has been closed by server or client, no use continuing.
-			respErr := oci.NewDistributionError(errCode, "mirroring for image component has been cancelled", mirrorDetails)
-			rw.WriteError(http.StatusNotFound, errors.Join(respErr, req.Context().Err()))
+	lookupCtx, lookupCancel := context.WithTimeout(req.Context(), r.resolveTimeout)
+	defer lookupCancel()
+	balancer, err := r.router.Lookup(lookupCtx, dist.Identifier(), r.resolveRetries)
+	if err != nil {
+		respErr := oci.NewDistributionError(errCode, fmt.Sprintf("lookup failed for %s", dist.Identifier()), mirrorDetails)
+		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
+		return
+	}
+	for range r.resolveRetries {
+		peer, err := balancer.Next()
+		if err != nil {
+			respErr := oci.NewDistributionError(errCode, fmt.Sprintf("could not find peer for %s", dist.Identifier()), mirrorDetails)
+			rw.WriteError(http.StatusNotFound, errors.Join(respErr, lookupCtx.Err()))
 			return
-		case peer, ok := <-peerCh:
-			// Channel closed means no more mirrors will be received and max retries has been reached.
-			if !ok {
-				msg := fmt.Sprintf("mirror with image component %s could not be found", dist.Identifier())
-				if mirrorDetails.Attempts > 0 {
-					msg = fmt.Sprintf("%s requests to %d mirrors failed, all attempts have been exhausted or timeout has been reached", msg, mirrorDetails.Attempts)
+		}
+
+		mirrorDetails.Attempts += 1
+
+		mirror := &url.URL{
+			Scheme: "http",
+			Host:   peer.String(),
+		}
+		if req.TLS != nil {
+			mirror.Scheme = "https"
+		}
+		fetchOpts := []oci.FetchOption{
+			oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
+			oci.WithFetchMirror(mirror),
+			oci.WithFetchBasicAuth(r.username, r.password),
+		}
+		// Override range header with resume range if set.
+		if resumeRng != nil {
+			fetchOpts = append(fetchOpts, oci.WithFetchRange(*resumeRng))
+		} else if h := req.Header.Get(httpx.HeaderRange); h != "" {
+			fetchOpts = append(fetchOpts, oci.WithFetchHeader(httpx.HeaderRange, h))
+		}
+
+		done := func() bool {
+			log := log.WithValues("attempt", mirrorDetails.Attempts, "path", req.URL.Path, "mirror", peer)
+
+			fetchCtx := req.Context()
+			if req.Method == http.MethodHead {
+				var reqCancel context.CancelFunc
+				fetchCtx, reqCancel = context.WithTimeout(req.Context(), 1*time.Second)
+				defer reqCancel()
+			} else if req.Method == http.MethodGet && dist.Kind == oci.DistributionKindManifest {
+				var reqCancel context.CancelFunc
+				fetchCtx, reqCancel = context.WithTimeout(req.Context(), 2*time.Second)
+				defer reqCancel()
+			}
+
+			rc, desc, err := r.ociClient.Fetch(fetchCtx, req.Method, dist, fetchOpts...)
+			if err != nil {
+				log.Error(err, "request to mirror failed, retryign with next")
+				balancer.Remove(peer)
+				return false
+			}
+			defer httpx.DrainAndClose(rc)
+
+			if !rw.HeadersWritten() {
+				oci.WriteDescriptorToHeader(desc, rw.Header())
+
+				switch dist.Kind {
+				case oci.DistributionKindManifest:
+					rw.WriteHeader(http.StatusOK)
+				case oci.DistributionKindBlob:
+					rng, err := httpx.ParseRangeHeader(req.Header, desc.Size)
+					if err != nil {
+						rw.WriteError(http.StatusBadRequest, err)
+						return true
+					}
+					resumeRng = rng
+
+					rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
+					if rng == nil {
+						rw.WriteHeader(http.StatusOK)
+					} else {
+						rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
+						rw.Header().Set(httpx.HeaderContentRange, httpx.ContentRangeFromRange(*rng, desc.Size).String())
+						rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(rng.Size(), 10))
+						rw.WriteHeader(http.StatusPartialContent)
+					}
 				}
-				respErr := oci.NewDistributionError(errCode, msg, mirrorDetails)
-				rw.WriteError(http.StatusNotFound, errors.Join(respErr, resolveCtx.Err()))
-				return
+			}
+			if req.Method == http.MethodHead {
+				return true
 			}
 
-			mirrorDetails.Attempts++
-
-			mirror := &url.URL{
-				Scheme: "http",
-				Host:   peer.String(),
-			}
-			if req.TLS != nil {
-				mirror.Scheme = "https"
-			}
-
-			fetchOpts := []oci.FetchOption{
-				oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
-				oci.WithFetchMirror(mirror),
-				oci.WithFetchBasicAuth(r.username, r.password),
-			}
-
-			// Override range header with resume range if set.
-			if resumeRng != nil {
-				fetchOpts = append(fetchOpts, oci.WithFetchRange(*resumeRng))
-			} else if h := req.Header.Get(httpx.HeaderRange); h != "" {
-				fetchOpts = append(fetchOpts, oci.WithFetchHeader(httpx.HeaderRange, h))
-			}
-
-			done := func() bool {
-				log := log.WithValues("attempt", mirrorDetails.Attempts, "path", req.URL.Path, "mirror", peer)
-
-				fetchCtx := req.Context()
-				if req.Method == http.MethodHead {
-					var reqCancel context.CancelFunc
-					fetchCtx, reqCancel = context.WithTimeout(req.Context(), 1*time.Second)
-					defer reqCancel()
-				} else if req.Method == http.MethodGet && dist.Kind == oci.DistributionKindManifest {
-					var reqCancel context.CancelFunc
-					fetchCtx, reqCancel = context.WithTimeout(req.Context(), 2*time.Second)
-					defer reqCancel()
-				}
-
-				rc, desc, err := r.ociClient.Fetch(fetchCtx, req.Method, dist, fetchOpts...)
-				if err != nil {
-					log.Error(err, "request to mirror failed, retryign with next")
+			//nolint: errcheck // Ignore
+			buf := r.bufferPool.Get().(*[]byte)
+			defer r.bufferPool.Put(buf)
+			n, err := io.CopyBuffer(rw, rc, *buf)
+			if err != nil {
+				switch dist.Kind {
+				case oci.DistributionKindManifest:
+					log.Error(err, "copying of manifest data failed")
+					return true
+				case oci.DistributionKindBlob:
+					if resumeRng == nil {
+						resumeRng = &httpx.Range{
+							End: desc.Size - 1,
+						}
+					}
+					resumeRng.Start += n
+					log.Error(err, "copying of blob data failed, retrying with offset")
 					return false
 				}
-				defer httpx.DrainAndClose(rc)
-
-				if !rw.HeadersWritten() {
-					oci.WriteDescriptorToHeader(desc, rw.Header())
-
-					switch dist.Kind {
-					case oci.DistributionKindManifest:
-						rw.WriteHeader(http.StatusOK)
-					case oci.DistributionKindBlob:
-						rng, err := httpx.ParseRangeHeader(req.Header, desc.Size)
-						if err != nil {
-							rw.WriteError(http.StatusBadRequest, err)
-							return true
-						}
-						resumeRng = rng
-
-						rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
-						if rng == nil {
-							rw.WriteHeader(http.StatusOK)
-						} else {
-							rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
-							rw.Header().Set(httpx.HeaderContentRange, httpx.ContentRangeFromRange(*rng, desc.Size).String())
-							rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(rng.Size(), 10))
-							rw.WriteHeader(http.StatusPartialContent)
-						}
-					}
-				}
-				if req.Method == http.MethodHead {
-					return true
-				}
-
-				//nolint: errcheck // Ignore
-				buf := r.bufferPool.Get().(*[]byte)
-				defer r.bufferPool.Put(buf)
-				n, err := io.CopyBuffer(rw, rc, *buf)
-				if err != nil {
-					switch dist.Kind {
-					case oci.DistributionKindManifest:
-						log.Error(err, "copying of manifest data failed")
-						return true
-					case oci.DistributionKindBlob:
-						if resumeRng == nil {
-							resumeRng = &httpx.Range{
-								End: desc.Size - 1,
-							}
-						}
-						resumeRng.Start += n
-						log.Error(err, "copying of blob data failed, retrying with offset")
-						return false
-					}
-				}
-				return true
-			}()
-			if done {
-				return
 			}
+			return true
+		}()
+		if done {
+			return
 		}
 	}
+
+	respErr := oci.NewDistributionError(errCode, fmt.Sprintf("all request retries exhausted for %s", dist.Identifier()), mirrorDetails)
+	rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 }
 
 func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {

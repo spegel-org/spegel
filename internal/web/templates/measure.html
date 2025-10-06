@@ -1,5 +1,5 @@
-{{ if .PeerResults }}
-<h3>Resolved Peers</h3>
+{{ if .LookupResults }}
+<h3>Lookup Result</h3>
 <div style="margin-bottom: 10px;">
   <strong>Duration:</strong> {{ .PeerDuration | formatDuration }}
 </div>
@@ -10,7 +10,7 @@
       <th style="width: 50%;">Duration</th>
     </tr>
 
-    {{ range .PeerResults }}
+    {{ range .LookupResults }}
     <tr>
       <td>{{ .Peer.Addr }}</td>
       <td>{{ .Duration | formatDuration }}</td>
@@ -19,7 +19,7 @@
   </table>
 </div>
 
-<h3>Result</h3>
+<h3>Pull Result</h3>
 <div style="margin-bottom: 10px;">
   <strong>Duration:</strong> {{ .PullDuration | formatDuration }}
   <strong>Size:</strong> {{ .PullSize | formatBytes }}
