@@ -1,6 +1,7 @@
 package routing
 
 import (
+	"context"
 	"errors"
 	"net/netip"
 	"slices"
@@ -13,6 +14,8 @@ var ErrNoNext = errors.New("no peers available for selection")
 type Balancer interface {
 	// Next returns the next peer.
 	Next() (netip.AddrPort, error)
+	// Size returns the amount of peers.
+	Size() int
 	// Add adds a peer to the balancer.
 	Add(netip.AddrPort)
 	// Remove removes the peer from the balancer.
@@ -78,15 +81,18 @@ var _ Balancer = &ClosableBalancer{}
 
 type ClosableBalancer struct {
 	Balancer
-	closed    chan any
+	closeCtx  context.Context
+	closeFunc context.CancelFunc
 	waiters   []chan any
 	waitersMx sync.Mutex
 }
 
 func NewClosableBalancer(balancer Balancer) *ClosableBalancer {
+	closeCtx, closeFunc := context.WithCancel(context.Background())
 	return &ClosableBalancer{
-		Balancer: balancer,
-		closed:   make(chan any),
+		Balancer:  balancer,
+		closeCtx:  closeCtx,
+		closeFunc: closeFunc,
 	}
 }
 
@@ -111,7 +117,7 @@ func (cb *ClosableBalancer) Next() (netip.AddrPort, error) {
 			cb.waitersMx.Unlock()
 
 			select {
-			case <-cb.closed:
+			case <-cb.closeCtx.Done():
 				return netip.AddrPort{}, ErrNoNext
 			case <-ch:
 				continue
@@ -126,5 +132,5 @@ func (cb *ClosableBalancer) Next() (netip.AddrPort, error) {
 }
 
 func (cb *ClosableBalancer) Close() {
-	close(cb.closed)
+	cb.closeFunc()
 }
