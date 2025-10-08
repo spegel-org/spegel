@@ -13,13 +13,13 @@ import (
 )
 
 var (
-	nameRegexStr        = `([a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*)`
+	repoRegexStr        = `([a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*(?:\/[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*)*)`
 	tagRegexStr         = `([a-zA-Z0-9_][a-zA-Z0-9._-]{0,127})`
-	nameRegex           = regexp.MustCompile(`^` + nameRegexStr + `$`)
+	repoRegex           = regexp.MustCompile(`^` + repoRegexStr + `$`)
 	tagRegex            = regexp.MustCompile(`^` + tagRegexStr + `$`)
-	manifestRegexTag    = regexp.MustCompile(`/v2/` + nameRegexStr + `/manifests/` + tagRegexStr + `$`)
-	manifestRegexDigest = regexp.MustCompile(`/v2/` + nameRegexStr + `/manifests/(.*)`)
-	blobsRegexDigest    = regexp.MustCompile(`/v2/` + nameRegexStr + `/blobs/(.*)`)
+	manifestRegexTag    = regexp.MustCompile(`/v2/` + repoRegexStr + `/manifests/` + tagRegexStr + `$`)
+	manifestRegexDigest = regexp.MustCompile(`/v2/` + repoRegexStr + `/manifests/(.*)`)
+	blobsRegexDigest    = regexp.MustCompile(`/v2/` + repoRegexStr + `/blobs/(.*)`)
 )
 
 // DistributionKind represents the kind of content.
@@ -77,14 +77,14 @@ func (d DistributionPath) URL() *url.URL {
 func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 	registry := u.Query().Get("ns")
 	comps := manifestRegexTag.FindStringSubmatch(u.Path)
-	if len(comps) == 6 {
+	if len(comps) == 3 {
 		if registry == "" {
 			return DistributionPath{}, errors.New("registry parameter needs to be set for tag references")
 		}
 		ref := Reference{
 			Registry:   registry,
 			Repository: comps[1],
-			Tag:        comps[5],
+			Tag:        comps[2],
 		}
 		dist, err := NewDistributionPath(ref, DistributionKindManifest)
 		if err != nil {
@@ -93,8 +93,8 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 		return dist, nil
 	}
 	comps = manifestRegexDigest.FindStringSubmatch(u.Path)
-	if len(comps) == 6 {
-		dgst, err := digest.Parse(comps[5])
+	if len(comps) == 3 {
+		dgst, err := digest.Parse(comps[2])
 		if err != nil {
 			return DistributionPath{}, err
 		}
@@ -110,8 +110,8 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 		return dist, nil
 	}
 	comps = blobsRegexDigest.FindStringSubmatch(u.Path)
-	if len(comps) == 6 {
-		dgst, err := digest.Parse(comps[5])
+	if len(comps) == 3 {
+		dgst, err := digest.Parse(comps[2])
 		if err != nil {
 			return DistributionPath{}, err
 		}

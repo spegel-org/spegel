@@ -52,6 +52,26 @@ func TestParseDistributionPath(t *testing.T) {
 			expectedRef:  "sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
 			expectedKind: DistributionKindBlob,
 		},
+		{
+			name:         "manifest with consecutive dashes",
+			registry:     "example.com",
+			path:         "/v2/hello-static-empty--0ix3q/manifests/latest",
+			expectedName: "hello-static-empty--0ix3q",
+			expectedDgst: "",
+			expectedTag:  "latest",
+			expectedRef:  "example.com/hello-static-empty--0ix3q:latest",
+			expectedKind: DistributionKindManifest,
+		},
+		{
+			name:         "manifest with consecutive dashes and underscores",
+			registry:     "example.com",
+			path:         "/v2/test/foo__bar------test_baz/manifests/latest",
+			expectedName: "test/foo__bar------test_baz",
+			expectedDgst: "",
+			expectedTag:  "latest",
+			expectedRef:  "example.com/test/foo__bar------test_baz:latest",
+			expectedKind: DistributionKindManifest,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -120,6 +140,13 @@ func TestParseDistributionPathErrors(t *testing.T) {
 				Path: "/v2/spegel-org/spegel/manifests/sha253:foobar",
 			},
 			expectedError: "unsupported digest algorithm",
+		},
+		{
+			name: "manifest with more than two underscores",
+			url: &url.URL{
+				Path: "/v2/foo___bar/manifests/dev",
+			},
+			expectedError: "distribution path could not be parsed",
 		},
 	}
 	for _, tt := range tests {
