@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	cid "github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -30,6 +31,7 @@ import (
 	mc "github.com/multiformats/go-multicodec"
 	mh "github.com/multiformats/go-multihash"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/metrics"
@@ -61,11 +63,13 @@ func WithDataDir(dataDir string) P2PRouterOption {
 var _ Router = &P2PRouter{}
 
 type P2PRouter struct {
-	bootstrapper Bootstrapper
-	host         host.Host
-	kdht         *dht.IpfsDHT
-	rd           *routing.RoutingDiscovery
-	registryPort uint16
+	bootstrapper  Bootstrapper
+	host          host.Host
+	kdht          *dht.IpfsDHT
+	rd            *routing.RoutingDiscovery
+	balancerGroup *singleflight.Group
+	balancerCache *expirable.LRU[string, *ClosableBalancer]
+	registryPort  uint16
 }
 
 func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
@@ -143,11 +147,13 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 	rd := routing.NewRoutingDiscovery(kdht)
 
 	return &P2PRouter{
-		bootstrapper: bs,
-		host:         host,
-		kdht:         kdht,
-		rd:           rd,
-		registryPort: uint16(registryPort),
+		bootstrapper:  bs,
+		host:          host,
+		kdht:          kdht,
+		rd:            rd,
+		registryPort:  uint16(registryPort),
+		balancerGroup: &singleflight.Group{},
+		balancerCache: expirable.NewLRU[string, *ClosableBalancer](0, nil, 5*time.Second),
 	}, nil
 }
 
@@ -200,38 +206,66 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer
 		return nil, err
 	}
 
-	cb := NewClosableBalancer(NewRoundRobin())
-	addrInfoCh := r.rd.FindProvidersAsync(ctx, c, count)
-	go func() {
-		defer cb.Close()
-
-		lookupTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
-		for addrInfo := range addrInfoCh {
-			lookupTimer.ObserveDuration()
-			if len(addrInfo.Addrs) != 1 {
-				addrs := []string{}
-				for _, addr := range addrInfo.Addrs {
-					addrs = append(addrs, addr.String())
-				}
-				log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
-				continue
-			}
-
-			ip, err := manet.ToIP(addrInfo.Addrs[0])
-			if err != nil {
-				log.Error(err, "could not get IP address")
-				continue
-			}
-			ipAddr, ok := netip.AddrFromSlice(ip)
-			if !ok {
-				log.Error(errors.New("IP is not IPV4 or IPV6"), "could not convert IP")
-				continue
-			}
-			peer := netip.AddrPortFrom(ipAddr, r.registryPort)
-			cb.Add(peer)
+	bal, err, _ := r.balancerGroup.Do(c.String(), func() (any, error) {
+		cb, ok := r.balancerCache.Get(c.String())
+		if !ok {
+			cb = NewClosableBalancer(NewRoundRobin())
+			r.balancerCache.Add(c.String(), cb)
 		}
-	}()
-	return cb, nil
+
+		// Don't refresh if min count is already met.
+		if cb.Size() >= count {
+			return cb, nil
+		}
+
+		if ok {
+			// If not closed it means query is still running.
+			if cb.closeCtx.Err() == nil {
+				return cb, nil
+			}
+
+			// If we are running a refresh query we ant a new closer.
+			cb = NewClosableBalancer(cb.Balancer)
+			r.balancerCache.Add(c.String(), cb)
+		}
+
+		addrInfoCh := r.rd.FindProvidersAsync(ctx, c, count)
+		go func() {
+			defer cb.Close()
+
+			lookupTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
+			for addrInfo := range addrInfoCh {
+				lookupTimer.ObserveDuration()
+				if len(addrInfo.Addrs) != 1 {
+					addrs := []string{}
+					for _, addr := range addrInfo.Addrs {
+						addrs = append(addrs, addr.String())
+					}
+					log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
+					continue
+				}
+
+				ip, err := manet.ToIP(addrInfo.Addrs[0])
+				if err != nil {
+					log.Error(err, "could not get IP address")
+					continue
+				}
+				ipAddr, ok := netip.AddrFromSlice(ip)
+				if !ok {
+					log.Error(errors.New("IP is not IPV4 or IPV6"), "could not convert IP")
+					continue
+				}
+				peer := netip.AddrPortFrom(ipAddr, r.registryPort)
+				cb.Add(peer)
+			}
+		}()
+		return cb, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	//nolint: errcheck // Impossible to be another type other than Balancer.
+	return bal.(Balancer), nil
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
