@@ -182,7 +182,7 @@ func parseImage(s string) (string, string, string, digest.Digest, error) {
 	comps[len(comps)-1] = last
 
 	repository := strings.Join(comps, "/")
-	if !nameRegex.MatchString(repository) {
+	if !repoRegex.MatchString(repository) {
 		return "", "", "", "", fmt.Errorf("repository %s is invalid", repository)
 	}
 
