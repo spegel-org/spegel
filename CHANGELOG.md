@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - [#1036](https://github.com/spegel-org/spegel/pull/1036) Remove is latest check in favor of registry filter.
+- [#1044](https://github.com/spegel-org/spegel/pull/1044) Remove unused routing discovery.
 
 ### Fixed
 

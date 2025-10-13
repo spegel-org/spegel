@@ -25,7 +25,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/sec"
-	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
@@ -66,7 +65,6 @@ type P2PRouter struct {
 	bootstrapper  Bootstrapper
 	host          host.Host
 	kdht          *dht.IpfsDHT
-	rd            *routing.RoutingDiscovery
 	balancerGroup *singleflight.Group
 	balancerCache *expirable.LRU[string, *ClosableBalancer]
 	registryPort  uint16
@@ -144,13 +142,11 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 	if err != nil {
 		return nil, fmt.Errorf("could not create distributed hash table: %w", err)
 	}
-	rd := routing.NewRoutingDiscovery(kdht)
 
 	return &P2PRouter{
 		bootstrapper:  bs,
 		host:          host,
 		kdht:          kdht,
-		rd:            rd,
 		registryPort:  uint16(registryPort),
 		balancerGroup: &singleflight.Group{},
 		balancerCache: expirable.NewLRU[string, *ClosableBalancer](0, nil, 5*time.Second),
@@ -229,7 +225,7 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer
 			r.balancerCache.Add(c.String(), cb)
 		}
 
-		addrInfoCh := r.rd.FindProvidersAsync(ctx, c, count)
+		addrInfoCh := r.kdht.FindProvidersAsync(ctx, c, count)
 		go func() {
 			defer cb.Close()
 
@@ -275,7 +271,7 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 		if err != nil {
 			return err
 		}
-		err = r.rd.Provide(ctx, c, false)
+		err = r.kdht.Provide(ctx, c, false)
 		if err != nil {
 			return err
 		}
