@@ -15,7 +15,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | daemonsetAnnotations | object | `{}` | Annotations to add to the DaemonSet. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
 | grafanaDashboard.annotations | object | `{}` | Annotations to add to the Sidecar configMap or GrafanaDashboard. |
-| grafanaDashboard.enabled | bool | `true` | If true creates a Grafana dashboard. |
+| grafanaDashboard.enabled | bool | `false` | If true creates a Grafana dashboard. |
 | grafanaDashboard.grafanaOperator.allowCrossNamespaceImport | bool | `true` | If true allows for a Grafana in any namespace to access this GrafanaDashboard. |
 | grafanaDashboard.grafanaOperator.folder | string | `""` | Folder to create the dashboard in. |
 | grafanaDashboard.grafanaOperator.matchLabels | object | `{}` | Selected labels for Grafana instance. |

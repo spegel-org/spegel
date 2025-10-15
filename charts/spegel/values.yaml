@@ -128,7 +128,7 @@ serviceMonitor:
 
 grafanaDashboard:
   # -- If true creates a Grafana dashboard.
-  enabled: true
+  enabled: false
   # -- Mode for Grafana dashboard creation. Valid values are `Sidecar` and `GrafanaOperator`.
   mode: Sidecar
   # -- Labels to add to the Sidecar configMap or GrafanaDashboard.
