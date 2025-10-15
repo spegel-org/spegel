@@ -13,7 +13,7 @@ func TestMatchesFilter(t *testing.T) {
 	tests := []struct {
 		name     string
 		ref      Reference
-		filters  []*regexp.Regexp
+		filters  []Filter
 		expected bool
 	}{
 		{
@@ -22,7 +22,7 @@ func TestMatchesFilter(t *testing.T) {
 				Registry:   "docker.io",
 				Repository: "library/ubuntu",
 			},
-			filters:  []*regexp.Regexp{regexp.MustCompile("^docker.io")},
+			filters:  []Filter{RegexFilter{regexp.MustCompile("^docker.io")}},
 			expected: true,
 		},
 		{
@@ -31,7 +31,7 @@ func TestMatchesFilter(t *testing.T) {
 				Registry:   "docker.io",
 				Repository: "library/ubuntu",
 			},
-			filters:  []*regexp.Regexp{regexp.MustCompile("^ghcr.io")},
+			filters:  []Filter{RegexFilter{regexp.MustCompile("^ghcr.io")}},
 			expected: false,
 		},
 		{
@@ -41,7 +41,7 @@ func TestMatchesFilter(t *testing.T) {
 				Repository: "library/ubuntu",
 				Tag:        "latest",
 			},
-			filters:  []*regexp.Regexp{regexp.MustCompile(":latest$")},
+			filters:  []Filter{RegexFilter{regexp.MustCompile(":latest$")}},
 			expected: true,
 		},
 	}

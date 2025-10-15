@@ -3,7 +3,6 @@ package state
 import (
 	"context"
 	"errors"
-	"regexp"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -16,14 +15,14 @@ import (
 )
 
 type TrackerConfig struct {
-	RegistryFilters []*regexp.Regexp
+	Filters []oci.Filter
 }
 
 type TrackerOption = option.Option[TrackerConfig]
 
-func WithRegistryFilters(registryFilters []*regexp.Regexp) TrackerOption {
+func WithRegistryFilters(filters []oci.Filter) TrackerOption {
 	return func(cfg *TrackerConfig) error {
-		cfg.RegistryFilters = registryFilters
+		cfg.Filters = filters
 		return nil
 	}
 }
@@ -52,7 +51,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 			return ctx.Err()
 		case <-tickerCh:
 			log.Info("running state update")
-			err := tick(ctx, ociStore, router, cfg.RegistryFilters)
+			err := tick(ctx, ociStore, router, cfg.Filters)
 			if err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
@@ -71,7 +70,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 	}
 }
 
-func tick(ctx context.Context, ociStore oci.Store, router routing.Router, registryFilters []*regexp.Regexp) error {
+func tick(ctx context.Context, ociStore oci.Store, router routing.Router, filters []oci.Filter) error {
 	advertisedImages := map[string]float64{}
 	advertisedImageDigests := map[string]float64{}
 	advertisedImageTags := map[string]float64{}
@@ -82,7 +81,7 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, regist
 		return err
 	}
 	for _, img := range imgs {
-		if oci.MatchesFilter(img.Reference, registryFilters) {
+		if oci.MatchesFilter(img.Reference, filters) {
 			continue
 		}
 		tagName, ok := img.TagName()
@@ -105,7 +104,7 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, regist
 	}
 	for _, refs := range contents {
 		// TODO(phillebaba): Apply filtering on parent image tag.
-		if allReferencesMatchFilter(refs, registryFilters) {
+		if allReferencesMatchFilter(refs, filters) {
 			continue
 		}
 		err := router.Advertise(ctx, []string{refs[0].Digest.String()})
@@ -143,7 +142,7 @@ func handle(ctx context.Context, router routing.Router, event oci.OCIEvent) erro
 	return nil
 }
 
-func allReferencesMatchFilter(refs []oci.Reference, filters []*regexp.Regexp) bool {
+func allReferencesMatchFilter(refs []oci.Reference, filters []oci.Filter) bool {
 	for _, ref := range refs {
 		if !oci.MatchesFilter(ref, filters) {
 			return false
