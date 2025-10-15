@@ -82,36 +82,38 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, regist
 		return err
 	}
 	for _, img := range imgs {
-		advertisedImages[img.Registry] += 1
-		advertisedImageDigests[img.Registry] += 1
-
 		if oci.MatchesFilter(img.Reference, registryFilters) {
 			continue
 		}
-
 		tagName, ok := img.TagName()
-		if !ok {
-			continue
+		if ok {
+			err := router.Advertise(ctx, []string{tagName})
+			if err != nil {
+				return err
+			}
+			advertisedImageTags[img.Registry] += 1
+			advertisedKeys[img.Registry] += 1
 		}
-		err := router.Advertise(ctx, []string{tagName})
-		if err != nil {
-			return err
-		}
-		advertisedImageTags[img.Registry] += 1
+		advertisedImages[img.Registry] += 1
+		advertisedImageDigests[img.Registry] += 1
 		advertisedKeys[img.Registry] += 1
 	}
 
-	contents, err := ociStore.ListContents(ctx)
+	contents, err := ociStore.ListContent(ctx)
 	if err != nil {
 		return err
 	}
-	for _, content := range contents {
-		err := router.Advertise(ctx, []string{content.Digest.String()})
+	for _, refs := range contents {
+		// TODO(phillebaba): Apply filtering on parent image tag.
+		if allReferencesMatchFilter(refs, registryFilters) {
+			continue
+		}
+		err := router.Advertise(ctx, []string{refs[0].Digest.String()})
 		if err != nil {
 			return err
 		}
-		for _, registry := range content.Registires {
-			advertisedKeys[registry] += 1
+		for _, ref := range refs {
+			advertisedKeys[ref.Registry] += 1
 		}
 	}
 
@@ -139,4 +141,13 @@ func handle(ctx context.Context, router routing.Router, event oci.OCIEvent) erro
 		return err
 	}
 	return nil
+}
+
+func allReferencesMatchFilter(refs []oci.Reference, filters []*regexp.Regexp) bool {
+	for _, ref := range refs {
+		if !oci.MatchesFilter(ref, filters) {
+			return false
+		}
+	}
+	return true
 }

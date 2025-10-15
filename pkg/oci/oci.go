@@ -35,11 +35,6 @@ type OCIEvent struct {
 	Key  string
 }
 
-type Content struct {
-	Digest     digest.Digest
-	Registires []string
-}
-
 type Store interface {
 	// Name returns the name of the store implementation.
 	Name() string
@@ -53,8 +48,8 @@ type Store interface {
 	// ListImages returns a list of all local images.
 	ListImages(ctx context.Context) ([]Image, error)
 
-	// ListContents returns a list of all the contents.
-	ListContents(ctx context.Context) ([]Content, error)
+	// ListContent returns a list of references for all the content.
+	ListContent(ctx context.Context) ([][]Reference, error)
 
 	// Resolve returns the digest for the tagged image name reference.
 	// The ref is expected to be in the format `registry/name:tag`.

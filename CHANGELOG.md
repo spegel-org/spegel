@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1032](https://github.com/spegel-org/spegel/pull/1032) Fix measuring pulls in debug web view with non default registry address configured.
 - [#1035](https://github.com/spegel-org/spegel/pull/1035) Implement single registry filter using reference.
 - [#1040](https://github.com/spegel-org/spegel/pull/1040) Fix distribution regex to support consecutive dashes and underscores.
+- [#1048](https://github.com/spegel-org/spegel/pull/1048) Implement filtering of content in state tracking.
 
 ### Security
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/containerd/containerd/v2/pkg/filters"
 	"github.com/go-logr/logr"
+	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
@@ -164,25 +165,27 @@ func TestBackupConfig(t *testing.T) {
 	require.Len(t, files, 1)
 }
 
-func TestParseContentRegistries(t *testing.T) {
+func TestContentLabelsToReferences(t *testing.T) {
 	t.Parallel()
 
+	dgst := digest.Digest("foo")
 	tests := []struct {
 		name     string
 		labels   map[string]string
-		expected []string
+		expected []Reference
 	}{
-		{
-			name:     "no labels",
-			labels:   map[string]string{},
-			expected: []string{},
-		},
 		{
 			name: "one matching",
 			labels: map[string]string{
 				"containerd.io/distribution.source.docker.io": "library/alpine",
 			},
-			expected: []string{"docker.io"},
+			expected: []Reference{
+				{
+					Registry:   "docker.io",
+					Repository: "library/alpine",
+					Digest:     dgst,
+				},
+			},
 		},
 		{
 			name: "multiple matching",
@@ -190,18 +193,32 @@ func TestParseContentRegistries(t *testing.T) {
 				"containerd.io/distribution.source.example.com": "foo",
 				"containerd.io/distribution.source.ghcr.io":     "spegel-org/spegel",
 			},
-			expected: []string{"ghcr.io", "example.com"},
+			expected: []Reference{
+				{
+					Registry:   "ghcr.io",
+					Repository: "spegel-org/spegel",
+					Digest:     dgst,
+				},
+				{
+					Registry:   "example.com",
+					Repository: "foo",
+					Digest:     dgst,
+				},
+			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(t.Name(), func(t *testing.T) {
 			t.Parallel()
 
-			registries := parseContentRegistries(tt.labels)
-			require.ElementsMatch(t, tt.expected, registries)
+			refs, err := contentLabelsToReferences(tt.labels, dgst)
+			require.NoError(t, err)
+			require.ElementsMatch(t, tt.expected, refs)
 		})
 	}
+
+	_, err := contentLabelsToReferences(map[string]string{}, dgst)
+	require.EqualError(t, err, "no distribution source labels found for foo")
 }
 
 func TestFeaturesForVersion(t *testing.T) {
