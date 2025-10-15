@@ -320,19 +320,19 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	return imgs, nil
 }
 
-func (c *Containerd) ListContents(ctx context.Context) ([]Content, error) {
+func (c *Containerd) ListContent(ctx context.Context) ([][]Reference, error) {
 	client, err := c.Client()
 	if err != nil {
 		return nil, err
 	}
-	contents := []Content{}
+	contents := [][]Reference{}
 	err = client.ContentStore().Walk(ctx, func(i content.Info) error {
-		registries := parseContentRegistries(i.Labels)
-		content := Content{
-			Digest:     i.Digest,
-			Registires: registries,
+		refs, err := contentLabelsToReferences(i.Labels, i.Digest)
+		if err != nil {
+			logr.FromContextOrDiscard(ctx).Error(err, "skipping content that cant be converted to reference")
+			return nil
 		}
-		contents = append(contents, content)
+		contents = append(contents, refs)
 		return nil
 	}, c.contentFilter...)
 	if err != nil {
@@ -493,15 +493,23 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 	}
 }
 
-func parseContentRegistries(l map[string]string) []string {
-	registries := []string{}
-	for k := range l {
+func contentLabelsToReferences(l map[string]string, dgst digest.Digest) ([]Reference, error) {
+	refs := []Reference{}
+	for k, v := range l {
 		if !strings.HasPrefix(k, labels.LabelDistributionSource) {
 			continue
 		}
-		registries = append(registries, strings.TrimPrefix(k, labels.LabelDistributionSource+"."))
+		ref := Reference{
+			Registry:   strings.TrimPrefix(k, labels.LabelDistributionSource+"."),
+			Repository: v,
+			Digest:     dgst,
+		}
+		refs = append(refs, ref)
 	}
-	return registries
+	if len(refs) == 0 {
+		return nil, fmt.Errorf("no distribution source labels found for %s", dgst)
+	}
+	return refs, nil
 }
 
 func createFilters(parsedMirroredRegistries []url.URL) ([]string, []string, []string) {

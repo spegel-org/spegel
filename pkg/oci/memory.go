@@ -50,13 +50,13 @@ func (m *Memory) ListImages(ctx context.Context) ([]Image, error) {
 	return m.images, nil
 }
 
-func (m *Memory) ListContents(ctx context.Context) ([]Content, error) {
+func (m *Memory) ListContent(ctx context.Context) ([][]Reference, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
-	contents := []Content{}
+	contents := [][]Reference{}
 	for k := range m.blobs {
-		contents = append(contents, Content{Digest: k})
+		contents = append(contents, []Reference{{Digest: k}})
 	}
 	return contents, nil
 }
