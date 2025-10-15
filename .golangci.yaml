@@ -7,7 +7,6 @@ linters:
     - govet
     - importas
     - ineffassign
-    - ireturn
     - misspell
     - nolintlint
     - paralleltest
