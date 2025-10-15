@@ -63,27 +63,27 @@ func TestTrack(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		registryFilters []*regexp.Regexp
+		registryFilters []oci.Filter
 		expectedImages  []string
 	}{
 		{
 			name:            "no filters",
-			registryFilters: []*regexp.Regexp{},
+			registryFilters: []oci.Filter{},
 			expectedImages:  []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
 			name:            "filter docker.io only",
-			registryFilters: []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`)},
+			registryFilters: []oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`^docker\.io/`)}},
 			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
 			name:            "filter multiple registries",
-			registryFilters: []*regexp.Regexp{regexp.MustCompile(`^docker\.io/`), regexp.MustCompile(`^ghcr\.io/`)},
+			registryFilters: []oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`^docker\.io/`)}, oci.RegexFilter{Regex: regexp.MustCompile(`^ghcr\.io/`)}},
 			expectedImages:  []string{"quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
 		},
 		{
 			name:            "filter latest tags",
-			registryFilters: []*regexp.Regexp{regexp.MustCompile(`:latest$`)},
+			registryFilters: []oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}},
 			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
 		},
 	}
