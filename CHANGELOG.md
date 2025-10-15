@@ -23,7 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1034](https://github.com/spegel-org/spegel/pull/1034) Refactor to use shared reference in image and distribution path.
 - [#1037](https://github.com/spegel-org/spegel/pull/1037) Change to returning balancer from router lookups.
 - [#1039](https://github.com/spegel-org/spegel/pull/1039) Add caching for balancers to reduce duplicate queries.
-  
+- [#1046](https://github.com/spegel-org/spegel/pull/1046) Add GrafanaDashboard option to Helm chart.
+
 ### Deprecated
 
 ### Removed

@@ -14,10 +14,14 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | commonLabels | object | `{}` | Common labels to apply to all rendered resources. |
 | daemonsetAnnotations | object | `{}` | Annotations to add to the DaemonSet. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
-| grafanaDashboard.annotations | object | `{}` | Annotations that ConfigMaps can have to get configured in Grafana, See: sidecar.dashboards.folderAnnotation for specifying the dashboard folder. https://github.com/grafana/helm-charts/tree/main/charts/grafana |
-| grafanaDashboard.enabled | bool | `false` | If true creates a Grafana dashboard. |
-| grafanaDashboard.sidecarLabel | string | `"grafana_dashboard"` | Label that ConfigMaps should have to be loaded as dashboards. |
-| grafanaDashboard.sidecarLabelValue | string | `"1"` | Label value that ConfigMaps should have to be loaded as dashboards. |
+| grafanaDashboard.annotations | object | `{}` | Annotations to add to the Sidecar configMap or GrafanaDashboard. |
+| grafanaDashboard.enabled | bool | `true` | If true creates a Grafana dashboard. |
+| grafanaDashboard.grafanaOperator.allowCrossNamespaceImport | bool | `true` | If true allows for a Grafana in any namespace to access this GrafanaDashboard. |
+| grafanaDashboard.grafanaOperator.folder | string | `""` | Folder to create the dashboard in. |
+| grafanaDashboard.grafanaOperator.matchLabels | object | `{}` | Selected labels for Grafana instance. |
+| grafanaDashboard.grafanaOperator.resyncPeriod | string | `"10m"` | Resync period for the Grafana operator to check for updates to the dashboard. |
+| grafanaDashboard.labels | object | `{}` | Labels to add to the Sidecar configMap or GrafanaDashboard. |
+| grafanaDashboard.mode | string | `"Sidecar"` | Mode for Grafana dashboard creation. Valid values are `Sidecar` and `GrafanaOperator`. |
 | image.digest | string | `""` | Image digest. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image Pull Policy. |
 | image.repository | string | `"ghcr.io/spegel-org/spegel"` | Image repository. |
