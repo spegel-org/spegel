@@ -139,7 +139,15 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	if err != nil {
 		return err
 	}
+
 	filters := []oci.Filter{}
+	regFilter, err := oci.FilterForMirroredRegistries(args.MirroredRegistries)
+	if err != nil {
+		return err
+	}
+	if regFilter != nil {
+		filters = append(filters, *regFilter)
+	}
 	for _, r := range args.RegistryFilters {
 		filters = append(filters, oci.RegexFilter{Regex: r})
 	}
@@ -154,7 +162,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 
 	// OCI Store
-	ociStore, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, args.MirroredRegistries, oci.WithContentPath(args.ContainerdContentPath))
+	ociStore, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, oci.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
 		return err
 	}

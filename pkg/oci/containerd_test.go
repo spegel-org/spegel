@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/containerd/containerd/v2/pkg/filters"
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
@@ -271,50 +270,6 @@ func TestFeaturesForVersion(t *testing.T) {
 	}
 }
 
-func TestCreateFilter(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name                  string
-		expectedImageFilter   []string
-		expectedEventFilter   []string
-		expectedContentFilter []string
-		registries            []string
-	}{
-		{
-			name:                  "with registry filtering",
-			registries:            []string{"https://docker.io", "https://gcr.io"},
-			expectedImageFilter:   []string{`name~="^(docker\\.io|gcr\\.io)/"`},
-			expectedEventFilter:   []string{`topic~="/images/create|/images/delete",event.name~="^(docker\\.io|gcr\\.io)/"`, `topic~="/content/create"`},
-			expectedContentFilter: []string{`labels."containerd.io/distribution.source.docker.io"~="^."`, `labels."containerd.io/distribution.source.gcr.io"~="^."`},
-		},
-		{
-			name:                  "without registry filtering",
-			registries:            []string{},
-			expectedImageFilter:   []string{`name~="^.+/"`},
-			expectedEventFilter:   []string{`topic~="/images/create|/images/delete",event.name~="^.+/"`, `topic~="/content/create"`},
-			expectedContentFilter: []string{},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			imageFilter, eventFilter, contentFilter := createFilters(stringListToUrlList(t, tt.registries))
-
-			require.Equal(t, tt.expectedImageFilter, imageFilter)
-			_, err := filters.ParseAll(imageFilter...)
-			require.NoError(t, err)
-			require.Equal(t, tt.expectedEventFilter, eventFilter)
-			_, err = filters.ParseAll(eventFilter...)
-			require.NoError(t, err)
-			require.Equal(t, tt.expectedContentFilter, contentFilter)
-			_, err = filters.ParseAll(contentFilter...)
-			require.NoError(t, err)
-		})
-	}
-}
-
 func TestMirrorConfiguration(t *testing.T) {
 	t.Parallel()
 
@@ -367,7 +322,7 @@ dial_timeout = '200ms'`,
 		{
 			name:               "default is explicitly set",
 			resolveTags:        true,
-			mirroredRegistries: []string{wildcardRegistryMirrors[0]},
+			mirroredRegistries: []string{wildcardRegistries[0]},
 			mirrorTargets:      []string{"http://127.0.0.1:5000"},
 			prependExisting:    false,
 			expectedFiles: map[string]string{
@@ -664,29 +619,6 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 	}
 }
 
-func TestMirrorConfigurationInvalidMirrorURL(t *testing.T) {
-	t.Parallel()
-
-	configPath := filepath.Join(t.TempDir(), "etc", "containerd", "certs.d")
-	mirrorTargets := []string{"http://127.0.0.1:5000"}
-
-	mirroredRegistries := []string{"ftp://docker.io"}
-	err := AddMirrorConfiguration(t.Context(), configPath, mirroredRegistries, mirrorTargets, true, false, "", "")
-	require.EqualError(t, err, "invalid registry url scheme must be http or https: ftp://docker.io")
-
-	mirroredRegistries = []string{"https://docker.io/foo/bar"}
-	err = AddMirrorConfiguration(t.Context(), configPath, mirroredRegistries, mirrorTargets, true, false, "", "")
-	require.EqualError(t, err, "invalid registry url path has to be empty: https://docker.io/foo/bar")
-
-	mirroredRegistries = []string{"https://docker.io?foo=bar"}
-	err = AddMirrorConfiguration(t.Context(), configPath, mirroredRegistries, mirrorTargets, true, false, "", "")
-	require.EqualError(t, err, "invalid registry url query has to be empty: https://docker.io?foo=bar")
-
-	mirroredRegistries = []string{"https://foo@docker.io"}
-	err = AddMirrorConfiguration(t.Context(), configPath, mirroredRegistries, mirrorTargets, true, false, "", "")
-	require.EqualError(t, err, "invalid registry url user has to be empty: https://foo@docker.io")
-}
-
 func TestExistingHosts(t *testing.T) {
 	t.Parallel()
 
@@ -794,16 +726,4 @@ func TestCleanupMirrorConfiguration(t *testing.T) {
 		require.Len(t, files, 1)
 		require.Equal(t, "data.txt", files[0].Name())
 	}
-}
-
-func stringListToUrlList(t *testing.T, list []string) []url.URL {
-	t.Helper()
-
-	urls := []url.URL{}
-	for _, item := range list {
-		u, err := url.Parse(item)
-		require.NoError(t, err)
-		urls = append(urls, *u)
-	}
-	return urls
 }
