@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1039](https://github.com/spegel-org/spegel/pull/1039) Add caching for balancers to reduce duplicate queries.
 - [#1049](https://github.com/spegel-org/spegel/pull/1049) Refactor filters to support more than only regex.
 - [#1047](https://github.com/spegel-org/spegel/pull/1047) Refactor mirrored registries to be applied with registry filters.
+- [#1046](https://github.com/spegel-org/spegel/pull/1046) Add GrafanaDashboard option to Helm chart.
   
 ### Deprecated
 
