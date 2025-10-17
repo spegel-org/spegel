@@ -195,7 +195,7 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) { //nolint: ireturn // Ignore.
+func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) {
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
 	c, err := createCid(key)
 	if err != nil {

@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 	"text/template"
 
@@ -20,7 +19,6 @@ import (
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/events"
-	"github.com/containerd/containerd/v2/pkg/filters"
 	"github.com/containerd/containerd/v2/pkg/labels"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
@@ -39,10 +37,6 @@ import (
 
 const (
 	backupDir = "_backup"
-)
-
-var (
-	wildcardRegistryMirrors = []string{"_default", "*"}
 )
 
 type Feature uint32
@@ -87,29 +81,20 @@ func WithContentPath(path string) ContainerdOption {
 var _ Store = &Containerd{}
 
 type Containerd struct {
-	contentPath        string
-	registryConfigPath string
 	client             *client.Client
 	clientGetter       func() (*client.Client, error)
 	mtCache            *lru.Cache[digest.Digest, string]
 	features           *Feature
-	imageFilter        []string
-	eventFilter        []string
-	contentFilter      []string
+	contentPath        string
+	registryConfigPath string
 }
 
-func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistries []string, opts ...ContainerdOption) (*Containerd, error) {
+func NewContainerd(sock, namespace, registryConfigPath string, opts ...ContainerdOption) (*Containerd, error) {
 	cfg := ContainerdConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
-
-	parsedMirroredRegistries, err := parseMirroredRegistries(mirroredRegistries)
-	if err != nil {
-		return nil, err
-	}
-	imageFilter, eventFilter, contentFilter := createFilters(parsedMirroredRegistries)
 
 	mtCache, err := lru.New[digest.Digest, string](100)
 	if err != nil {
@@ -121,9 +106,6 @@ func NewContainerd(sock, namespace, registryConfigPath string, mirroredRegistrie
 		clientGetter: func() (*client.Client, error) {
 			return client.New(sock, client.WithDefaultNamespace(namespace))
 		},
-		imageFilter:        imageFilter,
-		eventFilter:        eventFilter,
-		contentFilter:      contentFilter,
 		registryConfigPath: registryConfigPath,
 		mtCache:            mtCache,
 	}
@@ -271,7 +253,8 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 
 	ctx, cancel := context.WithCancel(ctx)
 	eventCh := make(chan OCIEvent)
-	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, c.eventFilter...)
+	eventFilters := []string{`topic~="/images/create|/images/delete",event.name~="^.+/"`, `topic~="/content/create"`}
+	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, eventFilters...)
 	go func() {
 		defer close(eventCh)
 		for {
@@ -305,7 +288,9 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	cImgs, err := client.ListImages(ctx, c.imageFilter...)
+	// Filter out image names that are just sha sums.
+	imageFilter := `name~="^.+/"`
+	cImgs, err := client.ListImages(ctx, imageFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -320,21 +305,21 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	return imgs, nil
 }
 
-func (c *Containerd) ListContents(ctx context.Context) ([]Content, error) {
+func (c *Containerd) ListContent(ctx context.Context) ([][]Reference, error) {
 	client, err := c.Client()
 	if err != nil {
 		return nil, err
 	}
-	contents := []Content{}
+	contents := [][]Reference{}
 	err = client.ContentStore().Walk(ctx, func(i content.Info) error {
-		registries := parseContentRegistries(i.Labels)
-		content := Content{
-			Digest:     i.Digest,
-			Registires: registries,
+		refs, err := contentLabelsToReferences(i.Labels, i.Digest)
+		if err != nil {
+			logr.FromContextOrDiscard(ctx).Error(err, "skipping content that cant be converted to reference")
+			return nil
 		}
-		contents = append(contents, content)
+		contents = append(contents, refs)
 		return nil
-	}, c.contentFilter...)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -430,11 +415,6 @@ func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekC
 }
 
 func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope) ([]OCIEvent, error) {
-	client, err := c.Client()
-	if err != nil {
-		return nil, err
-	}
-
 	if envelope.Event == nil {
 		return nil, errors.New("envelope event cannot be nil")
 	}
@@ -444,21 +424,6 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 	}
 	switch e := evt.(type) {
 	case *eventtypes.ContentCreate:
-		filter, err := filters.ParseAll(c.contentFilter...)
-		if err != nil {
-			return nil, err
-		}
-		dgst, err := digest.Parse(e.GetDigest())
-		if err != nil {
-			return nil, err
-		}
-		info, err := client.ContentStore().Info(ctx, dgst)
-		if err != nil {
-			return nil, err
-		}
-		if !filter.Match(content.AdaptInfo(info)) {
-			return nil, nil
-		}
 		return []OCIEvent{{Type: CreateEvent, Key: e.GetDigest()}}, nil
 	case *eventtypes.ImageCreate:
 		img, err := ParseImage(e.GetName(), AllowTagOnly())
@@ -493,34 +458,23 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 	}
 }
 
-func parseContentRegistries(l map[string]string) []string {
-	registries := []string{}
-	for k := range l {
+func contentLabelsToReferences(l map[string]string, dgst digest.Digest) ([]Reference, error) {
+	refs := []Reference{}
+	for k, v := range l {
 		if !strings.HasPrefix(k, labels.LabelDistributionSource) {
 			continue
 		}
-		registries = append(registries, strings.TrimPrefix(k, labels.LabelDistributionSource+"."))
+		ref := Reference{
+			Registry:   strings.TrimPrefix(k, labels.LabelDistributionSource+"."),
+			Repository: v,
+			Digest:     dgst,
+		}
+		refs = append(refs, ref)
 	}
-	return registries
-}
-
-func createFilters(parsedMirroredRegistries []url.URL) ([]string, []string, []string) {
-	registryHosts := []string{}
-	for _, registry := range parsedMirroredRegistries {
-		registryHosts = append(registryHosts, strings.ReplaceAll(registry.Host, `.`, `\\.`))
+	if len(refs) == 0 {
+		return nil, fmt.Errorf("no distribution source labels found for %s", dgst)
 	}
-	imageFilter := fmt.Sprintf(`name~="^(%s)/"`, strings.Join(registryHosts, "|"))
-	if len(registryHosts) == 0 {
-		// Filter images that do not have a registry in it's reference,
-		// as we cant mirror images without registries.
-		imageFilter = `name~="^.+/"`
-	}
-	eventFilter := fmt.Sprintf(`topic~="/images/create|/images/delete",event.%s`, imageFilter)
-	contentFilters := []string{}
-	for _, registry := range parsedMirroredRegistries {
-		contentFilters = append(contentFilters, fmt.Sprintf(`labels."%s.%s"~="^."`, labels.LabelDistributionSource, registry.Host))
-	}
-	return []string{imageFilter}, []string{eventFilter, `topic~="/content/create"`}, contentFilters
+	return refs, nil
 }
 
 // Refer to containerd registry configuration documentation for more information about required configuration.
@@ -530,14 +484,11 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 	log := logr.FromContextOrDiscard(ctx)
 
 	// Parse and verify mirror urls.
-	if len(mirroredRegistries) == 0 {
-		mirroredRegistries = append(mirroredRegistries, wildcardRegistryMirrors[0])
-	}
-	parsedMirroredRegistries, err := parseMirroredRegistries(mirroredRegistries)
+	parsedMirroredRegistries, err := parseRegistries(mirroredRegistries, true)
 	if err != nil {
 		return err
 	}
-	parsedMirrorTargets, err := parseMirrorTargets(mirrorTargets)
+	parsedMirrorTargets, err := parseRegistries(mirrorTargets, false)
 	if err != nil {
 		return err
 	}
@@ -634,59 +585,6 @@ func CleanupMirrorConfiguration(ctx context.Context, configPath string) error {
 	return nil
 }
 
-func parseMirroredRegistries(mirroredRegistries []string) ([]url.URL, error) {
-	mru := []url.URL{}
-	for _, s := range mirroredRegistries {
-		if slices.Contains(wildcardRegistryMirrors, s) {
-			mru = append(mru, url.URL{Host: wildcardRegistryMirrors[0]})
-			continue
-		}
-		u, err := url.Parse(s)
-		if err != nil {
-			return nil, err
-		}
-		err = validateRegistry(u)
-		if err != nil {
-			return nil, err
-		}
-		mru = append(mru, *u)
-	}
-	return mru, nil
-}
-
-func parseMirrorTargets(mirroredTargets []string) ([]url.URL, error) {
-	mru := []url.URL{}
-	for _, s := range mirroredTargets {
-		u, err := url.Parse(s)
-		if err != nil {
-			return nil, err
-		}
-		err = validateRegistry(u)
-		if err != nil {
-			return nil, err
-		}
-		mru = append(mru, *u)
-	}
-	return mru, nil
-}
-
-func validateRegistry(u *url.URL) error {
-	errs := []error{}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		errs = append(errs, fmt.Errorf("invalid registry url scheme must be http or https: %s", u.String()))
-	}
-	if u.Path != "" {
-		errs = append(errs, fmt.Errorf("invalid registry url path has to be empty: %s", u.String()))
-	}
-	if len(u.Query()) != 0 {
-		errs = append(errs, fmt.Errorf("invalid registry url query has to be empty: %s", u.String()))
-	}
-	if u.User != nil {
-		errs = append(errs, fmt.Errorf("invalid registry url user has to be empty: %s", u.String()))
-	}
-	return errors.Join(errs...)
-}
-
 func backupConfig(log logr.Logger, configPath string) error {
 	backupDirPath := path.Join(configPath, backupDir)
 	ok, err := dirExists(backupDirPath)
@@ -739,7 +637,7 @@ func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, 
 	if parsedMirrorRegistry.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
 	}
-	if slices.Contains(wildcardRegistryMirrors, parsedMirrorRegistry.Host) {
+	if parsedMirrorRegistry == wildcardRegistryURL {
 		server = ""
 	}
 

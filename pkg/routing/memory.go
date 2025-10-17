@@ -29,7 +29,7 @@ func (m *MemoryRouter) Ready(ctx context.Context) (bool, error) {
 	return len(m.resolver) > 0, nil
 }
 
-func (m *MemoryRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) { //nolint: ireturn // Ignore.
+func (m *MemoryRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 

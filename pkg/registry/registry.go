@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -32,7 +31,7 @@ type RegistryConfig struct {
 	Transport      http.RoundTripper
 	Username       string
 	Password       string
-	Filters        []*regexp.Regexp
+	Filters        []oci.Filter
 	ResolveTimeout time.Duration
 	ResolveRetries int
 }
@@ -46,7 +45,7 @@ func WithResolveRetries(resolveRetries int) RegistryOption {
 	}
 }
 
-func WithRegistryFilters(filters []*regexp.Regexp) RegistryOption {
+func WithRegistryFilters(filters []oci.Filter) RegistryOption {
 	return func(cfg *RegistryConfig) error {
 		cfg.Filters = filters
 		return nil
@@ -82,7 +81,7 @@ type Registry struct {
 	router         routing.Router
 	username       string
 	password       string
-	filters        []*regexp.Regexp
+	filters        []oci.Filter
 	resolveTimeout time.Duration
 	resolveRetries int
 }

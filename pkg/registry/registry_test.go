@@ -25,9 +25,9 @@ func TestRegistryOptions(t *testing.T) {
 	t.Parallel()
 
 	transport := &http.Transport{}
-	filters := []*regexp.Regexp{
-		regexp.MustCompile(`^docker.io/`),
-		regexp.MustCompile(`^gcr.io/`),
+	filters := []oci.Filter{
+		oci.RegexFilter{Regex: regexp.MustCompile(`^docker.io/`)},
+		oci.RegexFilter{Regex: regexp.MustCompile(`^gcr.io/`)},
 	}
 
 	opts := []RegistryOption{
@@ -203,7 +203,7 @@ func TestRegistryHandler(t *testing.T) {
 		"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83": {goodAddrPort},
 	}
 	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
-	reg, err := NewRegistry(oci.NewMemory(), router, WithRegistryFilters([]*regexp.Regexp{regexp.MustCompile(`:latest$`)}))
+	reg, err := NewRegistry(oci.NewMemory(), router, WithRegistryFilters([]oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}}))
 	require.NoError(t, err)
 	handler := reg.Handler(logr.Discard())
 

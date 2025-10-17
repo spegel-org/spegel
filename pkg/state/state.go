@@ -3,7 +3,6 @@ package state
 import (
 	"context"
 	"errors"
-	"regexp"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -16,14 +15,14 @@ import (
 )
 
 type TrackerConfig struct {
-	RegistryFilters []*regexp.Regexp
+	Filters []oci.Filter
 }
 
 type TrackerOption = option.Option[TrackerConfig]
 
-func WithRegistryFilters(registryFilters []*regexp.Regexp) TrackerOption {
+func WithRegistryFilters(filters []oci.Filter) TrackerOption {
 	return func(cfg *TrackerConfig) error {
-		cfg.RegistryFilters = registryFilters
+		cfg.Filters = filters
 		return nil
 	}
 }
@@ -52,7 +51,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 			return ctx.Err()
 		case <-tickerCh:
 			log.Info("running state update")
-			err := tick(ctx, ociStore, router, cfg.RegistryFilters)
+			err := tick(ctx, ociStore, router, cfg.Filters)
 			if err != nil {
 				log.Error(err, "received errors when updating all images")
 				continue
@@ -71,7 +70,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 	}
 }
 
-func tick(ctx context.Context, ociStore oci.Store, router routing.Router, registryFilters []*regexp.Regexp) error {
+func tick(ctx context.Context, ociStore oci.Store, router routing.Router, filters []oci.Filter) error {
 	advertisedImages := map[string]float64{}
 	advertisedImageDigests := map[string]float64{}
 	advertisedImageTags := map[string]float64{}
@@ -82,36 +81,38 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, regist
 		return err
 	}
 	for _, img := range imgs {
+		if oci.MatchesFilter(img.Reference, filters) {
+			continue
+		}
+		tagName, ok := img.TagName()
+		if ok {
+			err := router.Advertise(ctx, []string{tagName})
+			if err != nil {
+				return err
+			}
+			advertisedImageTags[img.Registry] += 1
+			advertisedKeys[img.Registry] += 1
+		}
 		advertisedImages[img.Registry] += 1
 		advertisedImageDigests[img.Registry] += 1
-
-		if oci.MatchesFilter(img.Reference, registryFilters) {
-			continue
-		}
-
-		tagName, ok := img.TagName()
-		if !ok {
-			continue
-		}
-		err := router.Advertise(ctx, []string{tagName})
-		if err != nil {
-			return err
-		}
-		advertisedImageTags[img.Registry] += 1
 		advertisedKeys[img.Registry] += 1
 	}
 
-	contents, err := ociStore.ListContents(ctx)
+	contents, err := ociStore.ListContent(ctx)
 	if err != nil {
 		return err
 	}
-	for _, content := range contents {
-		err := router.Advertise(ctx, []string{content.Digest.String()})
+	for _, refs := range contents {
+		// TODO(phillebaba): Apply filtering on parent image tag.
+		if allReferencesMatchFilter(refs, filters) {
+			continue
+		}
+		err := router.Advertise(ctx, []string{refs[0].Digest.String()})
 		if err != nil {
 			return err
 		}
-		for _, registry := range content.Registires {
-			advertisedKeys[registry] += 1
+		for _, ref := range refs {
+			advertisedKeys[ref.Registry] += 1
 		}
 	}
 
@@ -139,4 +140,13 @@ func handle(ctx context.Context, router routing.Router, event oci.OCIEvent) erro
 		return err
 	}
 	return nil
+}
+
+func allReferencesMatchFilter(refs []oci.Reference, filters []oci.Filter) bool {
+	for _, ref := range refs {
+		if !oci.MatchesFilter(ref, filters) {
+			return false
+		}
+	}
+	return true
 }
