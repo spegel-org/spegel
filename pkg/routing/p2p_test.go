@@ -2,7 +2,6 @@ package routing
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -11,11 +10,12 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/spegel-org/spegel/internal/option"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spegel-org/spegel/internal/option"
 )
 
 func TestP2PRouterOptions(t *testing.T) {
@@ -38,35 +38,57 @@ func TestP2PRouterOptions(t *testing.T) {
 func TestP2PRouter(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(t.Context())
-
-	bs := NewStaticBootstrapper(nil)
-	router, err := NewP2PRouter(ctx, "localhost:0", bs, "9090")
-	require.NoError(t, err)
-
+	log := tlog.NewTestLogger(t)
+	ctx := logr.NewContext(t.Context(), log)
+	ctx, cancel := context.WithCancel(ctx)
 	g, gCtx := errgroup.WithContext(ctx)
+
+	firstBs := NewStaticBootstrapper(nil)
+	firstRouter, err := NewP2PRouter(ctx, "localhost:0", firstBs, "9090")
+	require.NoError(t, err)
 	g.Go(func() error {
-		return router.Run(gCtx)
+		return firstRouter.Run(gCtx)
 	})
 
-	// TODO (phillebaba): There is a test flake that sometime occurs sometimes if code runs too fast.
-	// Flake results in a peer being returned without an address. Revisit in Go 1.24 to see if this can be solved better.
-	time.Sleep(1 * time.Second)
+	// Router will never be ready because it cant bootstrap.
+	ready, err := firstRouter.Ready(t.Context())
+	require.NoError(t, err)
+	require.False(t, ready)
+
+	// Start new router and verify readiness.
+	secondBs := NewStaticBootstrapper([]peer.AddrInfo{*host.InfoFromHost(firstRouter.host)})
+	secondRouter, err := NewP2PRouter(ctx, "localhost:0", secondBs, "9090")
+	require.NoError(t, err)
+	g.Go(func() error {
+		return secondRouter.Run(gCtx)
+	})
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		// First router should be ready because second connected.
+		ready, err = firstRouter.Ready(t.Context())
+		require.NoError(c, err)
+		require.True(c, ready)
+
+		// Second router should be ready because it bootstrapped.
+		ready, err = secondRouter.Ready(t.Context())
+		require.NoError(c, err)
+		require.True(c, ready)
+	}, 10*time.Second, time.Second)
 
 	// Advertise nil keys.
-	err = router.Advertise(ctx, nil)
+	err = firstRouter.Advertise(ctx, nil)
 	require.NoError(t, err)
 
 	// Lookup key that does not exist.
-	rr, err := router.Lookup(ctx, "foo", 1)
+	rr, err := firstRouter.Lookup(ctx, "foo", 1)
 	require.NoError(t, err)
 	_, err = rr.Next()
 	require.ErrorIs(t, err, ErrNoNext)
 
 	// Advertise and then resolve the key.
-	err = router.Advertise(ctx, []string{"foo"})
+	err = firstRouter.Advertise(ctx, []string{"foo"})
 	require.NoError(t, err)
-	rr, err = router.Lookup(ctx, "foo", 1)
+	rr, err = firstRouter.Lookup(ctx, "foo", 1)
 	require.NoError(t, err)
 	peer, err := rr.Next()
 	require.NoError(t, err)
@@ -75,111 +97,6 @@ func TestP2PRouter(t *testing.T) {
 	cancel()
 	err = g.Wait()
 	require.NoError(t, err)
-}
-
-func TestReady(t *testing.T) {
-	t.Parallel()
-
-	bs := NewStaticBootstrapper(nil)
-	router, err := NewP2PRouter(t.Context(), "localhost:0", bs, "9090")
-	require.NoError(t, err)
-
-	// Should not be ready if no peers are found.
-	isReady, err := router.Ready(t.Context())
-	require.NoError(t, err)
-	require.False(t, isReady)
-
-	// Should be ready if only peer is host.
-	bs.SetPeers([]peer.AddrInfo{*host.InfoFromHost(router.host)})
-	isReady, err = router.Ready(t.Context())
-	require.NoError(t, err)
-	require.True(t, isReady)
-
-	// Shouldd be not ready with multiple peers but empty routing table.
-	bs.SetPeers([]peer.AddrInfo{{}, {}})
-	isReady, err = router.Ready(t.Context())
-	require.NoError(t, err)
-	require.False(t, isReady)
-
-	// Should be ready with multiple peers and populated routing table.
-	newPeer, err := router.kdht.RoutingTable().GenRandPeerID(0)
-	require.NoError(t, err)
-	ok, err := router.kdht.RoutingTable().TryAddPeer(newPeer, false, false)
-	require.NoError(t, err)
-	require.True(t, ok)
-	bs.SetPeers([]peer.AddrInfo{{}, {}})
-	isReady, err = router.Ready(t.Context())
-	require.NoError(t, err)
-	require.True(t, isReady)
-}
-
-func TestBootstrapFunc(t *testing.T) {
-	t.Parallel()
-
-	log := tlog.NewTestLogger(t)
-	ctx := logr.NewContext(t.Context(), log)
-
-	mn, err := mocknet.WithNPeers(2)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name     string
-		peers    []peer.AddrInfo
-		expected []string
-	}{
-		{
-			name:     "no peers",
-			peers:    []peer.AddrInfo{},
-			expected: []string{},
-		},
-		{
-			name: "nothing missing",
-			peers: []peer.AddrInfo{
-				{
-					ID:    "foo",
-					Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1/tcp/8080")},
-				},
-			},
-			expected: []string{"/ip4/192.168.1.1/tcp/8080/p2p/foo"},
-		},
-		{
-			name: "only self",
-			peers: []peer.AddrInfo{
-				{
-					ID:    mn.Hosts()[0].ID(),
-					Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1/tcp/8080")},
-				},
-			},
-			expected: []string{},
-		},
-		{
-			name: "missing port",
-			peers: []peer.AddrInfo{
-				{
-					ID:    "foo",
-					Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
-				},
-			},
-			expected: []string{"/ip4/192.168.1.1/tcp/4242/p2p/foo"},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			bs := NewStaticBootstrapper(tt.peers)
-			f := bootstrapFunc(ctx, bs, mn.Hosts()[0])
-			peers := f()
-
-			peerStrs := []string{}
-			for _, p := range peers {
-				id, err := p.ID.Marshal()
-				require.NoError(t, err)
-				peerStrs = append(peerStrs, fmt.Sprintf("%s/p2p/%s", p.Addrs[0].String(), string(id)))
-			}
-			require.ElementsMatch(t, tt.expected, peerStrs)
-		})
-	}
 }
 
 func TestListenMultiaddrs(t *testing.T) {
