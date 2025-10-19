@@ -188,7 +188,11 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		return err
 	}
 	g.Go(func() error {
-		return router.Run(ctx)
+		err := router.Run(ctx)
+		if err != nil {
+			return err
+		}
+		return nil
 	})
 
 	// State tracking
