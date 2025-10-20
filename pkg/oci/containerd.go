@@ -430,9 +430,14 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 		if err != nil {
 			return nil, err
 		}
-		// Pull by tag creates an event only for the tag. We dont get content to avoid advertising twice.
+		events := []OCIEvent{}
 		if img.Digest == "" {
-			return []OCIEvent{{Type: CreateEvent, Key: e.GetName()}}, nil
+			events = append(events, OCIEvent{Type: CreateEvent, Key: e.GetName()})
+			dgst, err := c.Resolve(ctx, img.String())
+			if err != nil {
+				return nil, err
+			}
+			img.Digest = dgst
 		}
 		// If Containerd supports content events we can skip walking the image.
 		feats, err := c.Features(ctx)
@@ -440,13 +445,12 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 			return nil, err
 		}
 		if feats.Has(FeatureContentEvent) {
-			return nil, nil
+			return events, nil
 		}
 		dgsts, err := WalkImage(ctx, c, img)
 		if err != nil {
 			return nil, fmt.Errorf("could not get digests for image %s: %w", img.String(), err)
 		}
-		events := []OCIEvent{}
 		for _, dgst := range dgsts {
 			events = append(events, OCIEvent{Type: CreateEvent, Key: dgst.String()})
 		}
