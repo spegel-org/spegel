@@ -67,6 +67,7 @@ func (f Feature) String() string {
 
 type ContainerdConfig struct {
 	ContentPath string
+	Verify      bool
 }
 
 type ContainerdOption = option.Option[ContainerdConfig]
@@ -78,22 +79,44 @@ func WithContentPath(path string) ContainerdOption {
 	}
 }
 
+func WithSkipVerify() ContainerdOption {
+	return func(c *ContainerdConfig) error {
+		c.Verify = false
+		return nil
+	}
+}
+
 var _ Store = &Containerd{}
 
 type Containerd struct {
-	client             *client.Client
-	clientGetter       func() (*client.Client, error)
-	mtCache            *lru.Cache[digest.Digest, string]
-	features           *Feature
-	contentPath        string
-	registryConfigPath string
+	client      *client.Client
+	mtCache     *lru.Cache[digest.Digest, string]
+	contentPath string
+	features    Feature
 }
 
-func NewContainerd(sock, namespace, registryConfigPath string, opts ...ContainerdOption) (*Containerd, error) {
-	cfg := ContainerdConfig{}
+func NewContainerd(ctx context.Context, sock, namespace, registryConfigPath string, opts ...ContainerdOption) (*Containerd, error) {
+	cfg := ContainerdConfig{
+		Verify: true,
+	}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
+	}
+
+	client, err := client.New(sock, client.WithDefaultNamespace(namespace))
+	if err != nil {
+		return nil, err
+	}
+	features, err := containerdFeatures(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Verify {
+		err = verifyContainerd(ctx, client, features, registryConfigPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	mtCache, err := lru.New[digest.Digest, string](100)
@@ -102,159 +125,25 @@ func NewContainerd(sock, namespace, registryConfigPath string, opts ...Container
 	}
 
 	c := &Containerd{
+		client:      client,
+		mtCache:     mtCache,
 		contentPath: cfg.ContentPath,
-		clientGetter: func() (*client.Client, error) {
-			return client.New(sock, client.WithDefaultNamespace(namespace))
-		},
-		registryConfigPath: registryConfigPath,
-		mtCache:            mtCache,
+		features:    features,
 	}
 	return c, nil
-}
-
-func (c *Containerd) Client() (*client.Client, error) {
-	var err error
-	if c.client == nil {
-		c.client, err = c.clientGetter()
-	}
-	return c.client, err
 }
 
 func (c *Containerd) Name() string {
 	return "containerd"
 }
 
-func (c *Containerd) Verify(ctx context.Context) error {
-	log := logr.FromContextOrDiscard(ctx)
-	client, err := c.Client()
-	if err != nil {
-		return err
-	}
-	ok, err := client.IsServing(ctx)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return errors.New("could not reach Containerd service")
-	}
-
-	feats, err := c.Features(ctx)
-	if err != nil {
-		return err
-	}
-	if !feats.Has(FeatureConfigCheck) {
-		log.Info("skipping verification of Containerd configuration")
-		return nil
-	}
-	grpcConn, ok := client.Conn().(*grpc.ClientConn)
-	if !ok {
-		return errors.New("client connection is not grpc")
-	}
-	srv := runtimeapi.NewRuntimeServiceClient(grpcConn)
-	statusResp, err := srv.Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
-	if err != nil {
-		return err
-	}
-	err = verifyStatusResponse(statusResp, c.registryConfigPath)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *Containerd) Features(ctx context.Context) (Feature, error) {
-	if c.features != nil {
-		return *c.features, nil
-	}
-
-	log := logr.FromContextOrDiscard(ctx)
-	client, err := c.Client()
-	if err != nil {
-		return 0, err
-	}
-	grpcConn, ok := client.Conn().(*grpc.ClientConn)
-	if !ok {
-		return 0, errors.New("client connection is not grpc")
-	}
-	srv := runtimeapi.NewRuntimeServiceClient(grpcConn)
-	versionResp, err := srv.Version(ctx, &runtimeapi.VersionRequest{})
-	if err != nil {
-		return 0, err
-	}
-	feats, err := featuresForVersion(versionResp.RuntimeVersion)
-	if err != nil {
-		return 0, err
-	}
-	log.Info("setting features for Containerd version", "features", feats.String(), "version", versionResp.String())
-	c.features = &feats
-	return feats, nil
-}
-
-func featuresForVersion(version string) (Feature, error) {
-	v, err := utilversion.Parse(version)
-	if err != nil {
-		return 0, fmt.Errorf("could not parse version %s: %w", version, err)
-	}
-	feats := Feature(0)
-	if v.LessThan(utilversion.MustParse("2.0")) {
-		feats.Set(FeatureConfigCheck)
-	}
-	if v.AtLeast(utilversion.MustParse("2.1")) {
-		feats.Set(FeatureContentEvent)
-	}
-	return feats, nil
-}
-
-func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) error {
-	str, ok := resp.Info["config"]
-	if !ok {
-		return errors.New("could not get config data from info response")
-	}
-	cfg := &struct {
-		Registry struct {
-			ConfigPath *string `json:"configPath"`
-		} `json:"registry"`
-		Containerd struct {
-			DiscardUnpackedLayers *bool `json:"discardUnpackedLayers"`
-		} `json:"containerd"`
-	}{}
-	err := json.Unmarshal([]byte(str), cfg)
-	if err != nil {
-		return err
-	}
-	if cfg.Containerd.DiscardUnpackedLayers == nil {
-		return errors.New("field containerd.discardUnpackedLayers missing from config")
-	}
-	if *cfg.Containerd.DiscardUnpackedLayers {
-		return errors.New("Containerd discard unpacked layers cannot be enabled")
-	}
-	if cfg.Registry.ConfigPath == nil {
-		return errors.New("field registry.configPath missing from config")
-	}
-	if *cfg.Registry.ConfigPath == "" {
-		return errors.New("Containerd registry config path needs to be set for mirror configuration to take effect")
-	}
-	paths := filepath.SplitList(*cfg.Registry.ConfigPath)
-	for _, path := range paths {
-		if path != configPath {
-			continue
-		}
-		return nil
-	}
-	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", *cfg.Registry.ConfigPath, configPath)
-}
-
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
-	client, err := c.Client()
-	if err != nil {
-		return nil, err
-	}
 	log := logr.FromContextOrDiscard(ctx)
 
 	ctx, cancel := context.WithCancel(ctx)
 	eventCh := make(chan OCIEvent)
 	eventFilters := []string{`topic~="/images/create|/images/delete",event.name~="^.+/"`, `topic~="/content/create"`}
-	envelopeCh, cErrCh := client.EventService().Subscribe(ctx, eventFilters...)
+	envelopeCh, cErrCh := c.client.EventService().Subscribe(ctx, eventFilters...)
 	go func() {
 		defer close(eventCh)
 		for {
@@ -284,13 +173,9 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 }
 
 func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
-	client, err := c.Client()
-	if err != nil {
-		return nil, err
-	}
 	// Filter out image names that are just sha sums.
 	imageFilter := `name~="^.+/"`
-	cImgs, err := client.ListImages(ctx, imageFilter)
+	cImgs, err := c.client.ListImages(ctx, imageFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -306,12 +191,8 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 }
 
 func (c *Containerd) ListContent(ctx context.Context) ([][]Reference, error) {
-	client, err := c.Client()
-	if err != nil {
-		return nil, err
-	}
 	contents := [][]Reference{}
-	err = client.ContentStore().Walk(ctx, func(i content.Info) error {
+	err := c.client.ContentStore().Walk(ctx, func(i content.Info) error {
 		refs, err := contentLabelsToReferences(i.Labels, i.Digest)
 		if err != nil {
 			logr.FromContextOrDiscard(ctx).Error(err, "skipping content that cant be converted to reference")
@@ -327,11 +208,7 @@ func (c *Containerd) ListContent(ctx context.Context) ([][]Reference, error) {
 }
 
 func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
-	client, err := c.Client()
-	if err != nil {
-		return "", err
-	}
-	cImg, err := client.GetImage(ctx, ref)
+	cImg, err := c.client.GetImage(ctx, ref)
 	if err != nil {
 		return "", err
 	}
@@ -339,11 +216,7 @@ func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, er
 }
 
 func (c *Containerd) Descriptor(ctx context.Context, dgst digest.Digest) (ocispec.Descriptor, error) {
-	client, err := c.Client()
-	if err != nil {
-		return ocispec.Descriptor{}, err
-	}
-	info, err := client.ContentStore().Info(ctx, dgst)
+	info, err := c.client.ContentStore().Info(ctx, dgst)
 	if errors.Is(err, errdefs.ErrNotFound) {
 		return ocispec.Descriptor{}, errors.Join(ErrNotFound, err)
 	}
@@ -394,11 +267,7 @@ func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekC
 		}
 		return file, nil
 	}
-	client, err := c.Client()
-	if err != nil {
-		return nil, err
-	}
-	ra, err := client.ContentStore().ReaderAt(ctx, ocispec.Descriptor{Digest: dgst})
+	ra, err := c.client.ContentStore().ReaderAt(ctx, ocispec.Descriptor{Digest: dgst})
 	if errors.Is(err, errdefs.ErrNotFound) {
 		return nil, errors.Join(ErrNotFound, err)
 	}
@@ -435,11 +304,7 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 			return []OCIEvent{{Type: CreateEvent, Key: e.GetName()}}, nil
 		}
 		// If Containerd supports content events we can skip walking the image.
-		feats, err := c.Features(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if feats.Has(FeatureContentEvent) {
+		if c.features.Has(FeatureContentEvent) {
 			return nil, nil
 		}
 		dgsts, err := WalkImage(ctx, c, img)
@@ -456,6 +321,107 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 	default:
 		return nil, errors.New("unsupported event type")
 	}
+}
+
+func containerdFeatures(ctx context.Context, client *client.Client) (Feature, error) {
+	grpcConn, ok := client.Conn().(*grpc.ClientConn)
+	if !ok {
+		return 0, errors.New("client connection is not grpc")
+	}
+	srv := runtimeapi.NewRuntimeServiceClient(grpcConn)
+	versionResp, err := srv.Version(ctx, &runtimeapi.VersionRequest{})
+	if err != nil {
+		return 0, err
+	}
+	features, err := featuresForVersion(versionResp.RuntimeVersion)
+	if err != nil {
+		return 0, err
+	}
+	return features, nil
+}
+
+func featuresForVersion(version string) (Feature, error) {
+	v, err := utilversion.Parse(version)
+	if err != nil {
+		return 0, fmt.Errorf("could not parse version %s: %w", version, err)
+	}
+	features := Feature(0)
+	if v.LessThan(utilversion.MustParse("2.0")) {
+		features.Set(FeatureConfigCheck)
+	}
+	if v.AtLeast(utilversion.MustParse("2.1")) {
+		features.Set(FeatureContentEvent)
+	}
+	return features, nil
+}
+
+func verifyContainerd(ctx context.Context, client *client.Client, features Feature, registryConfigPath string) error {
+	log := logr.FromContextOrDiscard(ctx)
+	ok, err := client.IsServing(ctx)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("could not reach Containerd service")
+	}
+
+	if !features.Has(FeatureConfigCheck) {
+		log.Info("skipping verification of Containerd configuration")
+		return nil
+	}
+	grpcConn, ok := client.Conn().(*grpc.ClientConn)
+	if !ok {
+		return errors.New("client connection is not grpc")
+	}
+	srv := runtimeapi.NewRuntimeServiceClient(grpcConn)
+	statusResp, err := srv.Status(ctx, &runtimeapi.StatusRequest{Verbose: true})
+	if err != nil {
+		return err
+	}
+	err = verifyStatusResponse(statusResp, registryConfigPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) error {
+	str, ok := resp.Info["config"]
+	if !ok {
+		return errors.New("could not get config data from info response")
+	}
+	cfg := &struct {
+		Registry struct {
+			ConfigPath *string `json:"configPath"`
+		} `json:"registry"`
+		Containerd struct {
+			DiscardUnpackedLayers *bool `json:"discardUnpackedLayers"`
+		} `json:"containerd"`
+	}{}
+	err := json.Unmarshal([]byte(str), cfg)
+	if err != nil {
+		return err
+	}
+	if cfg.Containerd.DiscardUnpackedLayers == nil {
+		return errors.New("field containerd.discardUnpackedLayers missing from config")
+	}
+	if *cfg.Containerd.DiscardUnpackedLayers {
+		return errors.New("Containerd discard unpacked layers cannot be enabled")
+	}
+	if cfg.Registry.ConfigPath == nil {
+		return errors.New("field registry.configPath missing from config")
+	}
+	if *cfg.Registry.ConfigPath == "" {
+		return errors.New("Containerd registry config path needs to be set for mirror configuration to take effect")
+	}
+	paths := filepath.SplitList(*cfg.Registry.ConfigPath)
+	for _, path := range paths {
+		if path != configPath {
+			continue
+		}
+		return nil
+	}
+	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", *cfg.Registry.ConfigPath, configPath)
 }
 
 func contentLabelsToReferences(l map[string]string, dgst digest.Digest) ([]Reference, error) {

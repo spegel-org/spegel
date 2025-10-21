@@ -15,20 +15,6 @@ import (
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
-func TestNewContainerd(t *testing.T) {
-	t.Parallel()
-
-	c, err := NewContainerd("socket", "namespace", "foo", nil)
-	require.NoError(t, err)
-	require.Empty(t, c.contentPath)
-	require.Nil(t, c.client)
-	require.Equal(t, "foo", c.registryConfigPath)
-
-	c, err = NewContainerd("socket", "namespace", "foo", nil, WithContentPath("local"))
-	require.NoError(t, err)
-	require.Equal(t, "local", c.contentPath)
-}
-
 func TestVerifyStatusResponse(t *testing.T) {
 	t.Parallel()
 
