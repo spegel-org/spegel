@@ -39,9 +39,6 @@ type Store interface {
 	// Name returns the name of the store implementation.
 	Name() string
 
-	// Verify checks that all expected configuration is set.
-	Verify(ctx context.Context) error
-
 	// Subscribe will notify for any image events ocuring in the store backend.
 	Subscribe(ctx context.Context) (<-chan OCIEvent, error)
 

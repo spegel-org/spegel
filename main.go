@@ -162,11 +162,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 
 	// OCI Store
-	ociStore, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, oci.WithContentPath(args.ContainerdContentPath))
-	if err != nil {
-		return err
-	}
-	err = ociStore.Verify(ctx)
+	ociStore, err := oci.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, oci.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
 		return err
 	}
