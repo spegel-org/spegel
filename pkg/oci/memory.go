@@ -35,10 +35,6 @@ func (m *Memory) Name() string {
 	return "memory"
 }
 
-func (m *Memory) Verify(ctx context.Context) error {
-	return nil
-}
-
 func (m *Memory) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	return nil, nil
 }

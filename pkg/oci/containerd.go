@@ -67,7 +67,6 @@ func (f Feature) String() string {
 
 type ContainerdConfig struct {
 	ContentPath string
-	Verify      bool
 }
 
 type ContainerdOption = option.Option[ContainerdConfig]
@@ -79,26 +78,16 @@ func WithContentPath(path string) ContainerdOption {
 	}
 }
 
-func WithSkipVerify() ContainerdOption {
-	return func(c *ContainerdConfig) error {
-		c.Verify = false
-		return nil
-	}
-}
-
 var _ Store = &Containerd{}
 
 type Containerd struct {
 	client      *client.Client
 	mtCache     *lru.Cache[digest.Digest, string]
 	contentPath string
-	features    Feature
 }
 
-func NewContainerd(ctx context.Context, sock, namespace, registryConfigPath string, opts ...ContainerdOption) (*Containerd, error) {
-	cfg := ContainerdConfig{
-		Verify: true,
-	}
+func NewContainerd(sock, namespace string, opts ...ContainerdOption) (*Containerd, error) {
+	cfg := ContainerdConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
@@ -108,29 +97,36 @@ func NewContainerd(ctx context.Context, sock, namespace, registryConfigPath stri
 	if err != nil {
 		return nil, err
 	}
-	features, err := containerdFeatures(ctx, client)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.Verify {
-		err = verifyContainerd(ctx, client, features, registryConfigPath)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	mtCache, err := lru.New[digest.Digest, string](100)
 	if err != nil {
 		return nil, err
 	}
-
 	c := &Containerd{
 		client:      client,
 		mtCache:     mtCache,
 		contentPath: cfg.ContentPath,
-		features:    features,
 	}
 	return c, nil
+}
+
+func (c *Containerd) Verify(ctx context.Context, registryConfigPath string) error {
+	features, err := containerdFeatures(ctx, c.client)
+	if err != nil {
+		return err
+	}
+	err = verifyContainerd(ctx, c.client, features, registryConfigPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Containerd) Close() error {
+	err := c.client.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *Containerd) Name() string {
@@ -139,6 +135,11 @@ func (c *Containerd) Name() string {
 
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	log := logr.FromContextOrDiscard(ctx)
+
+	features, err := containerdFeatures(ctx, c.client)
+	if err != nil {
+		return nil, err
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	eventCh := make(chan OCIEvent)
@@ -151,7 +152,7 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 			case <-ctx.Done():
 				return
 			case envelope := <-envelopeCh:
-				events, err := c.convertEvent(ctx, *envelope)
+				events, err := c.convertEvent(ctx, *envelope, features)
 				if err != nil {
 					log.Error(err, "error when handling event")
 					continue
@@ -283,7 +284,7 @@ func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekC
 	}, nil
 }
 
-func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope) ([]OCIEvent, error) {
+func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope, features Feature) ([]OCIEvent, error) {
 	if envelope.Event == nil {
 		return nil, errors.New("envelope event cannot be nil")
 	}
@@ -304,7 +305,7 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope)
 			return []OCIEvent{{Type: CreateEvent, Key: e.GetName()}}, nil
 		}
 		// If Containerd supports content events we can skip walking the image.
-		if c.features.Has(FeatureContentEvent) {
+		if features.Has(FeatureContentEvent) {
 			return nil, nil
 		}
 		dgsts, err := WalkImage(ctx, c, img)
