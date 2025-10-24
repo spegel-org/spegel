@@ -1,5 +1,9 @@
 <div>
   <div class="stat-container">
+    <div class="stat-box" style="background-color: #64B5F6;">
+      <div class="stat-title">Local Address</div>
+      <div class="stat-value" style="font-size: 18px; word-break: break-all;">{{ .LocalAddress }}</div>
+    </div>
     <div class="stat-box" style="background-color: {{if .MirrorLastSuccess}}#81C784{{else}}#FAA93B{{end}};">
       <div class="stat-title">Last Mirror Success</div>
       {{- if .MirrorLastSuccess }}
@@ -16,5 +20,49 @@
       <div class="stat-title">Layers</div>
       <div class="stat-value">{{ .LayerCount }}</div>
     </div>
+    <div class="stat-box" style="background-color: {{if .PeerCount}}#81C784{{else}}#E57373{{end}};">
+      <div class="stat-title">Connected Peers</div>
+      <div class="stat-value">{{ .PeerCount }}</div>
+    </div>
   </div>
+
+  {{- if .PeerAddresses }}
+  <h2>Peer Network Status</h2>
+  <div class="table-container">
+    <table>
+      <tr>
+        <th style="width: 10%;">Index</th>
+        <th style="width: 90%;">Peer Address</th>
+      </tr>
+      {{ range $index, $peer := .PeerAddresses }}
+      <tr>
+        <td>{{ $index }}</td>
+        <td><a href="http://{{ $peer }}/debug/web/" target="_blank">{{ $peer }}</a></td>
+      </tr>
+      {{ end }}
+    </table>
+  </div>
+  {{- end }}
+
+  {{- if .Images }}
+  <h2>Available Images</h2>
+  <div class="table-container">
+    <table>
+      <tr>
+        <th style="width: 30%;">Registry</th>
+        <th style="width: 40%;">Repository</th>
+        <th style="width: 15%;">Tag</th>
+        <th style="width: 15%;">Digest</th>
+      </tr>
+      {{ range .Images }}
+      <tr>
+        <td>{{ .Registry }}</td>
+        <td>{{ .Repository }}</td>
+        <td>{{ .Tag }}</td>
+        <td>{{ .Digest }}</td>
+      </tr>
+      {{ end }}
+    </table>
+  </div>
+  {{- end }}
 </div>

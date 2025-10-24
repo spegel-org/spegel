@@ -272,3 +272,44 @@ func TestLoadOrCreatePrivateKey(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, firstPrivKey.Equals(secondPrivKey))
 }
+
+func TestPeers(t *testing.T) {
+	t.Parallel()
+
+	isolatedBs := NewStaticBootstrapper(nil)
+	isolatedRouter, err := NewP2PRouter(t.Context(), "localhost:0", isolatedBs, "9090")
+	require.NoError(t, err)
+
+	isolatedPeers := isolatedRouter.Peers()
+	require.Empty(t, isolatedPeers)
+
+	require.NotNil(t, isolatedPeers)
+}
+
+func TestPeerAddresses(t *testing.T) {
+	t.Parallel()
+
+	isolatedBs := NewStaticBootstrapper(nil)
+	isolatedRouter, err := NewP2PRouter(t.Context(), "localhost:0", isolatedBs, "9090")
+	require.NoError(t, err)
+
+	isolatedAddrs := isolatedRouter.PeerAddresses()
+	require.Empty(t, isolatedAddrs)
+
+	require.NotNil(t, isolatedAddrs)
+}
+
+func TestLocalAddress(t *testing.T) {
+	t.Parallel()
+
+	bs := NewStaticBootstrapper(nil)
+	router, err := NewP2PRouter(t.Context(), ":0", bs, "9090")
+	require.NoError(t, err)
+
+	localAddr := router.LocalAddress()
+	require.NotEmpty(t, localAddr, "LocalAddress should return a non-empty address")
+
+	_, err4 := ma.NewMultiaddr("/ip4/" + localAddr)
+	_, err6 := ma.NewMultiaddr("/ip6/" + localAddr)
+	require.True(t, err4 == nil || err6 == nil, "LocalAddress should return a valid IP address")
+}
