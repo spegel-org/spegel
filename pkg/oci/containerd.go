@@ -28,11 +28,12 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
 	tomlu "github.com/pelletier/go-toml/v2/unstable"
-	"github.com/spegel-org/spegel/internal/option"
-	"github.com/spegel-org/spegel/pkg/httpx"
 	"google.golang.org/grpc"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
+
+	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
 const (
@@ -81,12 +82,13 @@ func WithContentPath(path string) ContainerdOption {
 var _ Store = &Containerd{}
 
 type Containerd struct {
-	client      *client.Client
-	mtCache     *lru.Cache[digest.Digest, string]
-	contentPath string
+	client       *client.Client
+	mediaTypeIdx *lru.Cache[digest.Digest, string]
+	contentPath  string
+	features     Feature
 }
 
-func NewContainerd(sock, namespace string, opts ...ContainerdOption) (*Containerd, error) {
+func NewContainerd(ctx context.Context, sock, namespace string, opts ...ContainerdOption) (*Containerd, error) {
 	cfg := ContainerdConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
@@ -97,24 +99,27 @@ func NewContainerd(sock, namespace string, opts ...ContainerdOption) (*Container
 	if err != nil {
 		return nil, err
 	}
-	mtCache, err := lru.New[digest.Digest, string](100)
+	features, err := containerdFeatures(ctx, client)
 	if err != nil {
 		return nil, err
 	}
+
+	mediaTypeIdx, err := lru.New[digest.Digest, string](100)
+	if err != nil {
+		return nil, err
+	}
+
 	c := &Containerd{
-		client:      client,
-		mtCache:     mtCache,
-		contentPath: cfg.ContentPath,
+		client:       client,
+		mediaTypeIdx: mediaTypeIdx,
+		contentPath:  cfg.ContentPath,
+		features:     features,
 	}
 	return c, nil
 }
 
 func (c *Containerd) Verify(ctx context.Context, registryConfigPath string) error {
-	features, err := containerdFeatures(ctx, c.client)
-	if err != nil {
-		return err
-	}
-	err = verifyContainerd(ctx, c.client, features, registryConfigPath)
+	err := verifyContainerd(ctx, c.client, c.features, registryConfigPath)
 	if err != nil {
 		return err
 	}
@@ -136,25 +141,21 @@ func (c *Containerd) Name() string {
 func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	log := logr.FromContextOrDiscard(ctx)
 
-	features, err := containerdFeatures(ctx, c.client)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
 	eventCh := make(chan OCIEvent)
+	subCtx, subCancel := context.WithCancel(ctx)
 	eventFilters := []string{`topic~="/images/create|/images/delete",event.name~="^.+/"`, `topic~="/content/create"`}
-	envelopeCh, cErrCh := c.client.EventService().Subscribe(ctx, eventFilters...)
+	envelopeCh, cErrCh := c.client.EventService().Subscribe(subCtx, eventFilters...)
+
 	go func() {
 		defer close(eventCh)
 		for {
 			select {
-			case <-ctx.Done():
+			case <-subCtx.Done():
 				return
 			case envelope := <-envelopeCh:
-				events, err := c.convertEvent(ctx, *envelope, features)
+				events, err := c.convertEvent(subCtx, *envelope)
 				if err != nil {
-					log.Error(err, "error when handling event")
+					log.Error(err, "error when handling Contianerd event")
 					continue
 				}
 				for _, event := range events {
@@ -165,9 +166,9 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	}()
 	go func() {
 		// Required so that the event channel closes in case Containerd is restarted.
-		defer cancel()
+		defer subCancel()
 		for err := range cErrCh {
-			log.Error(err, "containerd event error")
+			log.Error(err, "received Containerd event error")
 		}
 	}()
 	return eventCh, nil
@@ -225,7 +226,7 @@ func (c *Containerd) Descriptor(ctx context.Context, dgst digest.Digest) (ocispe
 		return ocispec.Descriptor{}, err
 	}
 
-	mt, ok := c.mtCache.Get(dgst)
+	mt, ok := c.mediaTypeIdx.Get(dgst)
 	if !ok {
 		mt, err = func() (string, error) {
 			if info.Size > ManifestMaxSize {
@@ -245,7 +246,7 @@ func (c *Containerd) Descriptor(ctx context.Context, dgst digest.Digest) (ocispe
 		if err != nil {
 			return ocispec.Descriptor{}, err
 		}
-		c.mtCache.Add(dgst, mt)
+		c.mediaTypeIdx.Add(dgst, mt)
 	}
 
 	desc := ocispec.Descriptor{
@@ -284,7 +285,7 @@ func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekC
 	}, nil
 }
 
-func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope, features Feature) ([]OCIEvent, error) {
+func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope) ([]OCIEvent, error) {
 	if envelope.Event == nil {
 		return nil, errors.New("envelope event cannot be nil")
 	}
@@ -305,7 +306,7 @@ func (c *Containerd) convertEvent(ctx context.Context, envelope events.Envelope,
 			return []OCIEvent{{Type: CreateEvent, Key: e.GetName()}}, nil
 		}
 		// If Containerd supports content events we can skip walking the image.
-		if features.Has(FeatureContentEvent) {
+		if c.features.Has(FeatureContentEvent) {
 			return nil, nil
 		}
 		dgsts, err := WalkImage(ctx, c, img)
