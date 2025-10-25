@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1047](https://github.com/spegel-org/spegel/pull/1047) Refactor mirrored registries to be applied with registry filters.
 - [#1051](https://github.com/spegel-org/spegel/pull/1051) Refactor readiness probe and bootstrap to be separate.
 - [#1052](https://github.com/spegel-org/spegel/pull/1052) Replace client getter in Containerd with a single client.
+- [#1055](https://github.com/spegel-org/spegel/pull/1055) Immediately get features when creating Containerd store.
   
 ### Deprecated
 

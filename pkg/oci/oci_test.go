@@ -47,15 +47,15 @@ func TestStore(t *testing.T) {
 	remoteMtCache, err := lru.New[digest.Digest, string](100)
 	require.NoError(t, err)
 	remoteContainerd := &Containerd{
-		mtCache: remoteMtCache,
-		client:  containerdClient,
+		mediaTypeIdx: remoteMtCache,
+		client:       containerdClient,
 	}
 	localMtCache, err := lru.New[digest.Digest, string](100)
 	require.NoError(t, err)
 	localContainerd := &Containerd{
-		mtCache:     localMtCache,
-		client:      containerdClient,
-		contentPath: contentPath,
+		mediaTypeIdx: localMtCache,
+		client:       containerdClient,
+		contentPath:  contentPath,
 	}
 
 	memoryStore := NewMemory()
