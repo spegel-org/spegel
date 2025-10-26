@@ -39,9 +39,6 @@ type Store interface {
 	// Name returns the name of the store implementation.
 	Name() string
 
-	// Subscribe will notify for any image events ocuring in the store backend.
-	Subscribe(ctx context.Context) (<-chan OCIEvent, error)
-
 	// ListImages returns a list of all local images.
 	ListImages(ctx context.Context) ([]Image, error)
 
@@ -57,6 +54,9 @@ type Store interface {
 
 	// Open returns the streamable content for the given digest.
 	Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
+
+	// Subscribe will notify for any image events ocuring in the store backend.
+	Subscribe(ctx context.Context) (<-chan OCIEvent, error)
 }
 
 // FingerprintMediaType attempts to determine the media type based on the json structure.
