@@ -132,7 +132,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 func (r *Registry) Handler(log logr.Logger) *httpx.ServeMux {
 	m := httpx.NewServeMux(log)
 	m.Handle("GET /readyz", r.readyHandler)
-	m.Handle("GET /livez", r.livenesHandler)
+	m.Handle("GET /livez", r.livenessHandler)
 	m.Handle("GET /v2/", r.registryHandler)
 	m.Handle("HEAD /v2/", r.registryHandler)
 	return m
@@ -153,7 +153,7 @@ func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(http.StatusOK)
 }
 
-func (r *Registry) livenesHandler(rw httpx.ResponseWriter, req *http.Request) {
+func (r *Registry) livenessHandler(rw httpx.ResponseWriter, req *http.Request) {
 	rw.SetAttrs(HandlerAttrKey, "livez")
 
 	rw.WriteHeader(http.StatusOK)
@@ -306,7 +306,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 
 			rc, desc, err := r.ociClient.Fetch(fetchCtx, req.Method, dist, fetchOpts...)
 			if err != nil {
-				log.Error(err, "request to mirror failed, retryign with next")
+				log.Error(err, "request to mirror failed, retrying with next")
 				balancer.Remove(peer)
 				return false
 			}
