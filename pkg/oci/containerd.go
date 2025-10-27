@@ -260,14 +260,19 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	envelopeCh, cErrCh := c.client.EventService().Subscribe(subCtx, eventFilters...)
 
 	// Populate the content index.
-	contentIdx := map[string][]digest.Digest{}
+	contentIdx := map[digest.Digest][]Reference{}
 	cImgs, err := c.client.ImageService().List(ctx, listImageFilter)
 	if err != nil {
 		subCancel()
 		return nil, err
 	}
 	for _, cImg := range cImgs {
-		dgsts := []digest.Digest{}
+		img, err := ParseImage(cImg.Name, WithDigest(cImg.Target.Digest))
+		if err != nil {
+			subCancel()
+			return nil, err
+		}
+		refs := []Reference{}
 		handler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 			children, err := images.ChildrenHandler(c.client.ContentStore()).Handle(ctx, desc)
 			if errors.Is(err, errdefs.ErrNotFound) {
@@ -276,15 +281,20 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 			if err != nil {
 				return nil, err
 			}
-			dgsts = append(dgsts, desc.Digest)
+			ref := Reference{
+				Registry:   img.Registry,
+				Repository: img.Repository,
+				Digest:     desc.Digest,
+			}
+			refs = append(refs, ref)
 			return children, nil
 		})
-		err := images.Walk(ctx, handler, cImg.Target)
+		err = images.Walk(ctx, handler, cImg.Target)
 		if err != nil {
 			subCancel()
 			return nil, err
 		}
-		contentIdx[cImg.Name] = dgsts
+		contentIdx[cImg.Target.Digest] = refs
 	}
 
 	go func() {
@@ -315,7 +325,7 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	return eventCh, nil
 }
 
-func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, contentIdx map[string][]digest.Digest) ([]OCIEvent, error) {
+func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, contentIdx map[digest.Digest][]Reference) ([]OCIEvent, error) {
 	if envelope.Event == nil {
 		return nil, errors.New("envelope event cannot be nil")
 	}
@@ -325,7 +335,31 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 	}
 	switch e := evt.(type) {
 	case *eventtypes.ContentCreate:
-		return []OCIEvent{{Type: CreateEvent, Key: e.GetDigest()}}, nil
+		dgst := digest.Digest(e.GetDigest())
+		retryOpts := []retry.Option{
+			retry.Context(ctx),
+			retry.Attempts(10),
+			retry.MaxDelay(100 * time.Millisecond),
+		}
+		refs, err := retry.DoWithData(func() ([]Reference, error) {
+			info, err := c.client.ContentStore().Info(ctx, dgst)
+			if err != nil {
+				return nil, retry.Unrecoverable(err)
+			}
+			refs, err := contentLabelsToReferences(info.Labels, dgst)
+			if err != nil {
+				return nil, err
+			}
+			return refs, nil
+		}, retryOpts...)
+		if err != nil {
+			return nil, err
+		}
+		events := []OCIEvent{}
+		for _, ref := range refs {
+			events = append(events, OCIEvent{Type: CreateEvent, Reference: ref})
+		}
+		return events, nil
 	case *eventtypes.ImageCreate:
 		img, err := ParseImage(e.GetName(), AllowTagOnly())
 		if err != nil {
@@ -333,15 +367,15 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		}
 		// Just advertise the image if it is a tag reference.
 		if img.Digest == "" {
-			return []OCIEvent{{Type: CreateEvent, Key: img.String()}}, nil
+			return []OCIEvent{{Type: CreateEvent, Reference: img.Reference}}, nil
 		}
 		// Walk the image to index its content.
 		cImg, err := c.client.ImageService().Get(ctx, img.String())
 		if err != nil {
 			return nil, err
 		}
+		refs := []Reference{}
 		events := []OCIEvent{}
-		dgsts := []digest.Digest{}
 		handler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 			children, err := images.ChildrenHandler(c.client.ContentStore()).Handle(ctx, desc)
 			if errors.Is(err, errdefs.ErrNotFound) {
@@ -350,15 +384,20 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 			if err != nil {
 				return nil, err
 			}
-			events = append(events, OCIEvent{Type: CreateEvent, Key: desc.Digest.String()})
-			dgsts = append(dgsts, desc.Digest)
+			ref := Reference{
+				Registry:   img.Registry,
+				Repository: img.Repository,
+				Digest:     desc.Digest,
+			}
+			refs = append(refs, ref)
+			events = append(events, OCIEvent{Type: CreateEvent, Reference: ref})
 			return children, nil
 		})
 		err = images.Walk(ctx, handler, cImg.Target)
 		if err != nil {
 			return nil, err
 		}
-		contentIdx[img.String()] = dgsts
+		contentIdx[img.Digest] = refs
 		// No need to advertise content if we receive content events.
 		if c.features.Has(FeatureContentEvent) {
 			return nil, nil
@@ -371,14 +410,15 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		}
 		// Just advertise the image if it is a tag reference.
 		if img.Digest == "" {
-			return []OCIEvent{{Type: DeleteEvent, Key: img.String()}}, nil
+			return []OCIEvent{{Type: DeleteEvent, Reference: img.Reference}}, nil
 		}
 		// Advertise deletion of images content if it no longer exists.
-		dgsts, ok := contentIdx[img.String()]
+		refs, ok := contentIdx[img.Digest]
 		if !ok {
-			return []OCIEvent{{Type: DeleteEvent, Key: img.Digest.String()}}, nil
+			logr.FromContextOrDiscard(ctx).Info("delete event with missing content index entry")
+			return []OCIEvent{{Type: DeleteEvent, Reference: img.Reference}}, nil
 		}
-		delete(contentIdx, img.String())
+		delete(contentIdx, img.Digest)
 		// Delete events are sent before garbage collection is run.
 		retryOpts := []retry.Option{
 			retry.Context(ctx),
@@ -400,15 +440,15 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		}
 		// Create delete events for contents that has been removed.
 		events := []OCIEvent{}
-		for _, dgst := range dgsts {
-			_, err := c.client.ContentStore().Info(ctx, dgst)
+		for _, ref := range refs {
+			_, err := c.client.ContentStore().Info(ctx, ref.Digest)
 			if err == nil {
 				continue
 			}
 			if !errors.Is(err, errdefs.ErrNotFound) {
 				return nil, err
 			}
-			events = append(events, OCIEvent{Type: DeleteEvent, Key: dgst.String()})
+			events = append(events, OCIEvent{Type: DeleteEvent, Reference: ref})
 		}
 		return events, nil
 	default:
