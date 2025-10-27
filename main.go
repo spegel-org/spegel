@@ -20,6 +20,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spegel-org/spegel/internal/otelx"
+
 	"github.com/spegel-org/spegel/internal/cleanup"
 	"github.com/spegel-org/spegel/internal/web"
 	"github.com/spegel-org/spegel/pkg/metrics"
@@ -93,6 +95,16 @@ func main() {
 	handler := slog.NewJSONHandler(os.Stderr, &opts)
 	log := logr.FromSlogHandler(handler)
 	ctx := logr.NewContext(context.Background(), log)
+
+	shutdown, terr := otelx.Setup(ctx, "spegel")
+	if terr != nil {
+		log.Error(terr, "failed to set up telemetry")
+	}
+	defer func() {
+		if shutdown != nil {
+			_ = shutdown(context.Background())
+		}
+	}()
 
 	err := run(ctx, args)
 	if err != nil {
@@ -217,7 +229,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	regSrv := &http.Server{
 		Addr:    args.RegistryAddr,
-		Handler: reg.Handler(log),
+		Handler: otelx.WrapHandler(reg.Handler(log), "registry"),
 	}
 	g.Go(func() error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -255,7 +267,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
-		Handler: mux,
+		Handler: otelx.WrapHandler(mux, "metrics"),
 	}
 	g.Go(func() error {
 		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
