@@ -1,0 +1,166 @@
+//go:build otel
+
+package otelx
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
+
+	"github.com/go-logr/logr"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+)
+
+var (
+	tp        *trace.TracerProvider
+	service   string
+	endpoint  string
+	insecure  bool
+	sampler   string
+)
+
+// Setup initializes the OpenTelemetry SDK.
+func Setup(ctx context.Context, serviceName string) (Shutdown, error) {
+	log := logr.FromContextOrDiscard(ctx)
+	
+	service = serviceName
+	endpoint = getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+	insecure = getEnvBool("OTEL_EXPORTER_OTLP_INSECURE", false)
+	sampler = getEnv("OTEL_TRACES_SAMPLER", "parentbased_always_off")
+
+	log.Info("initializing OTEL", "service", service, "endpoint", endpoint, "sampler", sampler)
+
+	opts := []otlptracehttp.Option{
+		otlptracehttp.WithEndpoint(endpoint),
+	}
+	if insecure {
+		opts = append(opts, otlptracehttp.WithInsecure())
+	}
+
+	exporter, err := otlptracehttp.New(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OTLP exporter: %w", err)
+	}
+
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceName(service),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	tp = trace.NewTracerProvider(
+		trace.WithBatcher(exporter),
+		trace.WithResource(res),
+		trace.WithSampler(newSampler(sampler)),
+	)
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	shutdownFn := func(ctx context.Context) error {
+		if tp != nil {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			return tp.Shutdown(ctx)
+		}
+		return nil
+	}
+
+	return shutdownFn, nil
+}
+
+// WrapHandler wraps an HTTP handler with OpenTelemetry instrumentation.
+func WrapHandler(name string, h http.Handler) http.Handler {
+	return otelhttp.NewHandler(h, name)
+}
+
+// WrapTransport wraps an HTTP transport with OpenTelemetry instrumentation.
+func WrapTransport(name string, rt http.RoundTripper) http.RoundTripper {
+	return otelhttp.NewTransport(rt)
+}
+
+// EnrichLogger adds trace correlation fields to a logger.
+func EnrichLogger(ctx context.Context, log logr.Logger) logr.Logger {
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return log
+	}
+
+	spanCtx := span.SpanContext()
+	if !spanCtx.IsValid() {
+		return log
+	}
+
+	traceID := spanCtx.TraceID().String()
+	spanID := spanCtx.SpanID().String()
+
+	return log.WithValues("trace_id", traceID, "span_id", spanID)
+}
+
+// StartSpan creates a new trace span.
+func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, func()) {
+	tracer := otel.Tracer("github.com/spegel-org/spegel")
+	ctx, span := tracer.Start(ctx, name, opts...)
+	return ctx, span.End
+}
+
+// WithEnrichedLogger returns a logger with trace correlation fields.
+func WithEnrichedLogger(ctx context.Context, log logr.Logger) logr.Logger {
+	return EnrichLogger(ctx, log)
+}
+
+// getEnv returns an environment variable value or a default.
+func getEnv(key, defaultValue string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultValue
+}
+
+// getEnvBool returns a boolean environment variable or a default.
+func getEnvBool(key string, defaultValue bool) bool {
+	if val := os.Getenv(key); val != "" {
+		if parsed, err := strconv.ParseBool(val); err == nil {
+			return parsed
+		}
+	}
+	return defaultValue
+}
+
+// newSampler creates a trace sampler based on the provided string.
+func newSampler(samplerType string) trace.Sampler {
+	switch samplerType {
+	case "always_on":
+		return trace.AlwaysSample()
+	case "always_off":
+		return trace.NeverSample()
+	case "parentbased_always_on":
+		return trace.ParentBased(trace.AlwaysSample())
+	case "parentbased_always_off":
+		return trace.ParentBased(trace.NeverSample())
+	default:
+		// Try to parse as a ratio
+		if ratio, err := strconv.ParseFloat(samplerType, 64); err == nil && ratio >= 0 && ratio <= 1 {
+			return trace.TraceIDRatioBased(ratio)
+		}
+		// Default to parentbased_always_off
+		return trace.ParentBased(trace.NeverSample())
+	}
+}
+

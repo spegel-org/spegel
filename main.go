@@ -63,6 +63,11 @@ type RegistryCmd struct {
 	MirrorResolveRetries         int              `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
 	DebugWebEnabled              bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
 	ResolveLatestTag             bool             `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
+	OtelEnabled                  bool             `arg:"--otel-enabled,env:OTEL_ENABLED" help:"Enable OTEL tracing."`
+	OtelEndpoint                 string           `arg:"--otel-endpoint,env:OTEL_ENDPOINT" help:"OTEL exporter endpoint (e.g., http://otel-collector:4318)."`
+	OtelInsecure                 bool             `arg:"--otel-insecure,env:OTEL_INSECURE" help:"Use insecure connection for OTEL exporter."`
+	OtelServiceName              string           `arg:"--otel-service-name,env:OTEL_SERVICE_NAME" default:"spegel" help:"Service name for OTEL traces."`
+	OtelSampler                  string           `arg:"--otel-sampler,env:OTEL_SAMPLER" default:"parentbased_always_off" help:"Trace sampler (always_on, always_off, parentbased_always_on, parentbased_always_off, or ratio 0.0-1.0)."`
 }
 
 type CleanupCmd struct {
@@ -96,15 +101,18 @@ func main() {
 	log := logr.FromSlogHandler(handler)
 	ctx := logr.NewContext(context.Background(), log)
 
-	shutdown, terr := otelx.Setup(ctx, "spegel")
-	if terr != nil {
-		log.Error(terr, "failed to set up telemetry")
-	}
-	defer func() {
-		if shutdown != nil {
-			_ = shutdown(context.Background())
+	// Only set up OTEL if explicitly enabled via registry command flags
+	if args.Registry != nil && args.Registry.OtelEnabled {
+		shutdown, terr := otelx.Setup(ctx, args.Registry.OtelServiceName)
+		if terr != nil {
+			log.Error(terr, "failed to set up telemetry")
 		}
-	}()
+		defer func() {
+			if shutdown != nil {
+				_ = shutdown(context.Background())
+			}
+		}()
+	}
 
 	err := run(ctx, args)
 	if err != nil {
@@ -229,7 +237,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	regSrv := &http.Server{
 		Addr:    args.RegistryAddr,
-		Handler: otelx.WrapHandler(reg.Handler(log), "registry"),
+		Handler: otelx.WrapHandler("registry", reg.Handler(log)),
 	}
 	g.Go(func() error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -267,7 +275,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
-		Handler: otelx.WrapHandler(mux, "metrics"),
+		Handler: otelx.WrapHandler("metrics", mux),
 	}
 	g.Go(func() error {
 		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

@@ -16,12 +16,12 @@ func Setup(ctx context.Context, serviceName string) (Shutdown, error) {
 }
 
 // WrapHandler returns the original handler when tracing is disabled.
-func WrapHandler(h http.Handler, name string) http.Handler {
+func WrapHandler(name string, h http.Handler) http.Handler {
 	return h
 }
 
 // WrapTransport returns the original transport when tracing is disabled.
-func WrapTransport(rt http.RoundTripper) http.RoundTripper {
+func WrapTransport(name string, rt http.RoundTripper) http.RoundTripper {
 	return rt
 }
 

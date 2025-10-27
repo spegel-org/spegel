@@ -180,6 +180,18 @@ spegel:
   prependExisting: false
   # -- When true enables debug web page.
   debugWebEnabled: true
+  # -- OTEL tracing configuration.
+  otel:
+    # -- Enable OTEL tracing.
+    enabled: false
+    # -- OTEL exporter endpoint (e.g., http://otel-collector:4318).
+    endpoint: ""
+    # -- Use insecure connection for OTEL exporter.
+    insecure: false
+    # -- Service name for OTEL traces.
+    serviceName: "spegel"
+    # -- Trace sampler (always_on, always_off, parentbased_always_on, parentbased_always_off, or a ratio 0.0-1.0).
+    sampler: "parentbased_always_off"
 
 verticalPodAutoscaler:
   # -- If true creates a Vertical Pod Autoscaler.

@@ -40,9 +40,9 @@ func NewClient(httpClient *http.Client) *Client {
 	}
 	// Wrap transport for tracing if enabled (noop if not).
 	if httpClient.Transport == nil {
-		httpClient.Transport = otelx.WrapTransport(http.DefaultTransport)
+		httpClient.Transport = otelx.WrapTransport("oci", http.DefaultTransport)
 	} else {
-		httpClient.Transport = otelx.WrapTransport(httpClient.Transport)
+		httpClient.Transport = otelx.WrapTransport("oci", httpClient.Transport)
 	}
 	return &Client{
 		httpClient: httpClient,

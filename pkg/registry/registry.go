@@ -14,8 +14,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/spegel-org/spegel/internal/otelx"
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/otelx"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
