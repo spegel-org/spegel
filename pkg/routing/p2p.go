@@ -36,7 +36,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/spegel-org/spegel/internal/option"
-    "github.com/spegel-org/spegel/internal/otelx"
+	"github.com/spegel-org/spegel/internal/otelx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
@@ -160,13 +160,13 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 }
 
 func (r *P2PRouter) Run(ctx context.Context) error {
-    logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", r.host.ID())
+	logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", r.host.ID())
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-        spanCtx, end := otelx.StartSpan(gCtx, "p2p.bootstrapper.run")
-        defer end()
-        err := r.bootstrapper.Run(spanCtx, *host.InfoFromHost(r.host))
+		spanCtx, end := otelx.StartSpan(gCtx, "p2p.bootstrapper.run")
+		defer end()
+		err := r.bootstrapper.Run(spanCtx, *host.InfoFromHost(r.host))
 		if err != nil {
 			return err
 		}
@@ -180,10 +180,10 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 			case <-gCtx.Done():
 				return nil
 			case <-onlineCh:
-                spanCtx, end := otelx.StartSpan(gCtx, "p2p.ensureOnline")
-                var err error
-                lastBootstrap, err = ensureOnline(spanCtx, r.bootstrapper, r.kdht, &r.isOnline, lastBootstrap)
-                end()
+				spanCtx, end := otelx.StartSpan(gCtx, "p2p.ensureOnline")
+				var err error
+				lastBootstrap, err = ensureOnline(spanCtx, r.bootstrapper, r.kdht, &r.isOnline, lastBootstrap)
+				end()
 				if err != nil {
 					return err
 				}
@@ -213,8 +213,8 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 
 func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) {
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
-    ctx, end := otelx.StartSpan(ctx, "p2p.lookup")
-    defer end()
+	ctx, end := otelx.StartSpan(ctx, "p2p.lookup")
+	defer end()
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err

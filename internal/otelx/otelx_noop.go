@@ -32,5 +32,10 @@ func EnrichLogger(ctx context.Context, log logr.Logger) logr.Logger {
 
 // StartSpan returns the original context and a no-op end function.
 func StartSpan(ctx context.Context, name string) (context.Context, func()) {
-    return ctx, func() {}
+	return ctx, func() {}
+}
+
+// WithEnrichedLogger returns a logger with trace correlation fields.
+func WithEnrichedLogger(ctx context.Context, log logr.Logger) logr.Logger {
+	return EnrichLogger(ctx, log)
 }

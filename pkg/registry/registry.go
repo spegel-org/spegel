@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/spegel-org/spegel/internal/otelx"
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
@@ -414,7 +415,8 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	rw.WriteHeader(http.StatusOK)
 	_, err = io.Copy(rw, rc)
 	if err != nil {
-		logr.FromContextOrDiscard(req.Context()).Error(err, "error occurred when writing manifest")
+		log := otelx.EnrichLogger(req.Context(), logr.FromContextOrDiscard(req.Context()))
+		log.Error(err, "error occurred when writing manifest")
 		return
 	}
 }
@@ -476,7 +478,8 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 	rw.WriteHeader(status)
 	_, err = io.Copy(rw, src)
 	if err != nil {
-		logr.FromContextOrDiscard(req.Context()).Error(err, "failed to write blob")
+		log := otelx.EnrichLogger(req.Context(), logr.FromContextOrDiscard(req.Context()))
+		log.Error(err, "failed to write blob")
 		return
 	}
 }
