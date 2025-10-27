@@ -103,7 +103,13 @@ func main() {
 
 	// Only set up OTEL if explicitly enabled via registry command flags
 	if args.Registry != nil && args.Registry.OtelEnabled {
-		shutdown, terr := otelx.Setup(ctx, args.Registry.OtelServiceName)
+		cfg := otelx.Config{
+			ServiceName: args.Registry.OtelServiceName,
+			Endpoint:    args.Registry.OtelEndpoint,
+			Insecure:    args.Registry.OtelInsecure,
+			Sampler:     args.Registry.OtelSampler,
+		}
+		shutdown, terr := otelx.Setup(ctx, cfg)
 		if terr != nil {
 			log.Error(terr, "failed to set up telemetry")
 		}

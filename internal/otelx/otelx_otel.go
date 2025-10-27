@@ -21,29 +21,35 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 )
 
-var (
-	tp        *trace.TracerProvider
-	service   string
-	endpoint  string
-	insecure  bool
-	sampler   string
-)
+// Config holds OTEL configuration.
+type Config struct {
+	ServiceName string
+	Endpoint    string
+	Insecure    bool
+	Sampler     string
+}
 
 // Setup initializes the OpenTelemetry SDK.
-func Setup(ctx context.Context, serviceName string) (Shutdown, error) {
+func Setup(ctx context.Context, cfg Config) (Shutdown, error) {
 	log := logr.FromContextOrDiscard(ctx)
 	
-	service = serviceName
-	endpoint = getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
-	insecure = getEnvBool("OTEL_EXPORTER_OTLP_INSECURE", false)
-	sampler = getEnv("OTEL_TRACES_SAMPLER", "parentbased_always_off")
+	// Use cfg if provided, otherwise fall back to environment
+	if cfg.Endpoint == "" {
+		cfg.Endpoint = getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+	}
+	if cfg.ServiceName == "" {
+		cfg.ServiceName = "spegel"
+	}
+	if cfg.Sampler == "" {
+		cfg.Sampler = getEnv("OTEL_TRACES_SAMPLER", "parentbased_always_off")
+	}
 
-	log.Info("initializing OTEL", "service", service, "endpoint", endpoint, "sampler", sampler)
+	log.Info("initializing OTEL", "service", cfg.ServiceName, "endpoint", cfg.Endpoint, "sampler", cfg.Sampler)
 
 	opts := []otlptracehttp.Option{
-		otlptracehttp.WithEndpoint(endpoint),
+		otlptracehttp.WithEndpoint(cfg.Endpoint),
 	}
-	if insecure {
+	if cfg.Insecure {
 		opts = append(opts, otlptracehttp.WithInsecure())
 	}
 
@@ -54,17 +60,17 @@ func Setup(ctx context.Context, serviceName string) (Shutdown, error) {
 
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
-			semconv.ServiceName(service),
+			semconv.ServiceName(cfg.ServiceName),
 		),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	tp = trace.NewTracerProvider(
+	tp := trace.NewTracerProvider(
 		trace.WithBatcher(exporter),
 		trace.WithResource(res),
-		trace.WithSampler(newSampler(sampler)),
+		trace.WithSampler(newSampler(cfg.Sampler)),
 	)
 
 	otel.SetTracerProvider(tp)
@@ -83,6 +89,11 @@ func Setup(ctx context.Context, serviceName string) (Shutdown, error) {
 	}
 
 	return shutdownFn, nil
+}
+
+// SetupWithDefaults is a convenience function that accepts a service name.
+func SetupWithDefaults(ctx context.Context, serviceName string) (Shutdown, error) {
+	return Setup(ctx, Config{ServiceName: serviceName})
 }
 
 // WrapHandler wraps an HTTP handler with OpenTelemetry instrumentation.

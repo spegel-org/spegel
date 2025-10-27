@@ -10,8 +10,21 @@ import (
 // Shutdown is a function that cleans up tracing resources.
 type Shutdown func(context.Context) error
 
+// Config holds OTEL configuration (unused in noop).
+type Config struct {
+	ServiceName string
+	Endpoint    string
+	Insecure    bool
+	Sampler     string
+}
+
 // Setup is a no-op tracing initializer used when OTEL is not built in.
-func Setup(ctx context.Context, serviceName string) (Shutdown, error) {
+func Setup(ctx context.Context, cfg Config) (Shutdown, error) {
+	return nil, nil
+}
+
+// SetupWithDefaults is a convenience function that accepts a service name.
+func SetupWithDefaults(ctx context.Context, serviceName string) (Shutdown, error) {
 	return nil, nil
 }
 
