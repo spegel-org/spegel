@@ -15,6 +15,18 @@ type Reference struct {
 	Digest     digest.Digest
 }
 
+func (r Reference) String() string {
+	tag := ""
+	if r.Tag != "" {
+		tag = ":" + r.Tag
+	}
+	digest := ""
+	if r.Digest != "" {
+		digest = "@" + r.Digest.String()
+	}
+	return fmt.Sprintf("%s/%s%s%s", r.Registry, r.Repository, tag, digest)
+}
+
 // Validate checks that the contents of the reference is valid.
 func (r Reference) Validate() error {
 	if r.Registry == "" {

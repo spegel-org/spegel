@@ -36,18 +36,6 @@ func NewImage(registry, repository, tag string, dgst digest.Digest) (Image, erro
 	}, nil
 }
 
-func (i Image) String() string {
-	tag := ""
-	if i.Tag != "" {
-		tag = ":" + i.Tag
-	}
-	digest := ""
-	if i.Digest != "" {
-		digest = "@" + i.Digest.String()
-	}
-	return fmt.Sprintf("%s/%s%s%s", i.Registry, i.Repository, tag, digest)
-}
-
 // TagName returns the full tag reference string if tag is set.
 func (i Image) TagName() (string, bool) {
 	if i.Tag == "" {

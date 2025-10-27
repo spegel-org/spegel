@@ -162,13 +162,14 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 
 	// OCI Store
-	ociStore, err := oci.NewContainerd(args.ContainerdSock, args.ContainerdNamespace, args.ContainerdRegistryConfigPath, oci.WithContentPath(args.ContainerdContentPath))
+	ociStore, err := oci.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, oci.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
 		return err
 	}
-	err = ociStore.Verify(ctx)
+	defer ociStore.Close()
+	err = ociStore.Verify(ctx, args.ContainerdRegistryConfigPath)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	// Router
@@ -188,7 +189,11 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		return err
 	}
 	g.Go(func() error {
-		return router.Run(ctx)
+		err := router.Run(ctx)
+		if err != nil {
+			return err
+		}
+		return nil
 	})
 
 	// State tracking

@@ -60,7 +60,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 			if !ok {
 				return errors.New("event channel closed")
 			}
-			log.Info("OCI event", "key", event.Key, "type", event.Type)
+			log.Info("OCI event", "ref", event.Reference.String(), "type", event.Type)
 			err := handle(ctx, router, event)
 			if err != nil {
 				log.Error(err, "could not handle event")
@@ -135,7 +135,7 @@ func handle(ctx context.Context, router routing.Router, event oci.OCIEvent) erro
 	if event.Type != oci.CreateEvent {
 		return nil
 	}
-	err := router.Advertise(ctx, []string{event.Key})
+	err := router.Advertise(ctx, []string{event.Reference.Identifier()})
 	if err != nil {
 		return err
 	}

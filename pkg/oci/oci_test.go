@@ -15,6 +15,7 @@ import (
 	"github.com/containerd/containerd/v2/core/metadata"
 	"github.com/containerd/containerd/v2/pkg/namespaces"
 	"github.com/containerd/containerd/v2/plugins/content/local"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -43,13 +44,19 @@ func TestStore(t *testing.T) {
 	ctx := namespaces.WithNamespace(t.Context(), "k8s.io")
 	containerdClient, err := client.New("", client.WithServices(client.WithImageStore(imageStore), client.WithContentStore(contentStore)))
 	require.NoError(t, err)
-	remoteContainerd, err := NewContainerd("", "", "", nil)
+	remoteMtCache, err := lru.New[digest.Digest, string](100)
 	require.NoError(t, err)
-	remoteContainerd.client = containerdClient
-	localContainerd, err := NewContainerd("", "", "", nil)
+	remoteContainerd := &Containerd{
+		mediaTypeIdx: remoteMtCache,
+		client:       containerdClient,
+	}
+	localMtCache, err := lru.New[digest.Digest, string](100)
 	require.NoError(t, err)
-	localContainerd.contentPath = contentPath
-	localContainerd.client = containerdClient
+	localContainerd := &Containerd{
+		mediaTypeIdx: localMtCache,
+		client:       containerdClient,
+		contentPath:  contentPath,
+	}
 
 	memoryStore := NewMemory()
 
