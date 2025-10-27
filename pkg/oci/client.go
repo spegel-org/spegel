@@ -20,7 +20,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/spegel-org/spegel/internal/option"
-    "github.com/spegel-org/spegel/internal/otelx"
+	"github.com/spegel-org/spegel/internal/otelx"
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
@@ -38,12 +38,12 @@ func NewClient(httpClient *http.Client) *Client {
 		httpClient = httpx.BaseClient()
 		httpClient.Timeout = 0
 	}
-    // Wrap transport for tracing if enabled (noop if not).
-    if httpClient.Transport == nil {
-        httpClient.Transport = otelx.WrapTransport(http.DefaultTransport)
-    } else {
-        httpClient.Transport = otelx.WrapTransport(httpClient.Transport)
-    }
+	// Wrap transport for tracing if enabled (noop if not).
+	if httpClient.Transport == nil {
+		httpClient.Transport = otelx.WrapTransport(http.DefaultTransport)
+	} else {
+		httpClient.Transport = otelx.WrapTransport(httpClient.Transport)
+	}
 	return &Client{
 		httpClient: httpClient,
 		tc:         sync.Map{},

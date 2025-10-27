@@ -29,3 +29,8 @@ func WrapTransport(rt http.RoundTripper) http.RoundTripper {
 func EnrichLogger(ctx context.Context, log logr.Logger) logr.Logger {
 	return log
 }
+
+// StartSpan returns the original context and a no-op end function.
+func StartSpan(ctx context.Context, name string) (context.Context, func()) {
+    return ctx, func() {}
+}
