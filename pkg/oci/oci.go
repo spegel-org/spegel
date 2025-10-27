@@ -31,8 +31,8 @@ const (
 )
 
 type OCIEvent struct {
-	Type EventType
-	Key  string
+	Type      EventType
+	Reference Reference
 }
 
 type Store interface {
