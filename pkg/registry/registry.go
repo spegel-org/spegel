@@ -232,7 +232,11 @@ type MirrorErrorDetails struct {
 func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "mirror")
 
-	log := logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path)
+	ctx, spanEnd := otelx.StartSpan(req.Context(), "registry.mirror")
+	defer spanEnd()
+	req = req.WithContext(ctx)
+
+	log := otelx.EnrichLogger(req.Context(), logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path))
 
 	defer func() {
 		cacheType := "hit"
@@ -376,6 +380,10 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "manifest")
 
+	ctx, spanEnd := otelx.StartSpan(req.Context(), "registry.manifest")
+	defer spanEnd()
+	req = req.WithContext(ctx)
+
 	if dist.Digest == "" {
 		dgst, err := r.ociStore.Resolve(req.Context(), dist.Identifier())
 		if err != nil {
@@ -423,6 +431,10 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 
 func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "blob")
+
+	ctx, spanEnd := otelx.StartSpan(req.Context(), "registry.blob")
+	defer spanEnd()
+	req = req.WithContext(ctx)
 
 	desc, err := r.ociStore.Descriptor(req.Context(), dist.Digest)
 	if err != nil {
