@@ -1,3 +1,5 @@
+//go:build !otel
+
 package otelx
 
 import (

@@ -13,13 +13,16 @@ import (
 	"github.com/go-logr/logr"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+	oteltrace "go.opentelemetry.io/otel/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 )
+
+// Shutdown is a function type for shutting down the OTEL SDK.
+type Shutdown func(context.Context) error
 
 // Config holds OTEL configuration.
 type Config struct {
@@ -108,7 +111,7 @@ func WrapTransport(name string, rt http.RoundTripper) http.RoundTripper {
 
 // EnrichLogger adds trace correlation fields to a logger.
 func EnrichLogger(ctx context.Context, log logr.Logger) logr.Logger {
-	span := trace.SpanFromContext(ctx)
+	span := oteltrace.SpanFromContext(ctx)
 	if !span.IsRecording() {
 		return log
 	}
@@ -125,10 +128,10 @@ func EnrichLogger(ctx context.Context, log logr.Logger) logr.Logger {
 }
 
 // StartSpan creates a new trace span.
-func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, func()) {
+func StartSpan(ctx context.Context, name string, opts ...oteltrace.SpanStartOption) (context.Context, func()) {
 	tracer := otel.Tracer("github.com/spegel-org/spegel")
 	ctx, span := tracer.Start(ctx, name, opts...)
-	return ctx, span.End
+	return ctx, func() { span.End() }
 }
 
 // WithEnrichedLogger returns a logger with trace correlation fields.
