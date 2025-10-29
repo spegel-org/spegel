@@ -71,8 +71,8 @@ func TestWrapHandler_SetsActiveSpan(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	parentCtx, parentSpan := otel.Tracer("test").Start(context.Background(), "parent")
 	otel.GetTextMapPropagator().Inject(parentCtx, propagation.HeaderCarrier(req.Header))
-	parentSpan.End()
 	wrapped.ServeHTTP(rr, req)
+	parentSpan.End()
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
@@ -91,8 +91,8 @@ func TestWrapTransport_InjectsTraceparent(t *testing.T) {
 	// Use a context with an active span so transport will inject traceparent
 	ctx, span := otel.Tracer("test").Start(context.Background(), "client-parent")
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
-	span.End()
 	res, err := client.Do(req)
+	span.End()
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 	assert.NotEmpty(t, <-gotHeader)
