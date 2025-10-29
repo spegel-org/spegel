@@ -90,6 +90,10 @@ type Arguments struct {
 }
 
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	args := &Arguments{}
 	arg.MustParse(args)
 
@@ -106,8 +110,8 @@ func main() {
 		cfg := otelx.Config{
 			ServiceName: args.Registry.OtelServiceName,
 			Endpoint:    args.Registry.OtelEndpoint,
-			Insecure:    args.Registry.OtelInsecure,
 			Sampler:     args.Registry.OtelSampler,
+			Insecure:    args.Registry.OtelInsecure,
 		}
 		shutdown, terr := otelx.Setup(ctx, cfg)
 		if terr != nil {
@@ -115,7 +119,9 @@ func main() {
 		}
 		defer func() {
 			if shutdown != nil {
-				_ = shutdown(context.Background())
+				if err := shutdown(context.Background()); err != nil {
+					log.Error(err, "failed to shutdown telemetry")
+				}
 			}
 		}()
 	}
@@ -123,9 +129,10 @@ func main() {
 	err := run(ctx, args)
 	if err != nil {
 		log.Error(err, "run exit with error")
-		os.Exit(1)
+		return 1
 	}
 	log.Info("gracefully shutdown")
+	return 0
 }
 
 func run(ctx context.Context, args *Arguments) error {
