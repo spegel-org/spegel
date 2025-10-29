@@ -65,6 +65,12 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | spegel.mirrorResolveRetries | int | `3` | Max amount of mirrors to attempt. |
 | spegel.mirrorResolveTimeout | string | `"20ms"` | Max duration spent finding a mirror. |
 | spegel.mirroredRegistries | list | `[]` | Registries for which mirror configuration will be created. Empty means all registires will be mirrored. |
+| spegel.otel | object | `{"enabled":false,"endpoint":"","insecure":false,"sampler":"parentbased_always_off","serviceName":"spegel"}` | OTEL tracing configuration. |
+| spegel.otel.enabled | bool | `false` | Enable OTEL tracing. |
+| spegel.otel.endpoint | string | `""` | OTEL exporter endpoint (e.g., http://otel-collector:4318). |
+| spegel.otel.insecure | bool | `false` | Use insecure connection for OTEL exporter. |
+| spegel.otel.sampler | string | `"parentbased_always_off"` | Trace sampler (always_on, always_off, parentbased_always_on, parentbased_always_off, or a ratio 0.0-1.0). |
+| spegel.otel.serviceName | string | `"spegel"` | Service name for OTEL traces. |
 | spegel.prependExisting | bool | `false` | When true existing mirror configuration will be kept and Spegel will prepend it's configuration. |
 | spegel.registryFilters | list | `[]` | Regular expressions to filter out tags/registries. If empty, all registries/tags are resolved. |
 | spegel.resolveLatestTag | bool | `true` | When true latest tags will be resolved to digests. |
