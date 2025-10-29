@@ -16,8 +16,8 @@ type Shutdown func(context.Context) error
 type Config struct {
 	ServiceName string
 	Endpoint    string
-	Insecure    bool
 	Sampler     string
+	Insecure    bool
 }
 
 // Setup is a no-op tracing initializer used when OTEL is not built in.
@@ -40,17 +40,12 @@ func WrapTransport(name string, rt http.RoundTripper) http.RoundTripper {
 	return rt
 }
 
-// EnrichLogger returns the original logger without correlation fields.
-func EnrichLogger(ctx context.Context, log logr.Logger) logr.Logger {
+// WithEnrichedLogger returns the original logger without correlation fields.
+func WithEnrichedLogger(ctx context.Context, log logr.Logger) logr.Logger {
 	return log
 }
 
 // StartSpan returns the original context and a no-op end function.
 func StartSpan(ctx context.Context, name string) (context.Context, func()) {
 	return ctx, func() {}
-}
-
-// WithEnrichedLogger returns the original logger when tracing is disabled.
-func WithEnrichedLogger(ctx context.Context, log logr.Logger) logr.Logger {
-	return EnrichLogger(ctx, log)
 }

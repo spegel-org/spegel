@@ -236,7 +236,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 	defer spanEnd()
 	req = req.WithContext(ctx)
 
-	log := otelx.EnrichLogger(req.Context(), logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path))
+	log := otelx.WithEnrichedLogger(req.Context(), logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path))
 
 	defer func() {
 		cacheType := "hit"
@@ -423,7 +423,7 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	rw.WriteHeader(http.StatusOK)
 	_, err = io.Copy(rw, rc)
 	if err != nil {
-		log := otelx.EnrichLogger(req.Context(), logr.FromContextOrDiscard(req.Context()))
+		log := otelx.WithEnrichedLogger(req.Context(), logr.FromContextOrDiscard(req.Context()))
 		log.Error(err, "error occurred when writing manifest")
 		return
 	}
@@ -490,7 +490,7 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 	rw.WriteHeader(status)
 	_, err = io.Copy(rw, src)
 	if err != nil {
-		log := otelx.EnrichLogger(req.Context(), logr.FromContextOrDiscard(req.Context()))
+		log := otelx.WithEnrichedLogger(req.Context(), logr.FromContextOrDiscard(req.Context()))
 		log.Error(err, "failed to write blob")
 		return
 	}

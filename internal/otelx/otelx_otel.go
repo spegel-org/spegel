@@ -17,8 +17,8 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	oteltrace "go.opentelemetry.io/otel/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 // Shutdown is a function type for shutting down the OTEL SDK.
@@ -28,14 +28,14 @@ type Shutdown func(context.Context) error
 type Config struct {
 	ServiceName string
 	Endpoint    string
-	Insecure    bool
 	Sampler     string
+	Insecure    bool
 }
 
 // Setup initializes the OpenTelemetry SDK.
 func Setup(ctx context.Context, cfg Config) (Shutdown, error) {
 	log := logr.FromContextOrDiscard(ctx)
-	
+
 	// Use cfg if provided, otherwise fall back to environment
 	if cfg.Endpoint == "" {
 		cfg.Endpoint = getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
@@ -77,6 +77,7 @@ func Setup(ctx context.Context, cfg Config) (Shutdown, error) {
 	)
 
 	otel.SetTracerProvider(tp)
+
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
@@ -109,8 +110,8 @@ func WrapTransport(name string, rt http.RoundTripper) http.RoundTripper {
 	return otelhttp.NewTransport(rt)
 }
 
-// EnrichLogger adds trace correlation fields to a logger.
-func EnrichLogger(ctx context.Context, log logr.Logger) logr.Logger {
+// WithEnrichedLogger adds trace correlation fields and returns a derived logger.
+func WithEnrichedLogger(ctx context.Context, log logr.Logger) logr.Logger {
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.IsRecording() {
 		return log
@@ -134,25 +135,10 @@ func StartSpan(ctx context.Context, name string, opts ...oteltrace.SpanStartOpti
 	return ctx, func() { span.End() }
 }
 
-// WithEnrichedLogger returns a logger with trace correlation fields.
-func WithEnrichedLogger(ctx context.Context, log logr.Logger) logr.Logger {
-	return EnrichLogger(ctx, log)
-}
-
 // getEnv returns an environment variable value or a default.
 func getEnv(key, defaultValue string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
-	}
-	return defaultValue
-}
-
-// getEnvBool returns a boolean environment variable or a default.
-func getEnvBool(key string, defaultValue bool) bool {
-	if val := os.Getenv(key); val != "" {
-		if parsed, err := strconv.ParseBool(val); err == nil {
-			return parsed
-		}
 	}
 	return defaultValue
 }
@@ -177,4 +163,3 @@ func newSampler(samplerType string) trace.Sampler {
 		return trace.ParentBased(trace.NeverSample())
 	}
 }
-
