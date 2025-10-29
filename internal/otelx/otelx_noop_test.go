@@ -5,6 +5,7 @@ package otelx
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -38,8 +39,10 @@ func TestWrapHandler_NoOp(t *testing.T) {
 	})
 
 	wrapped := WrapHandler("test-handler", handler)
-	// In no-op build, the wrapper must return the original handler instance
-	assert.Equal(t, handler, wrapped, "noop must return original handler")
+	// Compare underlying function entry pointers to avoid func equality
+	hp := reflect.ValueOf(handler).Pointer()
+	wp := reflect.ValueOf(wrapped).Pointer()
+	assert.Equal(t, hp, wp, "noop must return original handler")
 }
 
 func TestWrapTransport_NoOp(t *testing.T) {
