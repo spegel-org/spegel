@@ -50,7 +50,7 @@ func StartSpan(ctx context.Context, name string) (context.Context, func()) {
 	return ctx, func() {}
 }
 
-// WithEnrichedLogger returns a logger with trace correlation fields.
+// WithEnrichedLogger returns the original logger when tracing is disabled.
 func WithEnrichedLogger(ctx context.Context, log logr.Logger) logr.Logger {
 	return EnrichLogger(ctx, log)
 }
