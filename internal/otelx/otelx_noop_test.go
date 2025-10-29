@@ -38,9 +38,8 @@ func TestWrapHandler_NoOp(t *testing.T) {
 	})
 
 	wrapped := WrapHandler("test-handler", handler)
-	assert.NotNil(t, wrapped, "wrapped handler should not be nil")
-	// In no-op mode, wrapped == handler, so both should be non-nil
-	assert.NotNil(t, handler, "original handler should not be nil")
+	// In no-op build, the wrapper must return the original handler instance
+	assert.Equal(t, handler, wrapped, "noop must return original handler")
 }
 
 func TestWrapTransport_NoOp(t *testing.T) {
