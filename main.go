@@ -57,6 +57,9 @@ type RegistryCmd struct {
 	DataDir                      string           `arg:"--data-dir,env:DATA_DIR" default:"/var/lib/spegel" help:"Directory where Spegel persists data."`
 	RouterAddr                   string           `arg:"--router-addr,env:ROUTER_ADDR" default:":5001" help:"address to serve router."`
 	RegistryAddr                 string           `arg:"--registry-addr,env:REGISTRY_ADDR" default:":5000" help:"address to server image registry."`
+	OtelEndpoint                 string           `arg:"--otel-endpoint,env:OTEL_ENDPOINT" help:"OTEL exporter endpoint (e.g., http://otel-collector:4318)."`
+	OtelServiceName              string           `arg:"--otel-service-name,env:OTEL_SERVICE_NAME" default:"spegel" help:"Service name for OTEL traces."`
+	OtelSampler                  string           `arg:"--otel-sampler,env:OTEL_SAMPLER" default:"parentbased_always_off" help:"Trace sampler (always_on, always_off, parentbased_always_on, parentbased_always_off, or ratio 0.0-1.0)."`
 	MirroredRegistries           []string         `arg:"--mirrored-registries,env:MIRRORED_REGISTRIES" help:"Registries that are configured to be mirrored, if slice is empty all registries are mirrored."`
 	RegistryFilters              []*regexp.Regexp `arg:"--registry-filters,env:REGISTRY_FILTERS" help:"Regular expressions to filter out tags/registries, if slice is empty all registries/tags are resolved."`
 	MirrorResolveTimeout         time.Duration    `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
@@ -64,10 +67,7 @@ type RegistryCmd struct {
 	DebugWebEnabled              bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
 	ResolveLatestTag             bool             `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
 	OtelEnabled                  bool             `arg:"--otel-enabled,env:OTEL_ENABLED" help:"Enable OTEL tracing."`
-	OtelEndpoint                 string           `arg:"--otel-endpoint,env:OTEL_ENDPOINT" help:"OTEL exporter endpoint (e.g., http://otel-collector:4318)."`
 	OtelInsecure                 bool             `arg:"--otel-insecure,env:OTEL_INSECURE" help:"Use insecure connection for OTEL exporter."`
-	OtelServiceName              string           `arg:"--otel-service-name,env:OTEL_SERVICE_NAME" default:"spegel" help:"Service name for OTEL traces."`
-	OtelSampler                  string           `arg:"--otel-sampler,env:OTEL_SAMPLER" default:"parentbased_always_off" help:"Trace sampler (always_on, always_off, parentbased_always_on, parentbased_always_off, or ratio 0.0-1.0)."`
 }
 
 type CleanupCmd struct {
