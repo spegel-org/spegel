@@ -1,4 +1,4 @@
-# OpenTelemetry quick start (local)
+# OpenTelemetry quick start (local with Jaeger)
 
 Minimal steps to see traces during development.
 
@@ -20,8 +20,17 @@ spegel registry \
 
 3) View traces
 
-Open http://localhost:16686 and select service "spegel".
+Open <http://localhost:16686> and select service "spegel".
 
-Notes
+You should see traces in the search view:
+
+![Jaeger search view showing multiple traces](img/otel-traces.png)
+
+Click on any trace to see detailed span information:
+
+![Detailed view of a single trace with span tags and process information](img/otel-single-trace-example.png)
+
+## Notes
+
 - Build the code with the otel tag for unit tests: `go test -tags otel ./...`
 - Helm users can set `.Values.spegel.otel.*` to enable OTEL in the chart.
