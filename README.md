@@ -19,6 +19,7 @@ Spegel is for you if you are looking to do any of the following.
 * Avoid rate-limiting when pulling images from external registries (e.g. Docker Hub).
 * Decrease egressing traffic outside of the clusters network.
 * Increase image pull efficiency in edge node deployments.
+* Optional OpenTelemetry tracing – see the [OTEL quick start](./docs/otel/README.md).
 
 ## Getting Started
 
