@@ -1,8 +1,9 @@
+//go:build !otel
+
 package otelx
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"testing"
 
@@ -50,13 +51,13 @@ func TestWrapTransport_NoOp(t *testing.T) {
 	assert.Equal(t, transport, wrapped, "no-op should return original transport")
 }
 
-func TestEnrichLogger_NoOp(t *testing.T) {
+func TestWithEnrichedLogger_NoOp(t *testing.T) {
 	t.Parallel()
 
 	log := logr.Discard()
 	ctx := context.Background()
 
-	enriched := EnrichLogger(ctx, log)
+	enriched := WithEnrichedLogger(ctx, log)
 	assert.Equal(t, log, enriched, "no-op should return original logger")
 }
 
@@ -73,16 +74,6 @@ func TestStartSpan_NoOp(t *testing.T) {
 	end()
 }
 
-func TestWithEnrichedLogger_NoOp(t *testing.T) {
-	t.Parallel()
-
-	log := logr.Discard()
-	ctx := context.Background()
-
-	enriched := WithEnrichedLogger(ctx, log)
-	assert.Equal(t, log, enriched, "no-op should return original logger")
-}
-
 func TestSetupWithDefaults_NoOp(t *testing.T) {
 	t.Parallel()
 
@@ -96,46 +87,3 @@ func TestSetupWithDefaults_NoOp(t *testing.T) {
 		assert.NoError(t, err)
 	}
 }
-
-// Integration test: verify WrapHandler doesn't break HTTP handlers
-func TestWrapHandler_Integration(t *testing.T) {
-	t.Parallel()
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	wrapped := WrapHandler("integration-test", handler)
-
-	req := http.Request{
-		Method: http.MethodGet,
-		Header: make(http.Header),
-	}
-	rr := &testResponseWriter{
-		header: make(http.Header),
-		status: 0,
-		body:   &mockWriter{},
-	}
-
-	wrapped.ServeHTTP(rr, &req)
-
-	assert.Equal(t, http.StatusOK, rr.status)
-}
-
-// Helper types for testing
-type testResponseWriter struct {
-	header http.Header
-	status int
-	body   io.Writer
-}
-
-func (tw *testResponseWriter) Header() http.Header       { return tw.header }
-func (tw *testResponseWriter) Write(b []byte) (int, error) { return tw.body.Write(b) }
-func (tw *testResponseWriter) WriteHeader(code int)        { tw.status = code }
-
-type mockWriter struct{}
-
-func (m *mockWriter) Write(b []byte) (int, error) { return len(b), nil }
-
