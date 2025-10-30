@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- [#1060](https://github.com/spegel-org/spegel/pull/1060) Add OpenTelemetry tracing support via optional `otel` build tag, Helm values for OTEL configuration (endpoint, insecure, serviceName, sampler), and trace correlation (trace_id/span_id) to structured logs.
 - [#1056](https://github.com/spegel-org/spegel/pull/1056) Send delete events for content by keeping content index.
 
 ### Changed
