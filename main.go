@@ -169,7 +169,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	defer ociStore.Close()
 	err = ociStore.Verify(ctx, args.ContainerdRegistryConfigPath)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	// Router
