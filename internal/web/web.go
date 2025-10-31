@@ -27,7 +27,7 @@ import (
 var templatesFS embed.FS
 
 type Web struct {
-	router          routing.Router
+	router          *routing.P2PRouter
 	ociClient       *oci.Client
 	ociStore        oci.Store
 	httpClient      *http.Client
@@ -35,7 +35,7 @@ type Web struct {
 	registryAddress string
 }
 
-func NewWeb(router routing.Router, ociClient *oci.Client, ociStore oci.Store, registryAddr string) (*Web, error) {
+func NewWeb(router *routing.P2PRouter, ociClient *oci.Client, ociStore oci.Store, registryAddr string) (*Web, error) {
 	funcs := template.FuncMap{
 		"formatBytes":    formatBytes,
 		"formatDuration": formatDuration,
@@ -116,12 +116,10 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 		data.MirrorLastSuccess = time.Since(time.Unix(mirrorLastSuccess, 0))
 	}
 
-	if p2pRouter, ok := w.router.(*routing.P2PRouter); ok {
-		peerAddrs := p2pRouter.PeerAddresses()
-		data.PeerCount = len(peerAddrs)
-		data.PeerAddresses = peerAddrs
-		data.LocalAddress = p2pRouter.LocalAddress()
-	}
+	peerAddrs := w.router.PeerAddresses()
+	data.PeerCount = len(peerAddrs)
+	data.PeerAddresses = peerAddrs
+	data.LocalAddress = w.router.LocalAddress()
 
 	if w.ociStore != nil {
 		images, err := w.ociStore.ListImages(req.Context())
