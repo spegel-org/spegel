@@ -15,6 +15,7 @@ build-image: build
 
 test-unit:
 	go test ./... -race
+	go test -tags otel ./... -race	
 
 test-e2e: build-image
 	IMG_REF=${IMG_REF} \

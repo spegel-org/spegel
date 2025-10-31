@@ -17,6 +17,9 @@ builds:
     flags:
       - -trimpath
       - -a
+    # Uncomment this to enable otel
+    # tags:
+    #   - otel
     no_unique_dist_dir: true
     binary: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}/{{ .ProjectName }}"
 archives:
