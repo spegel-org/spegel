@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -21,12 +22,12 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spegel-org/spegel/internal/cleanup"
-	"github.com/spegel-org/spegel/internal/web"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/state"
+	"github.com/spegel-org/spegel/pkg/web"
 )
 
 type ConfigurationCmd struct {
@@ -252,7 +253,15 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
 	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 	if args.DebugWebEnabled {
-		web, err := web.NewWeb(router, ociClient, ociStore, args.RegistryAddr)
+		webOpts := []web.WebOption{
+			web.WithOCIClient(ociClient),
+			web.WithRegistryFilters(filters),
+		}
+		mirror := &url.URL{
+			Scheme: "http",
+			Host:   args.RegistryAddr,
+		}
+		web, err := web.NewWeb(router, ociStore, reg, mirror, webOpts...)
 		if err != nil {
 			return err
 		}

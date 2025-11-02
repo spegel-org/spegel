@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1055](https://github.com/spegel-org/spegel/pull/1055) Immediately get features when creating Containerd store.
 - [#1061](https://github.com/spegel-org/spegel/pull/1061) Change OCI events to use references instead of key string.
 - [#1063](https://github.com/spegel-org/spegel/pull/1063) Replace transport with option to set OCI client.
+- [#1065](https://github.com/spegel-org/spegel/pull/1065) Move web to pkg and remove metrics dependency.
   
 ### Deprecated
 

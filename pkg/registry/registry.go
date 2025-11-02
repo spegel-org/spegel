@@ -10,6 +10,7 @@ import (
 	"path"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -74,6 +75,10 @@ func WithBasicAuth(username, password string) RegistryOption {
 	}
 }
 
+type Statistics struct {
+	MirrorLastSuccess atomic.Int64
+}
+
 type Registry struct {
 	bufferPool     *sync.Pool
 	ociStore       oci.Store
@@ -84,6 +89,7 @@ type Registry struct {
 	filters        []oci.Filter
 	resolveTimeout time.Duration
 	resolveRetries int
+	stats          Statistics
 }
 
 func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
@@ -120,6 +126,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		username:       cfg.Username,
 		password:       cfg.Password,
 		bufferPool:     bufferPool,
+		stats:          Statistics{},
 	}
 	return r, nil
 }
@@ -131,6 +138,10 @@ func (r *Registry) Handler(log logr.Logger) *httpx.ServeMux {
 	m.Handle("GET /v2/", r.registryHandler)
 	m.Handle("HEAD /v2/", r.registryHandler)
 	return m
+}
+
+func (r *Registry) Stats() *Statistics {
+	return &r.stats
 }
 
 func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
@@ -229,12 +240,13 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 	log := logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path)
 
 	defer func() {
-		cacheType := "hit"
-		if rw.Status() != http.StatusOK {
-			cacheType = "miss"
+		if rw.Error() == nil {
+			metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, "hit").Inc()
+			metrics.MirrorLastSuccessTimestamp.SetToCurrentTime()
+			r.stats.MirrorLastSuccess.Store(time.Now().Unix())
+		} else {
+			metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, "miss").Inc()
 		}
-		metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, cacheType).Inc()
-		metrics.MirrorLastSuccessTimestamp.SetToCurrentTime()
 	}()
 
 	mirrorDetails := MirrorErrorDetails{

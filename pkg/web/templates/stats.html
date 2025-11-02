@@ -1,0 +1,66 @@
+<div>
+  <div class="stat-container">
+    <div class="stat-box" style="background-color: #64B5F6;">
+      <div class="stat-title">Local Address</div>
+      <div class="stat-value" style="word-break: break-all;">{{ .LocalAddress }}</div>
+    </div>
+    <div class="stat-box" style="background-color: {{if .MirrorLastSuccess}}#81C784{{else}}#FAA93B{{end}};">
+      <div class="stat-title">Last Mirror Success</div>
+      {{- if .MirrorLastSuccess }}
+      <div class="stat-value">{{ .MirrorLastSuccess | formatDuration }} ago</div>
+      {{- else }}
+      <div class="stat-value">Pending</div>
+      {{- end }}
+    </div>
+    <div class="stat-box" style="background-color: {{if .Images}}#81C784{{else}}#E57373{{end}};">
+      <div class="stat-title">Images</div>
+      <div class="stat-value">{{ len .Images }}</div>
+    </div>
+    <div class="stat-box" style="background-color: {{if .Peers}}#81C784{{else}}#E57373{{end}};">
+      <div class="stat-title">Connected Peers</div>
+      <div class="stat-value">{{ len .Peers }}</div>
+    </div>
+  </div>
+
+  {{- if .Peers }}
+  <div class="section-container">
+    <h2>Peer Network Status</h2>
+    <div class="table-container">
+      <table>
+        <tr>
+          <th style="width: 30%;">Address</th>
+          <th style="width: 70%;">ID</th>
+        </tr>
+        {{ range .Peers }}
+        <tr>
+          <td>{{ .Address }}</td>
+          <td>{{ .ID }}</td>
+        </tr>
+        {{ end }}
+      </table>
+    </div>
+  </div>
+  {{- end }}
+
+  {{- if .Images }}
+  <div class="section-container">
+    <h2>Available Images</h2>
+    <div class="table-container">
+      <table>
+        <tr>
+          <th style="width: 30%;">Name</th>
+          <th style="width: 20%;">Tag</th>
+          <th style="width: 50%;">Digest</th>
+        </tr>
+        {{ range .Images }}
+        <tr>
+          <td>{{ .Registry }}/{{ .Repository }}</td>
+          <td>{{ .Tag }}</td>
+          <td>{{ .Digest }}</td>
+        </tr>
+        {{ end }}
+      </table>
+    </div>
+  </div>
+  {{- end }}
+</div>

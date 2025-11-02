@@ -6,8 +6,8 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Spegel Debug</title>
 	<link rel="icon" href="https://spegel.dev/favicon.svg" type="image/svg+xml">
-	<script src="https://unpkg.com/htmx.org@2.0.4"></script>
-	<script src="https://unpkg.com/htmx.org@1.9.11/dist/ext/response-targets.js"></script>
+	<script src="https://unpkg.com/htmx.org@2.0.7"></script>
+	<script src="https://unpkg.com/htmx.org@2.0.7/dist/ext/response-targets.js"></script>
 
 	<style>
 		body {
@@ -60,7 +60,7 @@
 			justify-content: center;
 			align-items: center;
 			min-height: 100px;
-			padding: 16px;
+			padding: 0 16px 16px 20px;
 			border-radius: 8px;
 			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 		}
@@ -80,7 +80,8 @@
 			color: red;
 		}
 
-		.measure-container {
+		.section-container {
+			margin-bottom: 30px;
 			padding: 16px;
 			border-radius: 8px;
 			box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
@@ -128,7 +129,7 @@
 
 		<div hx-get="/debug/web/stats" hx-trigger="load, every 2s"></div>
 
-		<div class="measure-container">
+		<div class="section-container">
 			<h2>Measure Image Pull</h2>
 			<form hx-get="/debug/web/measure" hx-target="#measure-result" hx-target-error="#measure-result">
 				<input type="text" name="image" placeholder="ghcr.io/spegel-org/spegel:v0.30.0" />

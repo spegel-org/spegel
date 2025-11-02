@@ -220,14 +220,14 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer
 			r.balancerCache.Add(c.String(), cb)
 		}
 
-		// Don't refresh if min count is already met.
-		if cb.Size() >= count {
-			return cb, nil
-		}
-
 		if ok {
 			// If not closed it means query is still running.
 			if cb.closeCtx.Err() == nil {
+				return cb, nil
+			}
+			// Don't refresh if min count is already met.
+			if count > 0 && cb.Size() >= count {
+				cb.Close()
 				return cb, nil
 			}
 
@@ -290,40 +290,29 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 	return nil
 }
 
-func (r *P2PRouter) Peers() []string {
-	peers := r.kdht.RoutingTable().ListPeers()
-	peerIDs := make([]string, len(peers))
-	for i, p := range peers {
-		peerIDs[i] = p.String()
-	}
-	return peerIDs
+type Peer struct {
+	Address string
+	ID      string
 }
 
-func (r *P2PRouter) PeerAddresses() []string {
-	peerIDs := r.kdht.RoutingTable().ListPeers()
-	peerAddrs := []string{}
-
-	for _, pID := range peerIDs {
-		addrs := r.host.Peerstore().Addrs(pID)
+func (r *P2PRouter) ListPeers() ([]Peer, error) {
+	peers := []Peer{}
+	ids := r.kdht.RoutingTable().ListPeers()
+	for _, id := range ids {
+		addrs := r.host.Peerstore().Addrs(id)
 		if len(addrs) == 0 {
 			continue
 		}
-
-		for _, addr := range addrs {
-			ip, err := manet.ToIP(addr)
-			if err != nil {
-				continue
-			}
-			ipAddr, ok := netip.AddrFromSlice(ip)
-			if !ok {
-				continue
-			}
-			peerAddr := netip.AddrPortFrom(ipAddr, r.registryPort)
-			peerAddrs = append(peerAddrs, peerAddr.String())
-			break
+		if len(addrs) > 1 {
+			return nil, errors.New("dual stack not supported")
 		}
+		netAddr, err := manet.ToNetAddr(addrs[0])
+		if err != nil {
+			return nil, err
+		}
+		peers = append(peers, Peer{Address: netAddr.String(), ID: id.String()})
 	}
-	return peerAddrs
+	return peers, nil
 }
 
 func (r *P2PRouter) LocalAddress() string {
