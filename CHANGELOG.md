@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1035](https://github.com/spegel-org/spegel/pull/1035) Implement single registry filter using reference.
 - [#1040](https://github.com/spegel-org/spegel/pull/1040) Fix distribution regex to support consecutive dashes and underscores.
 - [#1048](https://github.com/spegel-org/spegel/pull/1048) Implement filtering of content in state tracking.
+- [#1059](https://github.com/spegel-org/spegel/pull/1059) Fix missing error return on Verify() failure in registry path.
 
 ### Security
 
