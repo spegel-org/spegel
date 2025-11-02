@@ -27,14 +27,15 @@ import (
 var templatesFS embed.FS
 
 type Web struct {
-	router          routing.Router
+	router          *routing.P2PRouter
 	ociClient       *oci.Client
+	ociStore        oci.Store
 	httpClient      *http.Client
 	tmpls           *template.Template
 	registryAddress string
 }
 
-func NewWeb(router routing.Router, ociClient *oci.Client, registryAddr string) (*Web, error) {
+func NewWeb(router *routing.P2PRouter, ociClient *oci.Client, ociStore oci.Store, registryAddr string) (*Web, error) {
 	funcs := template.FuncMap{
 		"formatBytes":    formatBytes,
 		"formatDuration": formatDuration,
@@ -46,6 +47,7 @@ func NewWeb(router routing.Router, ociClient *oci.Client, registryAddr string) (
 	return &Web{
 		router:          router,
 		ociClient:       ociClient,
+		ociStore:        ociStore,
 		httpClient:      httpx.BaseClient(),
 		tmpls:           tmpls,
 		registryAddress: registryAddr,
@@ -91,9 +93,13 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 
 	data := struct {
+		LocalAddress      string
+		Images            []oci.Image
+		PeerAddresses     []string
 		MirrorLastSuccess time.Duration
 		ImageCount        int64
 		LayerCount        int64
+		PeerCount         int
 	}{}
 	if family, ok := metricFamilies["spegel_advertised_images"]; ok {
 		for _, metric := range family.Metric {
@@ -108,6 +114,18 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	mirrorLastSuccess := int64(*metricFamilies["spegel_mirror_last_success_timestamp_seconds"].Metric[0].Gauge.Value)
 	if mirrorLastSuccess > 0 {
 		data.MirrorLastSuccess = time.Since(time.Unix(mirrorLastSuccess, 0))
+	}
+
+	peerAddrs := w.router.PeerAddresses()
+	data.PeerCount = len(peerAddrs)
+	data.PeerAddresses = peerAddrs
+	data.LocalAddress = w.router.LocalAddress()
+
+	if w.ociStore != nil {
+		images, err := w.ociStore.ListImages(req.Context())
+		if err == nil {
+			data.Images = images
+		}
 	}
 
 	err = w.tmpls.ExecuteTemplate(rw, "stats.html", data)

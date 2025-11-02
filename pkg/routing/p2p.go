@@ -290,6 +290,78 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 	return nil
 }
 
+func (r *P2PRouter) Peers() []string {
+	peers := r.kdht.RoutingTable().ListPeers()
+	peerIDs := make([]string, len(peers))
+	for i, p := range peers {
+		peerIDs[i] = p.String()
+	}
+	return peerIDs
+}
+
+func (r *P2PRouter) PeerAddresses() []string {
+	peerIDs := r.kdht.RoutingTable().ListPeers()
+	peerAddrs := []string{}
+
+	for _, pID := range peerIDs {
+		addrs := r.host.Peerstore().Addrs(pID)
+		if len(addrs) == 0 {
+			continue
+		}
+
+		for _, addr := range addrs {
+			ip, err := manet.ToIP(addr)
+			if err != nil {
+				continue
+			}
+			ipAddr, ok := netip.AddrFromSlice(ip)
+			if !ok {
+				continue
+			}
+			peerAddr := netip.AddrPortFrom(ipAddr, r.registryPort)
+			peerAddrs = append(peerAddrs, peerAddr.String())
+			break
+		}
+	}
+	return peerAddrs
+}
+
+func (r *P2PRouter) LocalAddress() string {
+	addrs := r.host.Addrs()
+	var ip4Addr, ip6Addr netip.Addr
+
+	for _, addr := range addrs {
+		if manet.IsIPLoopback(addr) {
+			continue
+		}
+
+		ip, err := manet.ToIP(addr)
+		if err != nil {
+			continue
+		}
+
+		ipAddr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			continue
+		}
+
+		if ipAddr.Is6() {
+			ip6Addr = ipAddr
+		} else if ipAddr.Is4() {
+			ip4Addr = ipAddr
+		}
+	}
+
+	if ip6Addr.IsValid() {
+		return ip6Addr.String()
+	}
+	if ip4Addr.IsValid() {
+		return ip4Addr.String()
+	}
+
+	return ""
+}
+
 func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
 	h, p, err := net.SplitHostPort(addr)
 	if err != nil {

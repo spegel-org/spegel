@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- [#1054](https://github.com/spegel-org/spegel/pull/1054) Extended the debug UI to provide more information.
+
 ### Added
 
 - [#1056](https://github.com/spegel-org/spegel/pull/1056) Send delete events for content by keeping content index.
