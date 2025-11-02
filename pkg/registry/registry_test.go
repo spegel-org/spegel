@@ -24,26 +24,27 @@ import (
 func TestRegistryOptions(t *testing.T) {
 	t.Parallel()
 
-	transport := &http.Transport{}
 	filters := []oci.Filter{
 		oci.RegexFilter{Regex: regexp.MustCompile(`^docker.io/`)},
 		oci.RegexFilter{Regex: regexp.MustCompile(`^gcr.io/`)},
 	}
+	ociClient, err := oci.NewClient()
+	require.NoError(t, err)
 
 	opts := []RegistryOption{
 		WithResolveRetries(5),
 		WithRegistryFilters(filters),
 		WithResolveTimeout(10 * time.Minute),
-		WithTransport(transport),
 		WithBasicAuth("foo", "bar"),
+		WithOCIClient(ociClient),
 	}
 	cfg := RegistryConfig{}
-	err := option.Apply(&cfg, opts...)
+	err = option.Apply(&cfg, opts...)
 	require.NoError(t, err)
 	require.Equal(t, 5, cfg.ResolveRetries)
 	require.Equal(t, filters, cfg.Filters)
 	require.Equal(t, 10*time.Minute, cfg.ResolveTimeout)
-	require.Equal(t, transport, cfg.Transport)
+	require.Equal(t, ociClient, cfg.OCIClient)
 	require.Equal(t, "foo", cfg.Username)
 	require.Equal(t, "bar", cfg.Password)
 }

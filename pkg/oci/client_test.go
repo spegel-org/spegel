@@ -1,6 +1,8 @@
 package oci
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,12 +14,30 @@ import (
 	"cuelabs.dev/go/oci/ociregistry/ociserver"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
 func TestClient(t *testing.T) {
 	t.Parallel()
+
+	t.Run("option configuration", func(t *testing.T) {
+		t.Parallel()
+
+		certPool := x509.NewCertPool()
+		certificates := []tls.Certificate{{Certificate: [][]byte{{1}}}}
+
+		opts := []ClientOption{
+			WithTLS(certPool, certificates),
+		}
+		cfg := ClientConfig{}
+		err := option.Apply(&cfg, opts...)
+		require.NoError(t, err)
+		require.Equal(t, certPool, cfg.TLSClientConfig.RootCAs)
+		require.Equal(t, certificates, cfg.TLSClientConfig.Certificates)
+	})
 
 	img, err := ParseImage("docker.io/test/image:latest", AllowTagOnly())
 	require.NoError(t, err)
@@ -60,10 +80,12 @@ func TestClient(t *testing.T) {
 		srv.Close()
 	})
 
-	client := NewClient(srv.Client())
+	ociClient, err := NewClient()
+	require.NoError(t, err)
+	require.NotNil(t, ociClient.httpClient)
 	mirror, err := url.Parse(srv.URL)
 	require.NoError(t, err)
-	pullResults, err := client.Pull(t.Context(), img, WithPullMirror(mirror))
+	pullResults, err := ociClient.Pull(t.Context(), img, WithPullMirror(mirror))
 	require.NoError(t, err)
 	require.Len(t, pullResults, 3)
 
@@ -74,13 +96,10 @@ func TestClient(t *testing.T) {
 	}
 	dist, err := NewDistributionPath(ref, DistributionKindBlob)
 	require.NoError(t, err)
-	desc, err := client.Head(t.Context(), dist, WithFetchMirror(mirror))
+	desc, err := ociClient.Head(t.Context(), dist, WithFetchMirror(mirror))
 	require.NoError(t, err)
 	require.Equal(t, dist.Digest, desc.Digest)
 	require.Equal(t, httpx.ContentTypeBinary, desc.MediaType)
-
-	client = NewClient(nil)
-	require.NotNil(t, client.httpClient)
 }
 
 func TestDescriptorHeader(t *testing.T) {

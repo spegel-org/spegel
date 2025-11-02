@@ -2,6 +2,8 @@ package oci
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,20 +29,49 @@ const (
 	HeaderDockerDigest = "Docker-Content-Digest"
 )
 
-type Client struct {
-	httpClient *http.Client
-	tc         sync.Map
+type ClientConfig struct {
+	TLSClientConfig *tls.Config
 }
 
-func NewClient(httpClient *http.Client) *Client {
-	if httpClient == nil {
-		httpClient = httpx.BaseClient()
-		httpClient.Timeout = 0
+type ClientOption = option.Option[ClientConfig]
+
+func WithTLS(rootCAs *x509.CertPool, certificates []tls.Certificate) ClientOption {
+	return func(cfg *ClientConfig) error {
+		cfg.TLSClientConfig = &tls.Config{
+			RootCAs:      rootCAs,
+			Certificates: certificates,
+		}
+		return nil
 	}
-	return &Client{
+}
+
+type Client struct {
+	httpClient *http.Client
+	tokenCache sync.Map
+}
+
+func NewClient(opts ...ClientOption) (*Client, error) {
+	cfg := ClientConfig{}
+	err := option.Apply(&cfg, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	httpClient := &http.Client{
+		Timeout: 0,
+	}
+	transport := httpx.BaseTransport()
+	transport.TLSClientConfig = cfg.TLSClientConfig
+	transport.MaxIdleConns = 100
+	transport.MaxConnsPerHost = 100
+	transport.MaxIdleConnsPerHost = 100
+	httpClient.Transport = transport
+
+	ociClient := &Client{
 		httpClient: httpClient,
-		tc:         sync.Map{},
+		tokenCache: sync.Map{},
 	}
+	return ociClient, nil
 }
 
 type CommonConfig struct {
@@ -298,7 +329,7 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 		if cfg.Range != nil {
 			req.Header.Add(httpx.HeaderRange, cfg.Range.String())
 		}
-		token, ok := c.tc.Load(tcKey)
+		token, ok := c.tokenCache.Load(tcKey)
 		if ok {
 			//nolint: errcheck // We know it will be a string.
 			req.Header.Set(httpx.HeaderAuthorization, "Bearer "+token.(string))
@@ -308,13 +339,13 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 			return nil, ocispec.Descriptor{}, err
 		}
 		if resp.StatusCode == http.StatusUnauthorized {
-			c.tc.Delete(tcKey)
+			c.tokenCache.Delete(tcKey)
 			wwwAuth := resp.Header.Get(httpx.HeaderWWWAuthenticate)
 			token, err = getBearerToken(ctx, wwwAuth, c.httpClient)
 			if err != nil {
 				return nil, ocispec.Descriptor{}, err
 			}
-			c.tc.Store(tcKey, token)
+			c.tokenCache.Store(tcKey, token)
 			continue
 		}
 		err = httpx.CheckResponseStatus(resp, http.StatusOK, http.StatusPartialContent)
