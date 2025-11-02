@@ -28,7 +28,7 @@ const (
 )
 
 type RegistryConfig struct {
-	Transport      http.RoundTripper
+	OCIClient      *oci.Client
 	Username       string
 	Password       string
 	Filters        []oci.Filter
@@ -59,9 +59,9 @@ func WithResolveTimeout(resolveTimeout time.Duration) RegistryOption {
 	}
 }
 
-func WithTransport(transport http.RoundTripper) RegistryOption {
+func WithOCIClient(ociClient *oci.Client) RegistryOption {
 	return func(cfg *RegistryConfig) error {
-		cfg.Transport = transport
+		cfg.OCIClient = ociClient
 		return nil
 	}
 }
@@ -95,18 +95,13 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 	if err != nil {
 		return nil, err
 	}
-
-	httpClient := &http.Client{}
-	if cfg.Transport != nil {
-		httpClient.Transport = cfg.Transport
-	} else {
-		transport := httpx.BaseTransport()
-		transport.MaxIdleConns = 100
-		transport.MaxConnsPerHost = 100
-		transport.MaxIdleConnsPerHost = 100
-		httpClient.Transport = transport
+	if cfg.OCIClient == nil {
+		ociClient, err := oci.NewClient()
+		if err != nil {
+			return nil, err
+		}
+		cfg.OCIClient = ociClient
 	}
-	ociClient := oci.NewClient(httpClient)
 
 	bufferPool := &sync.Pool{
 		New: func() any {
@@ -118,7 +113,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 	r := &Registry{
 		ociStore:       ociStore,
 		router:         router,
-		ociClient:      ociClient,
+		ociClient:      cfg.OCIClient,
 		resolveRetries: cfg.ResolveRetries,
 		filters:        cfg.Filters,
 		resolveTimeout: cfg.ResolveTimeout,

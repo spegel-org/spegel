@@ -139,6 +139,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	if err != nil {
 		return err
 	}
+	ociClient, err := oci.NewClient()
+	if err != nil {
+		return err
+	}
 
 	filters := []oci.Filter{}
 	regFilter, err := oci.FilterForMirroredRegistries(args.MirroredRegistries)
@@ -210,6 +214,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		registry.WithRegistryFilters(filters),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
 		registry.WithBasicAuth(username, password),
+		registry.WithOCIClient(ociClient),
 	}
 	reg, err := registry.NewRegistry(ociStore, router, registryOpts...)
 	if err != nil {
@@ -247,7 +252,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	mux.Handle("/debug/pprof/block", pprof.Handler("block"))
 	mux.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 	if args.DebugWebEnabled {
-		web, err := web.NewWeb(router, oci.NewClient(nil), ociStore, args.RegistryAddr)
+		web, err := web.NewWeb(router, ociClient, ociStore, args.RegistryAddr)
 		if err != nil {
 			return err
 		}
