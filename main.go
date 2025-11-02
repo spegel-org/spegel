@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spegel-org/spegel/internal/cleanup"
+	"github.com/spegel-org/spegel/internal/version"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
@@ -29,6 +31,10 @@ import (
 	"github.com/spegel-org/spegel/pkg/state"
 	"github.com/spegel-org/spegel/pkg/web"
 )
+
+type VersionCmd struct {
+	Format string `arg:"--format" default:"text" help:"Format to output version information in."`
+}
 
 type ConfigurationCmd struct {
 	ContainerdRegistryConfigPath string   `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
@@ -74,6 +80,7 @@ type CleanupWaitCmd struct {
 }
 
 type Arguments struct {
+	Version       *VersionCmd       `arg:"subcommand:version"`
 	Configuration *ConfigurationCmd `arg:"subcommand:configuration"`
 	Registry      *RegistryCmd      `arg:"subcommand:registry"`
 	Cleanup       *CleanupCmd       `arg:"subcommand:cleanup"`
@@ -85,36 +92,70 @@ func main() {
 	args := &Arguments{}
 	arg.MustParse(args)
 
+	err := run(context.Background(), args)
+	if err != nil {
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, args *Arguments) error {
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
+	defer cancel()
+
 	opts := slog.HandlerOptions{
 		AddSource: true,
 		Level:     args.LogLevel,
 	}
 	handler := slog.NewJSONHandler(os.Stderr, &opts)
 	log := logr.FromSlogHandler(handler)
-	ctx := logr.NewContext(context.Background(), log)
+	ctx = logr.NewContext(ctx, log)
 
-	err := run(ctx, args)
+	err := func() error {
+		switch {
+		case args.Version != nil:
+			return versionCommand(ctx, args.Version)
+		case args.Configuration != nil:
+			return configurationCommand(ctx, args.Configuration)
+		case args.Registry != nil:
+			return registryCommand(ctx, args.Registry)
+		case args.Cleanup != nil:
+			return cleanupCommand(ctx, args.Cleanup)
+		case args.CleanupWait != nil:
+			return cleanupWaitCommand(ctx, args.CleanupWait)
+		default:
+			return errors.New("unknown subcommand")
+		}
+	}()
 	if err != nil {
-		log.Error(err, "run exit with error")
-		os.Exit(1)
+		log.Error(err, "exit with error")
+		return err
 	}
-	log.Info("gracefully shutdown")
+	if args.Version != nil {
+		log.Info("exit gracefully")
+	}
+	return nil
 }
 
-func run(ctx context.Context, args *Arguments) error {
-	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
-	defer cancel()
-	switch {
-	case args.Configuration != nil:
-		return configurationCommand(ctx, args.Configuration)
-	case args.Registry != nil:
-		return registryCommand(ctx, args.Registry)
-	case args.Cleanup != nil:
-		return cleanupCommand(ctx, args.Cleanup)
-	case args.CleanupWait != nil:
-		return cleanupWaitCommand(ctx, args.CleanupWait)
+func versionCommand(_ context.Context, args *VersionCmd) error {
+	versionInfo, err := version.Load()
+	if err != nil {
+		return err
+	}
+	switch args.Format {
+	case "text":
+		//nolint: forbidigo // Output already formatted so no need to log formatting.
+		fmt.Printf("spegel version %s %s\n", versionInfo.Build.Version, versionInfo.Build.Commit)
+		return nil
+	case "json":
+		b, err := json.Marshal(&versionInfo)
+		if err != nil {
+			return err
+		}
+		//nolint: forbidigo // Output already formatted so no need to log formatting.
+		fmt.Print(string(b))
+		return nil
 	default:
-		return errors.New("unknown subcommand")
+		return fmt.Errorf("unknown output format %s", args.Format)
 	}
 }
 
@@ -133,6 +174,15 @@ func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	log := logr.FromContextOrDiscard(ctx)
 	g, ctx := errgroup.WithContext(ctx)
+
+	versionInfo, err := version.Load()
+	if err != nil {
+		return err
+	}
+	err = versionInfo.Preflight()
+	if err != nil {
+		return err
+	}
 
 	username, password, err := loadBasicAuth()
 	if err != nil {
