@@ -273,29 +273,16 @@ func TestLoadOrCreatePrivateKey(t *testing.T) {
 	require.True(t, firstPrivKey.Equals(secondPrivKey))
 }
 
-func TestPeers(t *testing.T) {
+func TestListPeers(t *testing.T) {
 	t.Parallel()
 
 	isolatedBs := NewStaticBootstrapper(nil)
 	isolatedRouter, err := NewP2PRouter(t.Context(), "localhost:0", isolatedBs, "9090")
 	require.NoError(t, err)
 
-	isolatedPeers := isolatedRouter.Peers()
-	require.Empty(t, isolatedPeers)
-
-	require.NotNil(t, isolatedPeers)
-}
-
-func TestPeerAddresses(t *testing.T) {
-	t.Parallel()
-
-	isolatedBs := NewStaticBootstrapper(nil)
-	isolatedRouter, err := NewP2PRouter(t.Context(), "localhost:0", isolatedBs, "9090")
+	isolatedAddrs, err := isolatedRouter.ListPeers()
 	require.NoError(t, err)
-
-	isolatedAddrs := isolatedRouter.PeerAddresses()
 	require.Empty(t, isolatedAddrs)
-
 	require.NotNil(t, isolatedAddrs)
 }
 

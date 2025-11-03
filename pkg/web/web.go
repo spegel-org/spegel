@@ -4,38 +4,69 @@ import (
 	"context"
 	"embed"
 	"errors"
-	"fmt"
-	"html"
 	"html/template"
-	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/prometheus/common/expfmt"
-	"github.com/prometheus/common/model"
 
+	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
+	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
 //go:embed templates/*
 var templatesFS embed.FS
 
-type Web struct {
-	router          *routing.P2PRouter
-	ociClient       *oci.Client
-	ociStore        oci.Store
-	httpClient      *http.Client
-	tmpls           *template.Template
-	registryAddress string
+type WebConfig struct {
+	OCIClient *oci.Client
+	Filters   []oci.Filter
 }
 
-func NewWeb(router *routing.P2PRouter, ociClient *oci.Client, ociStore oci.Store, registryAddr string) (*Web, error) {
+type WebOption = option.Option[WebConfig]
+
+func WithOCIClient(ociClient *oci.Client) WebOption {
+	return func(cfg *WebConfig) error {
+		cfg.OCIClient = ociClient
+		return nil
+	}
+}
+
+func WithRegistryFilters(filters []oci.Filter) WebOption {
+	return func(cfg *WebConfig) error {
+		cfg.Filters = filters
+		return nil
+	}
+}
+
+type Web struct {
+	mirror    *url.URL
+	router    *routing.P2PRouter
+	ociClient *oci.Client
+	ociStore  oci.Store
+	tmpls     *template.Template
+	reg       *registry.Registry
+	filters   []oci.Filter
+}
+
+func NewWeb(router *routing.P2PRouter, ociStore oci.Store, reg *registry.Registry, mirror *url.URL, opts ...WebOption) (*Web, error) {
+	cfg := WebConfig{}
+	err := option.Apply(&cfg, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.OCIClient == nil {
+		ociClient, err := oci.NewClient()
+		if err != nil {
+			return nil, err
+		}
+		cfg.OCIClient = ociClient
+	}
+
 	funcs := template.FuncMap{
 		"formatBytes":    formatBytes,
 		"formatDuration": formatDuration,
@@ -45,12 +76,13 @@ func NewWeb(router *routing.P2PRouter, ociClient *oci.Client, ociStore oci.Store
 		return nil, err
 	}
 	return &Web{
-		router:          router,
-		ociClient:       ociClient,
-		ociStore:        ociStore,
-		httpClient:      httpx.BaseClient(),
-		tmpls:           tmpls,
-		registryAddress: registryAddr,
+		router:    router,
+		ociClient: cfg.OCIClient,
+		ociStore:  ociStore,
+		filters:   cfg.Filters,
+		tmpls:     tmpls,
+		reg:       reg,
+		mirror:    mirror,
 	}, nil
 }
 
@@ -71,62 +103,38 @@ func (w *Web) indexHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
-	//nolint: errcheck // Ignore error.
-	srvAddr := req.Context().Value(http.LocalAddrContextKey).(net.Addr)
-	req, err := http.NewRequestWithContext(req.Context(), http.MethodGet, fmt.Sprintf("http://%s/metrics", srvAddr.String()), nil)
-	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, err)
-		return
-	}
-	resp, err := w.httpClient.Do(req)
-	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, err)
-		return
-	}
-	defer httpx.DrainAndClose(resp.Body)
-
-	parser := expfmt.NewTextParser(model.UTF8Validation)
-	metricFamilies, err := parser.TextToMetricFamilies(resp.Body)
-	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, err)
-		return
-	}
-
 	data := struct {
 		LocalAddress      string
 		Images            []oci.Image
-		PeerAddresses     []string
+		Peers             []routing.Peer
 		MirrorLastSuccess time.Duration
-		ImageCount        int64
-		LayerCount        int64
-		PeerCount         int
 	}{}
-	if family, ok := metricFamilies["spegel_advertised_images"]; ok {
-		for _, metric := range family.Metric {
-			data.ImageCount += int64(*metric.Gauge.Value)
-		}
+
+	images, err := w.ociStore.ListImages(req.Context())
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
 	}
-	if family, ok := metricFamilies["spegel_advertised_keys"]; ok {
-		for _, metric := range family.Metric {
-			data.LayerCount += int64(*metric.Gauge.Value)
+	for _, img := range images {
+		if oci.MatchesFilter(img.Reference, w.filters) {
+			continue
 		}
+		data.Images = append(data.Images, img)
 	}
-	mirrorLastSuccess := int64(*metricFamilies["spegel_mirror_last_success_timestamp_seconds"].Metric[0].Gauge.Value)
+
+	stats := w.reg.Stats()
+	mirrorLastSuccess := stats.MirrorLastSuccess.Load()
 	if mirrorLastSuccess > 0 {
 		data.MirrorLastSuccess = time.Since(time.Unix(mirrorLastSuccess, 0))
 	}
 
-	peerAddrs := w.router.PeerAddresses()
-	data.PeerCount = len(peerAddrs)
-	data.PeerAddresses = peerAddrs
 	data.LocalAddress = w.router.LocalAddress()
-
-	if w.ociStore != nil {
-		images, err := w.ociStore.ListImages(req.Context())
-		if err == nil {
-			data.Images = images
-		}
+	peers, err := w.router.ListPeers()
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
 	}
+	data.Peers = peers
 
 	err = w.tmpls.ExecuteTemplate(rw, "stats.html", data)
 	if err != nil {
@@ -156,11 +164,6 @@ type pullResult struct {
 }
 
 func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
-	mirror := &url.URL{
-		Scheme: "http",
-		Host:   w.registryAddress,
-	}
-
 	// Parse image name.
 	imgName := req.URL.Query().Get("image")
 	if imgName == "" {
@@ -203,7 +206,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	if len(res.LookupResults) > 0 {
 		// Pull the image and measure performance.
-		pullMetrics, err := w.ociClient.Pull(req.Context(), img, oci.WithPullMirror(mirror))
+		pullMetrics, err := w.ociClient.Pull(req.Context(), img, oci.WithPullMirror(w.mirror))
 		if err != nil {
 			rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 			return
@@ -225,70 +228,4 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 		return
 	}
-}
-
-var _ httpx.ResponseError = &HTMLResponseError{}
-
-type HTMLResponseError struct {
-	error
-}
-
-func NewHTMLResponseError(err error) *HTMLResponseError {
-	return &HTMLResponseError{err}
-}
-
-func (e *HTMLResponseError) ResponseBody() ([]byte, string, error) {
-	if e.error == nil {
-		return nil, "", errors.New("no error set")
-	}
-	return fmt.Appendf(nil, `<p class="error">%s</p>`, html.EscapeString(e.Error())), httpx.ContentTypeText, nil
-}
-
-func formatBytes(size int64) string {
-	const unit = 1024
-	if size < unit {
-		return fmt.Sprintf("%d B", size)
-	}
-	div, exp := int64(unit), 0
-	for n := size / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
-}
-
-func formatDuration(d time.Duration) string {
-	if d < time.Millisecond {
-		return "<1ms"
-	}
-
-	values := []int64{
-		int64(d / (24 * time.Hour)),
-		int64((d % (24 * time.Hour)) / time.Hour),
-		int64((d % time.Hour) / time.Minute),
-		int64((d % time.Minute) / time.Second),
-		int64((d % time.Second) / time.Millisecond),
-	}
-	units := []string{
-		"d",
-		"h",
-		"m",
-		"s",
-		"ms",
-	}
-
-	comps := []string{}
-	for i, v := range values {
-		if v == 0 {
-			if len(comps) > 0 {
-				break
-			}
-			continue
-		}
-		comps = append(comps, fmt.Sprintf("%d%s", v, units[i]))
-		if len(comps) == 2 {
-			break
-		}
-	}
-	return strings.Join(comps, " ")
 }
