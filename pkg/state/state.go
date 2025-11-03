@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/go-logr/logr"
 
 	"github.com/spegel-org/spegel/internal/channel"
@@ -30,6 +31,26 @@ func WithRegistryFilters(filters []oci.Filter) TrackerOption {
 func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts ...TrackerOption) error {
 	cfg := TrackerConfig{}
 	err := option.Apply(&cfg, opts...)
+	if err != nil {
+		return err
+	}
+
+	// Wait for router to be ready.
+	retryOpts := []retry.Option{
+		retry.Context(ctx),
+		retry.UntilSucceeded(),
+		retry.MaxDelay(500 * time.Millisecond),
+	}
+	err = retry.Do(func() error {
+		ready, err := router.Ready(ctx)
+		if err != nil {
+			return err
+		}
+		if !ready {
+			return errors.New("router is not ready")
+		}
+		return nil
+	}, retryOpts...)
 	if err != nil {
 		return err
 	}
