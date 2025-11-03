@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path"
@@ -622,9 +623,51 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 				return err
 			}
 			if existingHosts != "" {
+				// If we are prepending we also want to keep files like certificates that may be referenced.
+				backupRegDir := path.Join(configPath, backupDir, mr.Host)
+				err = filepath.WalkDir(backupRegDir, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					if d.IsDir() {
+						return nil
+					}
+					if d.Name() == "hosts.toml" {
+						return nil
+					}
+					src, err := os.Open(path)
+					if err != nil {
+						return err
+					}
+					defer src.Close()
+					relPath, err := filepath.Rel(backupRegDir, path)
+					if err != nil {
+						return err
+					}
+					dstPath := filepath.Join(configPath, mr.Host, relPath)
+					err = os.MkdirAll(filepath.Dir(dstPath), 0o755)
+					if err != nil {
+						return err
+					}
+					dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+					if err != nil {
+						return err
+					}
+					defer dst.Close()
+					_, err = io.Copy(dst, src)
+					if err != nil {
+						return err
+					}
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+
 				templatedHosts = templatedHosts + "\n\n" + existingHosts
+				log.Info("prepending to existing Containerd mirror configuration", "registry", mr.String())
 			}
-			log.Info("prepending to existing Containerd mirror configuration", "registry", mr.String())
+
 		}
 		fp := path.Join(configPath, mr.Host, "hosts.toml")
 		err = os.MkdirAll(filepath.Dir(fp), 0o755)
@@ -780,10 +823,6 @@ Authorization = '{{ $authorization }}'
 	return strings.TrimSpace(buf.String()), nil
 }
 
-type hostFile struct {
-	Hosts map[string]any `toml:"host"`
-}
-
 func existingHosts(configPath string, parsedMirrorRegistry url.URL) (string, error) {
 	fp := path.Join(configPath, backupDir, parsedMirrorRegistry.Host, "hosts.toml")
 	b, err := os.ReadFile(fp)
@@ -792,6 +831,10 @@ func existingHosts(configPath string, parsedMirrorRegistry url.URL) (string, err
 	}
 	if err != nil {
 		return "", err
+	}
+
+	type hostFile struct {
+		Hosts map[string]any `toml:"host"`
 	}
 
 	var hf hostFile

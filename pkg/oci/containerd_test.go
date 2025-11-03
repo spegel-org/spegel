@@ -451,6 +451,8 @@ capabilities = ['pull', 'resolve']
 [host.'http://bar.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
+				"docker.io/hello.txt":       "Hello World",
+				"docker.io/nested/cert.tls": "Foo Bar",
 			},
 			expectedFiles: map[string]string{
 				"_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
@@ -466,6 +468,8 @@ capabilities = ['pull', 'resolve']
 [host.'http://bar.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
+				"_backup/docker.io/hello.txt":       "Hello World",
+				"_backup/docker.io/nested/cert.tls": "Foo Bar",
 				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
 
 [host.'http://127.0.0.1:5000']
@@ -483,6 +487,8 @@ client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']
 [host.'http://bar.com:30020']
 capabilities = ['pull', 'resolve']
 client = ['/etc/certs/xxx/client.cert', '/etc/certs/xxx/client.key']`,
+				"docker.io/hello.txt":       "Hello World",
+				"docker.io/nested/cert.tls": "Foo Bar",
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
 [host.'http://127.0.0.1:5000']
@@ -592,7 +598,7 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 				relPath, err := filepath.Rel(registryConfigPath, path)
 				require.NoError(t, err)
 				expectedContent, ok := tt.expectedFiles[relPath]
-				require.True(t, ok)
+				require.True(t, ok, relPath)
 				delete(seenExpectedFiles, relPath)
 				b, err := os.ReadFile(path)
 				require.NoError(t, err)
