@@ -282,7 +282,7 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 		if err != nil {
 			return err
 		}
-		err = r.kdht.Provide(ctx, c, false)
+		err = r.kdht.Provide(ctx, c, true)
 		if err != nil {
 			return err
 		}
