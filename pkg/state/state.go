@@ -101,6 +101,7 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, filter
 	if err != nil {
 		return err
 	}
+	advErrs := []error{}
 	for _, img := range imgs {
 		if oci.MatchesFilter(img.Reference, filters) {
 			continue
@@ -109,7 +110,8 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, filter
 		if ok {
 			err := router.Advertise(ctx, []string{tagName})
 			if err != nil {
-				return err
+				advErrs = append(advErrs, err)
+				continue
 			}
 			advertisedImageTags[img.Registry] += 1
 			advertisedKeys[img.Registry] += 1
@@ -130,7 +132,8 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, filter
 		}
 		err := router.Advertise(ctx, []string{refs[0].Digest.String()})
 		if err != nil {
-			return err
+			advErrs = append(advErrs, err)
+			continue
 		}
 		for _, ref := range refs {
 			advertisedKeys[ref.Registry] += 1
@@ -148,6 +151,11 @@ func tick(ctx context.Context, ociStore oci.Store, router routing.Router, filter
 	}
 	for k, v := range advertisedKeys {
 		metrics.AdvertisedKeys.WithLabelValues(k).Set(v)
+	}
+
+	err = errors.Join(advErrs...)
+	if err != nil {
+		return err
 	}
 	return nil
 }
