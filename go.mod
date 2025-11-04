@@ -20,7 +20,7 @@ require (
 	github.com/libp2p/go-libp2p-kad-dht v0.35.1
 	github.com/miekg/dns v1.1.68
 	github.com/multiformats/go-multiaddr v0.16.1
-	github.com/multiformats/go-multicodec v0.9.2
+	github.com/multiformats/go-multicodec v0.10.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
