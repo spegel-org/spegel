@@ -179,8 +179,6 @@ spegel:
   containerdMirrorAdd: true
   # -- When true Spegel will resolve tags to digests.
   resolveTags: true
-  # -- When true latest tags will be resolved to digests.
-  resolveLatestTag: true
   # -- Regular expressions to filter out tags/registries. If empty, all registries/tags are resolved.
   registryFilters: []
     # - ".*:latest$"

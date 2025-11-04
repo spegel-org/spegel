@@ -61,7 +61,6 @@ type RegistryCmd struct {
 	MirrorResolveTimeout         time.Duration    `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries         int              `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
 	DebugWebEnabled              bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
-	ResolveLatestTag             bool             `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
 }
 
 type CleanupCmd struct {
@@ -154,15 +153,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		filters = append(filters, *regFilter)
 	}
 	for _, r := range args.RegistryFilters {
-		filters = append(filters, oci.RegexFilter{Regex: r})
-	}
-	if !args.ResolveLatestTag {
-		log.Error(errors.New("deprecated argument"), "Resolve latest tag is replaced by registry filter which offers more customizable behavior. Use the filter `:latest$` to achieve the same behavior.")
-		//nolint: gocritic // We want to avoid panics and instead return errors.
-		r, err := regexp.Compile(`:latest$`)
-		if err != nil {
-			return err
-		}
 		filters = append(filters, oci.RegexFilter{Regex: r})
 	}
 
