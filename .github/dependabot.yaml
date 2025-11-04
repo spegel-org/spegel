@@ -14,3 +14,6 @@ updates:
       k8s:
         patterns:
           - "k8s.io/*"
+    ignore:
+      - dependency-name: "github.com/libp2p/go-libp2p"
+        versions: ["v6.0.23+incompatible"]
