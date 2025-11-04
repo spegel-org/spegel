@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-- [#1054](https://github.com/spegel-org/spegel/pull/1054) Extended the debug UI to provide more information.
+### Added
+
+### Changed
+  
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+# v0.5.0
 
 ### Added
 
@@ -38,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [#1065](https://github.com/spegel-org/spegel/pull/1065) Move web to pkg and remove metrics dependency.
 - [#1066](https://github.com/spegel-org/spegel/pull/1066) Wait for router to be ready before tracking state.
 - [#1067](https://github.com/spegel-org/spegel/pull/1067) Keep files in registry directory when prepending to file.
+- [#1054](https://github.com/spegel-org/spegel/pull/1054) Extended the debug UI to provide more information.
   
 ### Deprecated
 
