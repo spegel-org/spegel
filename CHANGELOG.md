@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - [#1080](https://github.com/spegel-org/spegel/pull/1080) Fix image parsing to allow localhost without port and enforce proper IPV6 addresses.
+- [#1081](https://github.com/spegel-org/spegel/pull/1081) Fix so that Spegel does not crash on parse error in Containerd.
 
 ### Security
 
