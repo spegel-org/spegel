@@ -3,6 +3,7 @@ package oci
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"strings"
 
@@ -105,7 +106,7 @@ func ParseImage(s string, opts ...ParseImageOption) (Image, error) {
 	}
 	if cfg.Digest != "" {
 		if dgst != "" && dgst != cfg.Digest {
-			return Image{}, fmt.Errorf("invalid digest set does not match parsed digest: %v %v", s, dgst)
+			return Image{}, fmt.Errorf("set digest %s does not match parsed digest %s", dgst.String(), s)
 		}
 		dgst = cfg.Digest
 	}
@@ -143,7 +144,11 @@ func parseImage(s string) (string, string, string, digest.Digest, error) {
 
 	var registry string
 	if len(comps) > 1 {
-		if isRegistry(comps[0]) {
+		ok, err := isRegistry(comps[0])
+		if err != nil {
+			return "", "", "", "", err
+		}
+		if ok {
 			registry = comps[0]
 			comps = comps[1:]
 		}
@@ -177,9 +182,39 @@ func parseImage(s string) (string, string, string, digest.Digest, error) {
 	return registry, repository, tag, dgst, nil
 }
 
-func isRegistry(s string) bool {
-	if u, err := url.Parse("//" + s); err != nil || u.Host != s {
-		return false
+func isRegistry(s string) (bool, error) {
+	_, err := netip.ParseAddrPort(s)
+	if err == nil {
+		return true, nil
 	}
-	return strings.ContainsRune(s, '.') || strings.ContainsRune(s, ':')
+	trimmedIP := strings.TrimPrefix(s, "[")
+	trimmedIP = strings.TrimSuffix(trimmedIP, "]")
+	addr, err := netip.ParseAddr(trimmedIP)
+	if err == nil {
+		if addr.Is6() {
+			if s == trimmedIP {
+				return false, fmt.Errorf("ip6 address %s needs to be encaplsulated in square brackets", s)
+			}
+			return true, nil
+		}
+		return true, nil
+	}
+	// When parsing IPV6 URLs square brackets are not enforced.
+	// https://github.com/golang/go/issues/75223
+	u, err := url.Parse("//" + s)
+	if err != nil {
+		return false, err
+	}
+	if u.Host != s {
+		return false, fmt.Errorf("url host %s does not match registry string %s", u.Host, s)
+	}
+	hostname := u.Hostname()
+	if hostname == "localhost" {
+		return true, nil
+	}
+	// Single label domains that are not localhost is not a registry.
+	if !strings.Contains(hostname, ".") {
+		return false, nil
+	}
+	return true, nil
 }
