@@ -56,7 +56,19 @@ func TestParseImageStrict(t *testing.T) {
 			expectedString:     "foo/bar@sha256:c0669ef34cdc14332c0f1ab0c2c01acb91d96014b172f1a76f3a39e63d1f0bda",
 		},
 	}
-	registries := []string{"docker.io", "quay.io", "ghcr.com", "127.0.0.1"}
+	registries := []string{
+		"docker.io",
+		"quay.io",
+		"ghcr.com",
+		"example.com:2135",
+		"127.0.0.1",
+		"127.0.0.1:3",
+		"[::1]:8080",
+		"[::1]",
+		"localhost",
+		"localhost:5000",
+		"1234.dkr.ecr.eu-west-1.amazonaws.com",
+	}
 	for _, registry := range registries {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s_%s", tt.name, registry), func(t *testing.T) {
@@ -101,7 +113,7 @@ func TestParseImageStrictErrors(t *testing.T) {
 			name:          "digests do not match",
 			s:             "quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb",
 			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
-			expectedError: "invalid digest set does not match parsed digest: quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb",
+			expectedError: "set digest sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb does not match parsed digest quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb",
 		},
 		{
 			name:          "no tag or digest",
@@ -119,7 +131,19 @@ func TestParseImageStrictErrors(t *testing.T) {
 			name:          "unparsable url",
 			s:             "example%#$.com/foo",
 			dgst:          "",
-			expectedError: "repository example%#$.com/foo is invalid",
+			expectedError: "parse \"//example%\": invalid URL escape \"%\"",
+		},
+		{
+			name:          "missing registry",
+			s:             "library/ubuntu:latest",
+			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
+			expectedError: "reference needs to contain a registry",
+		},
+		{
+			name:          "ipv6 registry without brackets",
+			s:             "::1/library/ubuntu:latest",
+			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
+			expectedError: "ip6 address ::1 needs to be encaplsulated in square brackets",
 		},
 	}
 	for _, tt := range tests {
