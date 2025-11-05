@@ -270,8 +270,8 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	for _, cImg := range cImgs {
 		img, err := ParseImage(cImg.Name, WithDigest(cImg.Target.Digest))
 		if err != nil {
-			subCancel()
-			return nil, err
+			log.Error(err, "skipping image that cannot be parsed", "image", img.String())
+			continue
 		}
 		refs := []Reference{}
 		handler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
@@ -292,8 +292,8 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 		})
 		err = images.Walk(ctx, handler, cImg.Target)
 		if err != nil {
-			subCancel()
-			return nil, err
+			log.Error(err, "skipping image that cannot be walked", "image", img.String())
+			continue
 		}
 		contentIdx[cImg.Target.Digest] = refs
 	}
