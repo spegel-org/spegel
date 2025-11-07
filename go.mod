@@ -11,7 +11,7 @@ require (
 	github.com/containerd/containerd/api v1.10.0
 	github.com/containerd/containerd/v2 v2.1.4
 	github.com/containerd/errdefs v1.0.0
-	github.com/containerd/platforms v1.0.0-rc.1
+	github.com/containerd/platforms v1.0.0-rc.2
 	github.com/containerd/typeurl/v2 v2.2.3
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
