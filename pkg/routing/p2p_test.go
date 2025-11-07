@@ -9,8 +9,10 @@ import (
 	tlog "github.com/go-logr/logr/testing"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -43,57 +45,103 @@ func TestP2PRouter(t *testing.T) {
 	ctx, cancel := context.WithCancel(ctx)
 	g, gCtx := errgroup.WithContext(ctx)
 
-	firstBs := NewStaticBootstrapper(nil)
-	firstRouter, err := NewP2PRouter(ctx, "localhost:0", firstBs, "9090")
+	// Remove the 8 connection per IP limit.
+	routerOpts := []P2PRouterOption{
+		WithLibP2POptions(libp2p.ResourceManager(&network.NullResourceManager{})),
+	}
+
+	// Create primary router with no peer to bootstrap with.
+	primaryBs := NewStaticBootstrapper(nil)
+	primaryRouter, err := NewP2PRouter(t.Context(), "localhost:0", primaryBs, "9090", routerOpts...)
 	require.NoError(t, err)
 	g.Go(func() error {
-		return firstRouter.Run(gCtx)
+		return primaryRouter.Run(gCtx)
 	})
-
-	// Router will never be ready because it cant bootstrap.
-	ready, err := firstRouter.Ready(t.Context())
+	ready, err := primaryRouter.Ready(t.Context())
 	require.NoError(t, err)
 	require.False(t, ready)
-
-	// Start new router and verify readiness.
-	secondBs := NewStaticBootstrapper([]peer.AddrInfo{*host.InfoFromHost(firstRouter.host)})
-	secondRouter, err := NewP2PRouter(ctx, "localhost:0", secondBs, "9090")
-	require.NoError(t, err)
-	g.Go(func() error {
-		return secondRouter.Run(gCtx)
-	})
-
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		// First router should be ready because second connected.
-		ready, err = firstRouter.Ready(t.Context())
-		require.NoError(c, err)
-		require.True(c, ready)
-
-		// Second router should be ready because it bootstrapped.
-		ready, err = secondRouter.Ready(t.Context())
-		require.NoError(c, err)
-		require.True(c, ready)
-	}, 10*time.Second, time.Second)
-
-	// Advertise nil keys.
-	err = firstRouter.Advertise(ctx, nil)
+	primaryIP, err := manet.ToIP(primaryRouter.host.Addrs()[0])
 	require.NoError(t, err)
 
-	// Lookup key that does not exist.
-	rr, err := firstRouter.Lookup(ctx, "foo", 1)
+	// Advertise and Withdraw nil keys should not error.
+	err = primaryRouter.Advertise(t.Context(), nil)
 	require.NoError(t, err)
-	_, err = rr.Next()
+	err = primaryRouter.Withdraw(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Advertising while offline should not error.
+	advertisedKey := "will find key"
+	err = primaryRouter.Advertise(t.Context(), []string{advertisedKey})
+	require.NoError(t, err)
+
+	// Lookup local key should not return self.
+	bal, err := primaryRouter.Lookup(t.Context(), advertisedKey, 3)
+	require.NoError(t, err)
+	_, err = bal.Next()
 	require.ErrorIs(t, err, ErrNoNext)
 
-	// Advertise and then resolve the key.
-	err = firstRouter.Advertise(ctx, []string{"foo"})
-	require.NoError(t, err)
-	rr, err = firstRouter.Lookup(ctx, "foo", 1)
-	require.NoError(t, err)
-	peer, err := rr.Next()
-	require.NoError(t, err)
-	require.True(t, peer.IsValid())
+	// Create routers that all bootstrap with the primary router.
+	routers := []*P2PRouter{}
+	for range 30 {
+		bs := NewStaticBootstrapper([]peer.AddrInfo{*host.InfoFromHost(primaryRouter.host)})
+		r, err := NewP2PRouter(t.Context(), "localhost:0", bs, "9091", routerOpts...)
+		require.NoError(t, err)
+		g.Go(func() error {
+			return r.Run(gCtx)
+		})
+		routers = append(routers, r)
+	}
 
+	// All routers should eventually be ready as bootstrap has happened.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		ready, err = primaryRouter.Ready(t.Context())
+		require.NoError(c, err)
+		require.True(c, ready)
+		require.Equal(c, int64(1), primaryRouter.prov.Stats().Operations.Past.KeysProvided, 1)
+	}, 5*time.Second, time.Second)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		for _, r := range routers {
+			ready, err := r.Ready(t.Context())
+			require.NoError(c, err)
+			require.True(c, ready)
+		}
+	}, 5*time.Second, time.Second)
+	require.Equal(t, 30, primaryRouter.kdht.RoutingTable().Size())
+
+	// Advertised keys should be found.
+	for _, r := range routers {
+		bal, err = r.Lookup(t.Context(), advertisedKey, 3)
+		require.NoError(t, err)
+		addrPort, err := bal.Next()
+		require.NoError(t, err)
+		require.Equal(t, primaryIP.String(), addrPort.Addr().String())
+		require.Equal(t, uint16(9091), addrPort.Port())
+
+		bal, err = r.Lookup(t.Context(), "wont find key", 3)
+		require.NoError(t, err)
+		_, err = bal.Next()
+		require.ErrorIs(t, err, ErrNoNext)
+	}
+
+	// Advertise key from another router and lookup.
+	newKey := "new"
+	lastRouter := routers[len(routers)-1]
+	lastIP, err := manet.ToIP(lastRouter.host.Addrs()[0])
+	require.NoError(t, err)
+	err = lastRouter.Advertise(t.Context(), []string{newKey})
+	require.NoError(t, err)
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Equal(c, int64(1), lastRouter.prov.Stats().Operations.Past.KeysProvided, 1)
+	}, 5*time.Second, 1*time.Second)
+
+	bal, err = primaryRouter.Lookup(t.Context(), newKey, 3)
+	require.NoError(t, err)
+	addrPort, err := bal.Next()
+	require.NoError(t, err)
+	require.Equal(t, lastIP.String(), addrPort.Addr().String())
+
+	// Shutdown should complete without errors.
 	cancel()
 	err = g.Wait()
 	require.NoError(t, err)
