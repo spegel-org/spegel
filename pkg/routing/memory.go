@@ -57,6 +57,13 @@ func (m *MemoryRouter) Advertise(ctx context.Context, keys []string) error {
 	return nil
 }
 
+func (m *MemoryRouter) Withdraw(ctx context.Context, keys []string) error {
+	for _, key := range keys {
+		m.Delete(key, m.self)
+	}
+	return nil
+}
+
 func (m *MemoryRouter) Add(key string, ap netip.AddrPort) {
 	m.mx.Lock()
 	defer m.mx.Unlock()
@@ -70,6 +77,21 @@ func (m *MemoryRouter) Add(key string, ap netip.AddrPort) {
 		return
 	}
 	m.resolver[key] = append(v, ap)
+}
+
+func (m *MemoryRouter) Delete(key string, ap netip.AddrPort) {
+	m.mx.Lock()
+	defer m.mx.Unlock()
+
+	v, ok := m.resolver[key]
+	if !ok {
+		return
+	}
+	i := slices.Index(v, ap)
+	if i == -1 {
+		return
+	}
+	m.resolver[key] = slices.Delete(v, i, i+1)
 }
 
 func (m *MemoryRouter) Get(key string) ([]netip.AddrPort, bool) {

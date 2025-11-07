@@ -14,8 +14,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/avast/retry-go/v4"
 	"github.com/go-logr/logr"
@@ -23,6 +25,7 @@ import (
 	cid "github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p-kad-dht/provider"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -32,20 +35,16 @@ import (
 	mc "github.com/multiformats/go-multicodec"
 	mh "github.com/multiformats/go-multihash"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/singleflight"
 
+	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
-const KeyTTL = 10 * time.Minute
-
-const bootstrapSizeThreshold = 10
-
 type P2PRouterConfig struct {
-	DataDir    string
-	Libp2pOpts []libp2p.Option
+	DataDir      string
+	Libp2pOpts   []libp2p.Option
+	AdvertiseTTL time.Duration
 }
 
 type P2PRouterOption = option.Option[P2PRouterConfig]
@@ -64,20 +63,30 @@ func WithDataDir(dataDir string) P2PRouterOption {
 	}
 }
 
+func WithAdvertiseTTL(ttl time.Duration) P2PRouterOption {
+	return func(cfg *P2PRouterConfig) error {
+		cfg.AdvertiseTTL = ttl
+		return nil
+	}
+}
+
 var _ Router = &P2PRouter{}
 
 type P2PRouter struct {
-	bootstrapper  Bootstrapper
-	host          host.Host
-	kdht          *dht.IpfsDHT
-	balancerGroup *singleflight.Group
-	balancerCache *expirable.LRU[string, *ClosableBalancer]
-	registryPort  uint16
-	isOnline      atomic.Bool
+	bootstrapper     Bootstrapper
+	host             host.Host
+	kdht             *dht.IpfsDHT
+	prov             *provider.SweepingProvider
+	balancerGroup    *singleflight.Group
+	balancerCache    *expirable.LRU[string, *ClosableBalancer]
+	connectivityGate *channel.Gate
+	registryPort     uint16
 }
 
 func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
-	cfg := P2PRouterConfig{}
+	cfg := P2PRouterConfig{
+		AdvertiseTTL: 15 * time.Minute,
+	}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
@@ -140,26 +149,54 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 	dhtOpts := []dht.Option{
 		dht.Mode(dht.ModeServer),
 		dht.ProtocolPrefix("/spegel"),
-		dht.MaxRecordAge(KeyTTL),
+		dht.MaxRecordAge(cfg.AdvertiseTTL),
 	}
 	kdht, err := dht.New(ctx, host, dhtOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create distributed hash table: %w", err)
 	}
+	connectivityGate := channel.NewGate()
+	connectivityGate.Set(true)
+	providerOpts := []provider.Option{
+		provider.WithConnectivityCallbacks(
+			func() {
+				connectivityGate.Set(false)
+			},
+			func() {},
+			func() {
+				connectivityGate.Set(true)
+			},
+		),
+		provider.WithRouter(kdht),
+		provider.WithHost(host),
+		provider.WithMessageSender(kdht.MessageSender()),
+		provider.WithSelfAddrs(func() []ma.Multiaddr {
+			return host.Addrs()
+		}),
+		provider.WithReprovideInterval(cfg.AdvertiseTTL - time.Minute),
+		provider.WithOfflineDelay(0),
+		provider.WithConnectivityCheckOnlineInterval(30 * time.Second),
+	}
+	prov, err := provider.New(providerOpts...)
+	if err != nil {
+		return nil, err
+	}
 
 	return &P2PRouter{
-		bootstrapper:  bs,
-		host:          host,
-		kdht:          kdht,
-		registryPort:  uint16(registryPort),
-		balancerGroup: &singleflight.Group{},
-		balancerCache: expirable.NewLRU[string, *ClosableBalancer](0, nil, 5*time.Second),
-		isOnline:      atomic.Bool{},
+		bootstrapper:     bs,
+		host:             host,
+		kdht:             kdht,
+		prov:             prov,
+		balancerGroup:    &singleflight.Group{},
+		balancerCache:    expirable.NewLRU[string, *ClosableBalancer](0, nil, 5*time.Second),
+		connectivityGate: connectivityGate,
+		registryPort:     uint16(registryPort),
 	}, nil
 }
 
 func (r *P2PRouter) Run(ctx context.Context) error {
-	logr.FromContextOrDiscard(ctx).WithName("p2p").Info("starting p2p router", "id", r.host.ID())
+	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
+	log.Info("starting p2p router", "id", r.host.ID())
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
@@ -170,25 +207,53 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 		return nil
 	})
 	g.Go(func() error {
-		var lastBootstrap time.Time
-		onlineCh := time.After(0)
 		for {
 			select {
 			case <-gCtx.Done():
 				return nil
-			case <-onlineCh:
-				var err error
-				lastBootstrap, err = ensureOnline(gCtx, r.bootstrapper, r.kdht, &r.isOnline, lastBootstrap)
-				if err != nil {
-					return err
+			case <-r.connectivityGate.Wait():
+				start := time.Now()
+				retryOpts := []retry.Option{
+					retry.Context(gCtx),
+					retry.Attempts(0),
+					retry.DelayType(retry.FullJitterBackoffDelay),
+					retry.Delay(50 * time.Millisecond),
+					retry.MaxDelay(5 * time.Second),
+					retry.OnRetry(func(attempt uint, err error) {
+						log.Error(err, "failed to run bootstrap", "attempts", attempt+1)
+					}),
 				}
-				onlineCh = time.After(30 * time.Second)
+				err := retry.Do(func() error {
+					err := bootstrapPeers(gCtx, r.bootstrapper, r.kdht)
+					if err != nil {
+						return err
+					}
+					if r.connectivityGate.IsOpen() {
+						return errors.New("connectivity gate is still not closed")
+					}
+					return nil
+				}, retryOpts...)
+				if err != nil {
+					log.Error(err, "could not run bootstrap")
+					continue
+				}
+				log.Info("bootstrap completed connectivity is reached", "duration", time.Since(start))
+			case <-time.After(30 * time.Minute):
+				err := bootstrapPeers(gCtx, r.bootstrapper, r.kdht)
+				if err != nil {
+					log.Error(err, "periodic bootstrap failed")
+					continue
+				}
 			}
 		}
 	})
 
 	err := g.Wait()
-	cerr := r.kdht.Close()
+	cerr := r.prov.Close()
+	if cerr != nil {
+		err = errors.Join(err, cerr)
+	}
+	cerr = r.kdht.Close()
 	if cerr != nil {
 		err = errors.Join(err, cerr)
 	}
@@ -203,7 +268,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 }
 
 func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
-	return r.isOnline.Load(), nil
+	return !r.connectivityGate.IsOpen(), nil
 }
 
 func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) {
@@ -243,23 +308,10 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer
 			lookupTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
 			for addrInfo := range addrInfoCh {
 				lookupTimer.ObserveDuration()
-				if len(addrInfo.Addrs) != 1 {
-					addrs := []string{}
-					for _, addr := range addrInfo.Addrs {
-						addrs = append(addrs, addr.String())
-					}
-					log.Info("expected address list to only contain a single item", "addresses", strings.Join(addrs, ", "))
-					continue
-				}
 
-				ip, err := manet.ToIP(addrInfo.Addrs[0])
+				ipAddr, err := toIPAddr(addrInfo.Addrs[0])
 				if err != nil {
 					log.Error(err, "could not get IP address")
-					continue
-				}
-				ipAddr, ok := netip.AddrFromSlice(ip)
-				if !ok {
-					log.Error(errors.New("IP is not IPV4 or IPV6"), "could not convert IP")
 					continue
 				}
 				peer := netip.AddrPortFrom(ipAddr, r.registryPort)
@@ -276,16 +328,39 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer
 }
 
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
-	logr.FromContextOrDiscard(ctx).V(4).Info("advertising keys", "host", r.host.ID().String(), "keys", keys)
+	if len(keys) == 0 {
+		return nil
+	}
+	mhs := []mh.Multihash{}
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {
 			return err
 		}
-		err = r.kdht.Provide(ctx, c, true)
+		mhs = append(mhs, c.Hash())
+	}
+	err := r.prov.StartProviding(false, mhs...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *P2PRouter) Withdraw(ctx context.Context, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	mhs := []mh.Multihash{}
+	for _, key := range keys {
+		c, err := createCid(key)
 		if err != nil {
 			return err
 		}
+		mhs = append(mhs, c.Hash())
+	}
+	err := r.prov.StopProviding(mhs...)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -323,14 +398,8 @@ func (r *P2PRouter) LocalAddress() string {
 		if manet.IsIPLoopback(addr) {
 			continue
 		}
-
-		ip, err := manet.ToIP(addr)
+		ipAddr, err := toIPAddr(addr)
 		if err != nil {
-			continue
-		}
-
-		ipAddr, ok := netip.AddrFromSlice(ip)
-		if !ok {
 			continue
 		}
 
@@ -349,6 +418,18 @@ func (r *P2PRouter) LocalAddress() string {
 	}
 
 	return ""
+}
+
+func toIPAddr(addr ma.Multiaddr) (netip.Addr, error) {
+	ip, err := manet.ToIP(addr)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	ipAddr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return netip.Addr{}, errors.New("could not convert to netip address")
+	}
+	return ipAddr, nil
 }
 
 func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
@@ -431,140 +512,86 @@ func addrInfoMatches(a, b peer.AddrInfo) bool {
 	return false
 }
 
-func ensureOnline(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, isOnline *atomic.Bool, lastBootstrap time.Time) (time.Time, error) {
-	shouldBootstrap := func() bool {
-		if kdht.RoutingTable().Size() == 0 {
-			return true
-		}
-		if time.Since(lastBootstrap) > 30*time.Minute {
-			return true
-		}
-		if time.Since(lastBootstrap) > 2*time.Minute && kdht.RoutingTable().Size() < bootstrapSizeThreshold {
-			return true
-		}
-		return false
-	}()
-	if !shouldBootstrap {
-		return lastBootstrap, nil
+func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT) error {
+	// Get port from host address.
+	hostAddrs := kdht.Host().Addrs()
+	if len(hostAddrs) == 0 {
+		return errors.New("host does not have any addresses")
 	}
+	var hostPort ma.Component
+	ma.ForEach(hostAddrs[0], func(c ma.Component) bool {
+		if c.Protocol().Code == ma.P_TCP {
+			hostPort = c
+			return false
+		}
+		return true
+	})
 
-	logr.FromContextOrDiscard(ctx).Info("running bootstrap")
+	// Attempt to connect to bootstrap peers.
+	bootstrapCtx, bootstrapCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer bootstrapCancel()
 
-	retryOpts := []retry.Option{
-		retry.Context(ctx),
-		retry.Attempts(0),
-		retry.DelayType(retry.FullJitterBackoffDelay),
-		retry.Delay(100 * time.Millisecond),
-		retry.MaxDelay(5 * time.Second),
-		retry.OnRetry(func(attempt uint, err error) {
-			logr.FromContextOrDiscard(ctx).Error(err, "failed to run bootstrap", "attempts", attempt+1)
-		}),
+	addrInfos, err := bs.Get(bootstrapCtx)
+	if err != nil {
+		return err
 	}
-	err := retry.Do(func() error {
-		bootstrapCtx, bootstrapCancel := context.WithTimeout(ctx, 5*time.Second)
-		defer bootstrapCancel()
-		addrInfos, err := bs.Get(bootstrapCtx)
-		if err == nil && len(addrInfos) == 1 {
-			matches := addrInfoMatches(*host.InfoFromHost(kdht.Host()), addrInfos[0])
-			if matches {
-				logr.FromContextOrDiscard(ctx).Info("assuming online as only bootstrap peer found is self")
-				return nil
-			}
-		}
-		if kdht.RoutingTable().Size() == 0 {
-			isOnline.Store(false)
-		}
-		if err != nil {
-			return err
-		}
-		if len(addrInfos) == 0 {
-			// Succeed if we cant get bootstrap peers but others have connected to us.
-			if kdht.RoutingTable().Size() > 0 {
-				return nil
-			}
-			return errors.New("no bootstrap peers found")
+	errs := []error{}
+	self := *host.InfoFromHost(kdht.Host())
+	for _, addrInfo := range addrInfos {
+		matches := addrInfoMatches(self, addrInfo)
+		if matches {
+			continue
 		}
 
-		// Get port from host address.
-		hostAddrs := kdht.Host().Addrs()
-		if len(hostAddrs) == 0 {
-			return errors.New("host does not have any addresses")
-		}
-		var hostPort ma.Component
-		ma.ForEach(hostAddrs[0], func(c ma.Component) bool {
-			if c.Protocol().Code == ma.P_TCP {
-				hostPort = c
-				return false
-			}
-			return true
-		})
-
-		// Attempt to connect to bootstrap peers.
-		errs := []error{}
-		self := *host.InfoFromHost(kdht.Host())
-		for _, addrInfo := range addrInfos {
-			matches := addrInfoMatches(self, addrInfo)
-			if matches {
+		modifiedAddrs := []ma.Multiaddr{}
+		for _, addr := range addrInfo.Addrs {
+			hasPort := false
+			ma.ForEach(addr, func(c ma.Component) bool {
+				if c.Protocol().Code == ma.P_TCP {
+					hasPort = true
+					return false
+				}
+				return true
+			})
+			if hasPort {
+				modifiedAddrs = append(modifiedAddrs, addr)
 				continue
 			}
+			modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &hostPort))
+		}
+		addrInfo.Addrs = modifiedAddrs
 
-			modifiedAddrs := []ma.Multiaddr{}
-			for _, addr := range addrInfo.Addrs {
-				hasPort := false
-				ma.ForEach(addr, func(c ma.Component) bool {
-					if c.Protocol().Code == ma.P_TCP {
-						hasPort = true
-						return false
-					}
-					return true
-				})
-				if hasPort {
-					modifiedAddrs = append(modifiedAddrs, addr)
-					continue
-				}
-				modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &hostPort))
-			}
-			addrInfo.Addrs = modifiedAddrs
-
-			if addrInfo.ID == "" {
-				addrInfo.ID = "id"
-				err := kdht.Host().Connect(ctx, addrInfo)
-				var mismatchErr sec.ErrPeerIDMismatch
-				if !errors.As(err, &mismatchErr) {
-					errs = append(errs, err)
-					continue
-				}
-				addrInfo.ID = mismatchErr.Actual
-			}
-
-			err := kdht.Host().Connect(ctx, addrInfo)
-			if err != nil {
+		if addrInfo.ID == "" {
+			addrInfo.ID = "id"
+			err := kdht.Host().Connect(bootstrapCtx, addrInfo)
+			var mismatchErr sec.ErrPeerIDMismatch
+			if !errors.As(err, &mismatchErr) {
 				errs = append(errs, err)
 				continue
 			}
-		}
-		if len(errs) == len(addrInfos) {
-			return errors.Join(errs...)
+			addrInfo.ID = mismatchErr.Actual
 		}
 
-		// Refresh routing table.
-		if kdht.RoutingTable().Size() == 0 {
-			return errors.New("routing table is empty after bootstrapping")
-		}
-		errCh := kdht.RefreshRoutingTable()
-		err = <-errCh
+		err := kdht.Host().Connect(bootstrapCtx, addrInfo)
 		if err != nil {
-			return err
+			errs = append(errs, err)
+			continue
 		}
-		return nil
-	}, retryOpts...)
-	if err != nil {
-		return lastBootstrap, err
+	}
+	if len(errs) == len(addrInfos) {
+		return errors.Join(errs...)
 	}
 
-	logr.FromContextOrDiscard(ctx).Info("completed bootstrap", "peers", kdht.RoutingTable().Size())
-	isOnline.Store(true)
-	return time.Now(), nil
+	// Refresh routing table.
+	if kdht.RoutingTable().Size() == 0 {
+		return errors.New("routing table is empty after bootstrapping")
+	}
+	errCh := kdht.RefreshRoutingTable()
+	err = <-errCh
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func loadOrCreatePrivateKey(ctx context.Context, dataDir string) (crypto.PrivKey, error) {
