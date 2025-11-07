@@ -5,11 +5,15 @@ updates:
     schedule:
       interval: "daily"
     open-pull-requests-limit: 15
+    labels:
+      - "changelog/ignore"
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "daily"
     open-pull-requests-limit: 15
+    labels:
+      - "changelog/dependencies"
     groups:
       k8s:
         patterns:

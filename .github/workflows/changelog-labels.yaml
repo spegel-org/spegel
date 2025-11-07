@@ -1,0 +1,20 @@
+name: changelog
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash   
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check changelog label
+        uses: mheap/github-action-required-labels@8afbe8ae6ab7647d0c9f0cfa7c2f939650d22509 #v5.5.1
+        with:
+          mode: exactly
+          count: 1
+          use_regex: true
+          labels: "changelog/*"

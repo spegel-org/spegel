@@ -5,25 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
-
-### Added
-
-### Changed
-  
-### Deprecated
-
-### Removed
-
-- [#1075](https://github.com/spegel-org/spegel/pull/1075) Remove deprecated resolve latest.
-
-### Fixed
-
-- [#1080](https://github.com/spegel-org/spegel/pull/1080) Fix image parsing to allow localhost without port and enforce proper IPV6 addresses.
-- [#1081](https://github.com/spegel-org/spegel/pull/1081) Fix so that Spegel does not crash on parse error in Containerd.
-
-### Security
-
 # v0.5.0
 
 ### Added
