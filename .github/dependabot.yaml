@@ -21,3 +21,14 @@ updates:
     ignore:
       - dependency-name: "github.com/libp2p/go-libp2p"
         versions: ["v6.0.23+incompatible"]
+  - package-ecosystem: "gomod"
+    directory: "/test/integration/containerd"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 15
+    labels:
+      - "changelog/ignore"
+    groups:
+      k8s:
+        patterns:
+          - "k8s.io/*"

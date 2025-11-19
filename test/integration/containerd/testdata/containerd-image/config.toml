@@ -1,0 +1,12 @@
+version = 2
+
+[grpc]
+  address = "/run/containerd-sock/containerd.sock"
+
+[ttrpc]
+  address = "/run/containerd/containerd.sock.ttrpc"
+
+[plugins."io.containerd.grpc.v1.cri".registry]
+   config_path = "/etc/containerd/certs.d"
+[plugins."io.containerd.grpc.v1.cri".containerd]
+   discard_unpacked_layers = false
