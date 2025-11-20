@@ -5,7 +5,7 @@ permissions:
   contents: read
 defaults:
   run:
-    shell: bash   
+    shell: bash
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -27,7 +27,6 @@ jobs:
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 #v6.0.0
         with:
           go-version-file: go.mod
-      # https://github.com/golang/go/issues/75031
       - name: Run tests
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
       - name: Upload coverage reports to Codecov
