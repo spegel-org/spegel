@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -148,14 +149,28 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	if err != nil {
 		return nil, err
 	}
+	tagDgsts := map[digest.Digest]string{}
 	imgs := []Image{}
 	for _, cImg := range cImgs {
 		img, err := ParseImage(cImg.Name, WithDigest(cImg.Target.Digest))
 		if err != nil {
 			return nil, err
 		}
+		if img.Tag == "" {
+			tagDgsts[img.Digest] = img.Tag
+		}
 		imgs = append(imgs, img)
 	}
+	// Remove duplicate digest images that already have tags.
+	imgs = slices.DeleteFunc(imgs, func(img Image) bool {
+		if img.Tag != "" {
+			return false
+		}
+		if _, ok := tagDgsts[img.Digest]; ok {
+			return true
+		}
+		return false
+	})
 	return imgs, nil
 }
 
