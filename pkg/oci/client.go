@@ -27,6 +27,7 @@ import (
 
 const (
 	HeaderDockerDigest = "Docker-Content-Digest"
+	HeaderNamespace    = "OCI-Namespace"
 )
 
 type ClientConfig struct {
