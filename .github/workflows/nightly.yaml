@@ -19,8 +19,9 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run tests
-        run: cd ./test/integration/containerd && go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: cd ./test/integration/containerd && go test -race -coverprofile=coverage.txt -coverpkg=github.com/spegel-org/spegel/... -covermode=atomic ./...
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 #v5.5.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          flags: integration-containerd
