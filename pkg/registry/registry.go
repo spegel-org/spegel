@@ -406,6 +406,7 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	rw.Header().Set(httpx.HeaderContentType, desc.MediaType)
 	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
 	rw.Header().Set(oci.HeaderDockerDigest, desc.Digest.String())
+	rw.Header().Set(oci.HeaderNamespace, dist.Registry)
 	if req.Method == http.MethodHead {
 		rw.WriteHeader(http.StatusOK)
 		return
@@ -446,7 +447,9 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 		rw.WriteError(http.StatusBadRequest, err)
 		return
 	}
+
 	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
+	rw.Header().Set(oci.HeaderNamespace, dist.Registry)
 	rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
 	var status int
 	if rng == nil {
