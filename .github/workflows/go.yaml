@@ -34,3 +34,22 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit
+  integration-containerd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 #v6.0.0
+      - name: Setup Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c #v6.1.0
+        with:
+          go-version-file: ./test/integration/containerd/go.mod
+          cache-dependency-path: ./test/integration/containerd/go.sum
+      - name: Run tests
+        run: TEST_CONTAINERD_VERSION="fast" go test -race -coverprofile=coverage.txt -coverpkg=github.com/spegel-org/spegel/... -covermode=atomic ./...
+        working-directory: ./test/integration/containerd
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 #v5.5.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: integration-containerd
+          directory: ./test/integration/containerd
