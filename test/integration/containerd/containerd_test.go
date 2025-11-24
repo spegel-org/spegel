@@ -24,19 +24,37 @@ import (
 func TestContainerdPull(t *testing.T) {
 	t.Parallel()
 
+	containerdVersions := []string{
+		"2.2.0",
+		"2.1.5",
+		"2.0.7",
+		"1.7.29",
+	}
+	testContainerdVersion := os.Getenv("TEST_CONTAINERD_VERSION")
+	if testContainerdVersion == "" {
+		testContainerdVersion = "all"
+	}
+	t.Log("testing Containerd with version setting", testContainerdVersion)
+	switch testContainerdVersion {
+	case "all":
+		break
+	case "fast":
+		containerdVersions = []string{
+			containerdVersions[0],
+			containerdVersions[3],
+		}
+	case "latest":
+		containerdVersions = containerdVersions[:1]
+	default:
+		t.Fatal("unknown TEST_CONTAINERD_VERSION", testContainerdVersion)
+	}
+
 	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
 	require.NoError(t, err)
 	defer func() {
 		err := cli.Close()
 		assert.NoError(t, err)
 	}()
-
-	containerdVersions := []string{
-		"1.7.29",
-		"2.0.7",
-		"2.1.5",
-		"2.2.0",
-	}
 	for _, containerdVersion := range containerdVersions {
 		t.Run(containerdVersion, func(t *testing.T) {
 			t.Parallel()
