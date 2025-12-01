@@ -74,6 +74,10 @@ func FingerprintMediaType(r io.Reader) (string, error) {
 		return "", errors.New("expected object start")
 	}
 
+	if !dec.More() {
+		return ocispec.MediaTypeEmptyJSON, nil
+	}
+
 	schemaVersion := 0
 	mediaType := ""
 

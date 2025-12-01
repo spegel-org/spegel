@@ -328,7 +328,11 @@ func TestFingerprintMediaType(t *testing.T) {
 		})
 	}
 
-	mt, err := FingerprintMediaType(strings.NewReader("{}"))
+	mt, err := FingerprintMediaType(strings.NewReader(" { } "))
+	require.NoError(t, err)
+	require.Equal(t, ocispec.MediaTypeEmptyJSON, mt)
+
+	mt, err = FingerprintMediaType(strings.NewReader("{\"unexpected\":\"value\"}"))
 	require.EqualError(t, err, "could not determine media type")
 	require.Empty(t, mt)
 }
