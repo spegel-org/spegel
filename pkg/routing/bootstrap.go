@@ -6,8 +6,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -77,14 +77,12 @@ var _ Bootstrapper = &DNSBootstrapper{}
 type DNSBootstrapper struct {
 	resolver *net.Resolver
 	host     string
-	limit    int
 }
 
-func NewDNSBootstrapper(host string, limit int) *DNSBootstrapper {
+func NewDNSBootstrapper(host string) *DNSBootstrapper {
 	return &DNSBootstrapper{
 		resolver: &net.Resolver{},
 		host:     host,
-		limit:    limit,
 	}
 }
 
@@ -94,29 +92,38 @@ func (b *DNSBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error
 }
 
 func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
-	ips, err := b.resolver.LookupIPAddr(ctx, b.host)
-	if err != nil {
-		return nil, err
-	}
-	if len(ips) == 0 {
-		return nil, err
-	}
-	slices.SortFunc(ips, func(a, b net.IPAddr) int {
-		return strings.Compare(a.String(), b.String())
-	})
+	limit := 3
+	networks := []string{"ip4", "ip6"}
+	errs := []error{}
 	addrInfos := []peer.AddrInfo{}
-	for _, ip := range ips {
-		addr, err := manet.FromIPAndZone(ip.IP, ip.Zone)
+	for _, network := range networks {
+		ipAddrs, err := b.resolver.LookupNetIP(ctx, network, b.host)
 		if err != nil {
-			return nil, err
+			errs = append(errs, err)
+			continue
 		}
-		addrInfos = append(addrInfos, peer.AddrInfo{
-			ID:    "",
-			Addrs: []ma.Multiaddr{addr},
+		if len(ipAddrs) == 0 {
+			continue
+		}
+		slices.SortFunc(ipAddrs, func(a, b netip.Addr) int {
+			return a.Compare(b)
 		})
+		for _, ipAddr := range ipAddrs[:min(len(ipAddrs), limit)] {
+			addr, err := manet.FromIPAndZone(ipAddr.AsSlice(), ipAddr.Zone())
+			if err != nil {
+				return nil, err
+			}
+			addrInfo := peer.AddrInfo{
+				ID:    "",
+				Addrs: []ma.Multiaddr{addr},
+			}
+			addrInfos = append(addrInfos, addrInfo)
+		}
 	}
-	limit := min(len(addrInfos), b.limit)
-	return addrInfos[:limit], nil
+	if len(errs) == len(networks) {
+		return nil, errors.Join(errs...)
+	}
+	return addrInfos, nil
 }
 
 var _ Bootstrapper = &HTTPBootstrapper{}

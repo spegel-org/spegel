@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -68,6 +69,7 @@ func NewWeb(router *routing.P2PRouter, ociStore oci.Store, reg *registry.Registr
 	}
 
 	funcs := template.FuncMap{
+		"join":           strings.Join,
 		"formatBytes":    formatBytes,
 		"formatDuration": formatDuration,
 	}
@@ -104,7 +106,7 @@ func (w *Web) indexHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	data := struct {
-		LocalAddress      string
+		LocalAddresses    []string
 		Images            []oci.Image
 		Peers             []routing.Peer
 		MirrorLastSuccess time.Duration
@@ -128,7 +130,7 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 		data.MirrorLastSuccess = time.Since(time.Unix(mirrorLastSuccess, 0))
 	}
 
-	data.LocalAddress = w.router.LocalAddress()
+	data.LocalAddresses = w.router.LocalAddresses()
 	peers, err := w.router.ListPeers()
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
