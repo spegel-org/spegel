@@ -10,6 +10,8 @@ type Router interface {
 	Ready(ctx context.Context) (bool, error)
 	// Lookup discovers peers with the given key and returns a balancer with the peers.
 	Lookup(ctx context.Context, key string, count int) (Balancer, error)
-	// Advertise broadcasts that the current router can serve the content.
+	// Advertise broadcasts the availability of the given keys.
 	Advertise(ctx context.Context, keys []string) error
+	// Withdraw stops the broadcasting the availability of the given keys to the network.
+	Withdraw(ctx context.Context, keys []string) error
 }

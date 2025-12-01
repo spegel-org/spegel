@@ -53,7 +53,7 @@ func TestE2E(t *testing.T) {
 	for _, image := range images[:5] {
 		g.Go(func() error {
 			t.Logf("Pulling image %s", image)
-			_, err := commandWithError(gCtx, t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, image))
+			_, err := commandWithError(gCtx, t, fmt.Sprintf("docker exec %s-worker crictl pull %s", kindName, image))
 			if err != nil {
 				return err
 			}
@@ -121,7 +121,7 @@ func TestE2E(t *testing.T) {
 	require.Equal(t, "0", exitCode)
 
 	// Pull image from registry after Spegel has started.
-	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker ctr -n k8s.io image pull %s", kindName, images[5]))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker crictl pull %s", kindName, images[5]))
 
 	// Verify that both local and external ports are working.
 	tests := []struct {
@@ -205,25 +205,27 @@ func TestE2E(t *testing.T) {
 	ociVolumeFiles := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace pull-test exec %s -- sh -c 'ls -1A /oci-volume | sort'", kcPath, ociPodName))
 	require.Equal(t, "pause\nrandom_file_2259168264799515459.txt\nrandom_file_495671701297603781.txt\nrandom_file_7526869637736667835.txt\nrandom_file_8163815451001128425.txt", ociVolumeFiles)
 
-	// Remove all Spegel Pods and only restart one to verify that running a single instance works.
+	// Restart Containerd and verify that Spegel restarts.
+	t.Log("Restarting Containerd")
+	workerPod = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers -o name --field-selector spec.nodeName=%s-worker3", kcPath, kindName))
+	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker3 systemctl restart containerd", kindName))
+	require.Eventually(t, func() bool {
+		restartOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get %s -o=jsonpath='{.status.containerStatuses[0].restartCount}'", kcPath, workerPod))
+		return restartOutput == "1"
+	}, 10*time.Second, 1*time.Second)
+
+	// Verify Spegel is not  ready with a single instance.
 	t.Log("Scale down Spegel to single instance")
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s label nodes %s-control-plane %s-worker %s-worker2 spegel.dev/enabled-", kcPath, kindName, kindName, kindName))
 	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel delete pods --all", kcPath))
-	command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel rollout status daemonset spegel --timeout 60s", kcPath))
-	podOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods --no-headers", kcPath))
-	require.Len(t, strings.Split(podOutput, "\n"), 1)
+	require.Never(t, func() bool {
+		readyOutput := command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o jsonpath='{.items[*].status.conditions[?(@.type==\"Ready\")].status}'", kcPath))
+		return readyOutput != "False"
+	}, 5*time.Second, 1*time.Second)
 
 	// Verify that Spegel has never restarted
 	restartOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
 	require.Equal(t, "0", restartOutput)
-
-	// Restart Containerd and verify that Spegel restarts
-	t.Log("Restarting Containerd")
-	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker3 systemctl restart containerd", kindName))
-	require.Eventually(t, func() bool {
-		restartOutput = command(t.Context(), t, fmt.Sprintf("kubectl --kubeconfig %s --namespace spegel get pods -o=jsonpath='{.items[*].status.containerStatuses[0].restartCount}'", kcPath))
-		return restartOutput == "1"
-	}, 5*time.Second, 1*time.Second)
 
 	// Uninstall Spegel and make sure cleanup is run
 	t.Log("Uninstalling Spegel")

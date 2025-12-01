@@ -3,12 +3,10 @@ package state
 import (
 	"context"
 	"errors"
-	"time"
+	"fmt"
 
-	"github.com/avast/retry-go/v4"
 	"github.com/go-logr/logr"
 
-	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -35,54 +33,64 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 		return err
 	}
 
-	// Wait for router to be ready.
-	retryOpts := []retry.Option{
-		retry.Context(ctx),
-		retry.UntilSucceeded(),
-		retry.MaxDelay(500 * time.Millisecond),
-	}
-	err = retry.Do(func() error {
-		ready, err := router.Ready(ctx)
-		if err != nil {
-			return err
-		}
-		if !ready {
-			return errors.New("router is not ready")
-		}
-		return nil
-	}, retryOpts...)
-	if err != nil {
-		return err
-	}
-
-	log := logr.FromContextOrDiscard(ctx)
+	// Start subscribing to not miss events.
 	eventCh, err := ociStore.Subscribe(ctx)
 	if err != nil {
 		return err
 	}
-	immediateCh := make(chan time.Time, 1)
-	immediateCh <- time.Now()
-	close(immediateCh)
-	expirationTicker := time.NewTicker(routing.KeyTTL - time.Minute)
-	defer expirationTicker.Stop()
-	tickerCh := channel.Merge(immediateCh, expirationTicker.C)
+
+	// Initial advertisement of all content.
+	keys := []string{}
+	imgs, err := ociStore.ListImages(ctx)
+	if err != nil {
+		return err
+	}
+	for _, img := range imgs {
+		if oci.MatchesFilter(img.Reference, cfg.Filters) {
+			continue
+		}
+		tagName, ok := img.TagName()
+		if ok {
+			keys = append(keys, tagName)
+			metrics.AdvertisedImageTags.WithLabelValues(img.Registry).Inc()
+			metrics.AdvertisedKeys.WithLabelValues(img.Registry).Inc()
+		}
+		metrics.AdvertisedImages.WithLabelValues(img.Registry).Inc()
+		metrics.AdvertisedImageDigests.WithLabelValues(img.Registry).Inc()
+		metrics.AdvertisedKeys.WithLabelValues(img.Registry).Inc()
+	}
+	contents, err := ociStore.ListContent(ctx)
+	if err != nil {
+		return err
+	}
+	for _, refs := range contents {
+		// TODO(phillebaba): Apply filtering on parent image tag.
+		if allReferencesMatchFilter(refs, cfg.Filters) {
+			continue
+		}
+		for _, ref := range refs {
+			metrics.AdvertisedKeys.WithLabelValues(ref.Registry).Inc()
+		}
+		keys = append(keys, refs[0].Digest.String())
+	}
+	err = router.Advertise(ctx, keys)
+	if err != nil {
+		return err
+	}
+
+	// Watch for OCI events.
+	log := logr.FromContextOrDiscard(ctx)
+	log.Info("waiting for store events")
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-tickerCh:
-			log.Info("running state update")
-			err := tick(ctx, ociStore, router, cfg.Filters)
-			if err != nil {
-				log.Error(err, "received errors when updating all images")
-				continue
-			}
 		case event, ok := <-eventCh:
 			if !ok {
 				return errors.New("event channel closed")
 			}
 			log.Info("OCI event", "ref", event.Reference.String(), "type", event.Type)
-			err := handle(ctx, router, event)
+			err := handleEvent(ctx, router, event)
 			if err != nil {
 				log.Error(err, "could not handle event")
 				continue
@@ -91,84 +99,23 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 	}
 }
 
-func tick(ctx context.Context, ociStore oci.Store, router routing.Router, filters []oci.Filter) error {
-	advertisedImages := map[string]float64{}
-	advertisedImageDigests := map[string]float64{}
-	advertisedImageTags := map[string]float64{}
-	advertisedKeys := map[string]float64{}
-
-	imgs, err := ociStore.ListImages(ctx)
-	if err != nil {
-		return err
-	}
-	advErrs := []error{}
-	for _, img := range imgs {
-		if oci.MatchesFilter(img.Reference, filters) {
-			continue
-		}
-		tagName, ok := img.TagName()
-		if ok {
-			err := router.Advertise(ctx, []string{tagName})
-			if err != nil {
-				advErrs = append(advErrs, err)
-				continue
-			}
-			advertisedImageTags[img.Registry] += 1
-			advertisedKeys[img.Registry] += 1
-		}
-		advertisedImages[img.Registry] += 1
-		advertisedImageDigests[img.Registry] += 1
-		advertisedKeys[img.Registry] += 1
-	}
-
-	contents, err := ociStore.ListContent(ctx)
-	if err != nil {
-		return err
-	}
-	for _, refs := range contents {
-		// TODO(phillebaba): Apply filtering on parent image tag.
-		if allReferencesMatchFilter(refs, filters) {
-			continue
-		}
-		err := router.Advertise(ctx, []string{refs[0].Digest.String()})
+func handleEvent(ctx context.Context, router routing.Router, event oci.OCIEvent) error {
+	switch event.Type {
+	case oci.CreateEvent:
+		err := router.Advertise(ctx, []string{event.Reference.Identifier()})
 		if err != nil {
-			advErrs = append(advErrs, err)
-			continue
+			return err
 		}
-		for _, ref := range refs {
-			advertisedKeys[ref.Registry] += 1
-		}
-	}
-
-	for k, v := range advertisedImages {
-		metrics.AdvertisedImages.WithLabelValues(k).Set(v)
-	}
-	for k, v := range advertisedImageDigests {
-		metrics.AdvertisedImageDigests.WithLabelValues(k).Set(v)
-	}
-	for k, v := range advertisedImageTags {
-		metrics.AdvertisedImageTags.WithLabelValues(k).Set(v)
-	}
-	for k, v := range advertisedKeys {
-		metrics.AdvertisedKeys.WithLabelValues(k).Set(v)
-	}
-
-	err = errors.Join(advErrs...)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func handle(ctx context.Context, router routing.Router, event oci.OCIEvent) error {
-	if event.Type != oci.CreateEvent {
 		return nil
+	case oci.DeleteEvent:
+		err := router.Withdraw(ctx, []string{event.Reference.Identifier()})
+		if err != nil {
+			return err
+		}
+		return nil
+	default:
+		return fmt.Errorf("unhandled event type %s", event.Type)
 	}
-	err := router.Advertise(ctx, []string{event.Reference.Identifier()})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func allReferencesMatchFilter(refs []oci.Reference, filters []oci.Filter) bool {
