@@ -1,9 +1,11 @@
 <div>
   <div class="stat-container">
+    {{- range .LocalAddresses }}
     <div class="stat-box" style="background-color: #64B5F6;">
       <div class="stat-title">Local Address</div>
-      <div class="stat-value" style="word-break: break-all;">{{ .LocalAddress }}</div>
+      <div class="stat-value" style="word-break: break-all;">{{ . }}</div>
     </div>
+    {{- end }}
     <div class="stat-box" style="background-color: {{if .MirrorLastSuccess}}#81C784{{else}}#FAA93B{{end}};">
       <div class="stat-title">Last Mirror Success</div>
       {{- if .MirrorLastSuccess }}
@@ -28,13 +30,13 @@
     <div class="table-container">
       <table>
         <tr>
-          <th style="width: 30%;">Address</th>
-          <th style="width: 70%;">ID</th>
+          <th style="width: 60%;">ID</th>
+          <th style="width: 40%;">Addresses</th>
         </tr>
         {{ range .Peers }}
         <tr>
-          <td>{{ .Address }}</td>
           <td>{{ .ID }}</td>
+          <td>{{ join .Addresses ", " }}</td>
         </tr>
         {{ end }}
       </table>
