@@ -260,7 +260,7 @@ func TestDevDeploy(t *testing.T) {
 		err := os.WriteFile(kcPath, []byte(kcOutput), 0o644)
 		require.NoError(t, err)
 	} else {
-		kcPath = createKindCluster(t.Context(), t, kindName, "iptables", "ipv4", 2)
+		kcPath = createKindCluster(t.Context(), t, kindName, "iptables", "dual", 2)
 	}
 	deploySpegel(t.Context(), t, kindName, imageRef, kcPath)
 }
