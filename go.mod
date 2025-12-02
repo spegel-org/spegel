@@ -27,7 +27,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
-	go.etcd.io/bbolt v1.4.3
 	golang.org/x/sync v0.18.0
 	google.golang.org/grpc v1.77.0
 	k8s.io/apimachinery v0.34.2
