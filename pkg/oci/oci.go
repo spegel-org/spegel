@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/containerd/containerd/v2/core/images"
@@ -170,90 +169,4 @@ func IsManifestsMediatype(mt string) bool {
 	default:
 		return false
 	}
-}
-
-func WalkImage(ctx context.Context, store Store, img Image) ([]digest.Digest, error) {
-	dgsts := []digest.Digest{}
-	err := walk(ctx, []digest.Digest{img.Digest}, func(dgst digest.Digest) ([]digest.Digest, error) {
-		desc, err := store.Descriptor(ctx, dgst)
-		if err != nil {
-			return nil, err
-		}
-		if desc.MediaType == "" {
-			return nil, fmt.Errorf("descriptor media type is empty for digest %s", dgst)
-		}
-		dgsts = append(dgsts, dgst)
-		switch desc.MediaType {
-		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-			rc, err := store.Open(ctx, dgst)
-			if err != nil {
-				return nil, err
-			}
-			defer rc.Close()
-			decoder := json.NewDecoder(rc)
-			var idx ocispec.Index
-			err = decoder.Decode(&idx)
-			if err != nil {
-				return nil, err
-			}
-			manifestDgsts := []digest.Digest{}
-			for _, m := range idx.Manifests {
-				_, err := store.Descriptor(ctx, m.Digest)
-				if errors.Is(err, ErrNotFound) {
-					continue
-				}
-				if err != nil {
-					return nil, err
-				}
-				manifestDgsts = append(manifestDgsts, m.Digest)
-			}
-			if len(manifestDgsts) == 0 {
-				return nil, fmt.Errorf("could not find any platforms with local content in manifest %s", dgst)
-			}
-			return manifestDgsts, nil
-		case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-			rc, err := store.Open(ctx, dgst)
-			if err != nil {
-				return nil, err
-			}
-			defer rc.Close()
-			decoder := json.NewDecoder(rc)
-			var manifest ocispec.Manifest
-			err = decoder.Decode(&manifest)
-			if err != nil {
-				return nil, err
-			}
-			dgsts = append(dgsts, manifest.Config.Digest)
-			for _, layer := range manifest.Layers {
-				dgsts = append(dgsts, layer.Digest)
-			}
-			return nil, nil
-		default:
-			return nil, fmt.Errorf("unexpected media type %s for digest %s", desc.MediaType, dgst)
-		}
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk image manifests: %w", err)
-	}
-	if len(dgsts) == 0 {
-		return nil, errors.New("no image digests found")
-	}
-	return dgsts, nil
-}
-
-func walk(ctx context.Context, dgsts []digest.Digest, handler func(dgst digest.Digest) ([]digest.Digest, error)) error {
-	for _, dgst := range dgsts {
-		children, err := handler(dgst)
-		if err != nil {
-			return err
-		}
-		if len(children) == 0 {
-			continue
-		}
-		err = walk(ctx, children, handler)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
