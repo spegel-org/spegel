@@ -23,7 +23,9 @@ import (
 )
 
 func TestContainerdPull(t *testing.T) {
-	t.Parallel()
+	testStrategy := os.Getenv("INTEGRATION_TEST_STRATEGY")
+	require.NotEmpty(t, testStrategy)
+	t.Log("Running tests with with strategy", testStrategy)
 
 	containerdVersions := []string{
 		"2.2.0",
@@ -31,12 +33,7 @@ func TestContainerdPull(t *testing.T) {
 		"2.0.7",
 		"1.7.29",
 	}
-	testContainerdVersion := os.Getenv("TEST_CONTAINERD_VERSION")
-	if testContainerdVersion == "" {
-		testContainerdVersion = "all"
-	}
-	t.Log("testing Containerd with version setting", testContainerdVersion)
-	switch testContainerdVersion {
+	switch testStrategy {
 	case "all":
 		break
 	case "fast":
@@ -47,19 +44,16 @@ func TestContainerdPull(t *testing.T) {
 	case "latest":
 		containerdVersions = containerdVersions[:1]
 	default:
-		t.Fatal("unknown TEST_CONTAINERD_VERSION", testContainerdVersion)
+		t.Fatal("unknown test strategy", testStrategy)
 	}
 
-	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.FromEnv)
 	require.NoError(t, err)
-	defer func() {
-		err := cli.Close()
-		assert.NoError(t, err)
-	}()
+	t.Cleanup(func() {
+		cli.Close()
+	})
 	for _, containerdVersion := range containerdVersions {
 		t.Run(containerdVersion, func(t *testing.T) {
-			t.Parallel()
-
 			t.Log("building Containerd image")
 			containerImage := fmt.Sprintf("ghcr.io/spegel-org/containerd:%s", containerdVersion)
 			buildCtx, err := archive.TarWithOptions("./testdata/containerd-image", &archive.TarOptions{})

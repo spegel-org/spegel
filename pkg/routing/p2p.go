@@ -179,7 +179,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		provider.WithOfflineDelay(0),
 		provider.WithConnectivityCheckOnlineInterval(30 * time.Second),
 		provider.WithAddLocalRecord(func(h mh.Multihash) error {
-			return kdht.ProviderStore().AddProvider(ctx, h, peer.AddrInfo{ID: host.ID()})
+			return kdht.ProviderStore().AddProvider(kdht.Context(), h, peer.AddrInfo{ID: host.ID()})
 		}),
 	}
 	prov, err := provider.New(providerOpts...)
