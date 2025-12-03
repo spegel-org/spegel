@@ -45,7 +45,7 @@ jobs:
           go-version-file: ./test/integration/containerd/go.mod
           cache-dependency-path: ./test/integration/containerd/go.sum
       - name: Run tests
-        run: TEST_CONTAINERD_VERSION="fast" go test -race -coverprofile=coverage.txt -coverpkg=github.com/spegel-org/spegel/... -covermode=atomic ./...
+        run: INTEGRATION_TEST_STRATEGY="fast" go test -v -race -coverprofile=coverage.txt -coverpkg=github.com/spegel-org/spegel/... -covermode=atomic ./...
         working-directory: ./test/integration/containerd
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 #v5.5.1
@@ -53,3 +53,25 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: integration-containerd
           directory: ./test/integration/containerd
+  integration-kubernetes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 #v6.0.0
+      - name: Setup Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c #v6.1.0
+        with:
+          go-version-file: ./test/integration/kubernetes/go.mod
+          cache-dependency-path: ./test/integration/kubernetes/go.sum
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a #v6.4.0
+        with:
+          install-only: true
+      - name: Build image
+        id: build
+        run: |
+          IMG_REF=$(make build-image)
+          echo "IMG_REF=${IMG_REF}" >> $GITHUB_OUTPUT
+      - name: Run tests
+        run: INTEGRATION_TEST_STRATEGY="fast" IMG_REF=${{ steps.build.outputs.IMG_REF }} go test -v -race ./...
+        working-directory: ./test/integration/kubernetes

@@ -106,7 +106,7 @@ func ParseImage(s string, opts ...ParseImageOption) (Image, error) {
 	}
 	if cfg.Digest != "" {
 		if dgst != "" && dgst != cfg.Digest {
-			return Image{}, fmt.Errorf("set digest %s does not match parsed digest %s", dgst.String(), s)
+			return Image{}, fmt.Errorf("set digest %s does not match parsed digest %s for image %s", cfg.Digest.String(), dgst.String(), s)
 		}
 		dgst = cfg.Digest
 	}
