@@ -173,7 +173,7 @@ func TestNewImageErrors(t *testing.T) {
 			repository:    "foo/bar",
 			tag:           "latest",
 			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
-			expectedError: "reference needs to contain a registry",
+			expectedError: "reference needs to contain a registry for tag references",
 		},
 		{
 			name:          "missing repository",
