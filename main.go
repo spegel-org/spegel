@@ -61,6 +61,7 @@ type RegistryCmd struct {
 	MirrorResolveTimeout         time.Duration    `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries         int              `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
 	DebugWebEnabled              bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
+	CRIOImageContentCacheDir     string           `arg:"--crio-image-content-cache-dir,env:CRIO_IMAGE_CONTENT_CACHE_DIR" default:"/var/lib/containers/storage/image-content-cache" help:"Path to CRI-O image content cache directory. If this path exists, CRI-O mode is used."`
 }
 
 type CleanupCmd struct {
@@ -156,15 +157,38 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		filters = append(filters, oci.RegexFilter{Regex: r})
 	}
 
-	// OCI Store
-	ociStore, err := oci.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, oci.WithContentPath(args.ContainerdContentPath))
-	if err != nil {
-		return err
-	}
-	defer ociStore.Close()
-	err = ociStore.Verify(ctx, args.ContainerdRegistryConfigPath)
-	if err != nil {
-		return err
+	// OCI Store - use CRI-O if image content cache exists, otherwise containerd
+	var ociStore oci.Store
+	if _, err := os.Stat(args.CRIOImageContentCacheDir); err == nil {
+		crioClient, err := oci.NewCRIoClient(args.CRIOImageContentCacheDir)
+		if err != nil {
+			return fmt.Errorf("failed to create CRI-O client: %w", err)
+		}
+		err = crioClient.Verify(ctx, "")
+		if err != nil {
+			crioClient.Close()
+			return fmt.Errorf("CRI-O verification failed: %w", err)
+		}
+
+		log.Info("using CRI-O", "image_content_cache_dir", args.CRIOImageContentCacheDir)
+		ociStore = crioClient
+		defer crioClient.Close()
+	} else {
+		// Default to containerd.
+		containerdStore, err := oci.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, oci.WithContentPath(args.ContainerdContentPath))
+		if err != nil {
+			return fmt.Errorf("failed to create containerd client: %w", err)
+		}
+
+		err = containerdStore.Verify(ctx, args.ContainerdRegistryConfigPath)
+		if err != nil {
+			containerdStore.Close()
+			return fmt.Errorf("containerd verification failed: %w", err)
+		}
+
+		log.Info("using containerd", "socket", args.ContainerdSock)
+		ociStore = containerdStore
+		defer containerdStore.Close()
 	}
 
 	// Router

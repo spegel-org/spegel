@@ -29,8 +29,10 @@ func (r Reference) String() string {
 
 // Validate checks that the contents of the reference is valid.
 func (r Reference) Validate() error {
-	if r.Registry == "" {
-		return errors.New("reference needs to contain a registry")
+	// Registry is required for tag references (ambiguous without context)
+	// but optional for digest references (digest is globally unique)
+	if r.Registry == "" && r.Tag != "" {
+		return errors.New("reference needs to contain a registry for tag references")
 	}
 	if r.Repository == "" {
 		return errors.New("reference needs to contain a repository")
