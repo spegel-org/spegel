@@ -322,7 +322,7 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 			case envelope := <-envelopeCh:
 				events, err := c.handleEvent(subCtx, *envelope, contentIdx)
 				if err != nil {
-					log.Error(err, "error when handling Contianerd event")
+					log.Error(err, "error when handling containerd event")
 					continue
 				}
 				for _, event := range events {
@@ -332,10 +332,13 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 		}
 	}()
 	go func() {
-		// Required so that the event channel closes in case Containerd is restarted.
+		// Required so that the event channel closes in case containerd is restarted.
 		defer subCancel()
 		for err := range cErrCh {
-			log.Error(err, "received Containerd event error")
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			log.Error(err, "received containerd event error")
 		}
 	}()
 	return eventCh, nil
@@ -511,11 +514,11 @@ func verifyContainerd(ctx context.Context, client *client.Client, features Featu
 		return err
 	}
 	if !ok {
-		return errors.New("could not reach Containerd service")
+		return errors.New("could not reach containerd service")
 	}
 
 	if !features.Has(FeatureConfigCheck) {
-		log.Info("skipping verification of Containerd configuration")
+		log.Info("skipping verification of containerd configuration")
 		return nil
 	}
 	grpcConn, ok := client.Conn().(*grpc.ClientConn)
@@ -555,13 +558,13 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 		return errors.New("field containerd.discardUnpackedLayers missing from config")
 	}
 	if *cfg.Containerd.DiscardUnpackedLayers {
-		return errors.New("Containerd discard unpacked layers cannot be enabled")
+		return errors.New("containerd discard unpacked layers cannot be enabled")
 	}
 	if cfg.Registry.ConfigPath == nil {
 		return errors.New("field registry.configPath missing from config")
 	}
 	if *cfg.Registry.ConfigPath == "" {
-		return errors.New("Containerd registry config path needs to be set for mirror configuration to take effect")
+		return errors.New("containerd registry config path needs to be set for mirror configuration to take effect")
 	}
 	paths := filepath.SplitList(*cfg.Registry.ConfigPath)
 	for _, path := range paths {
@@ -570,7 +573,7 @@ func verifyStatusResponse(resp *runtimeapi.StatusResponse, configPath string) er
 		}
 		return nil
 	}
-	return fmt.Errorf("Containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", *cfg.Registry.ConfigPath, configPath)
+	return fmt.Errorf("containerd registry config path is %s but needs to contain path %s for mirror configuration to take effect", *cfg.Registry.ConfigPath, configPath)
 }
 
 func contentLabelsToReferences(l map[string]string, dgst digest.Digest) ([]Reference, error) {
@@ -680,7 +683,7 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 				}
 
 				templatedHosts = templatedHosts + "\n\n" + existingHosts
-				log.Info("prepending to existing Containerd mirror configuration", "registry", mr.String())
+				log.Info("prepending to existing containerd mirror configuration", "registry", mr.String())
 			}
 
 		}
@@ -693,7 +696,7 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 		if err != nil {
 			return err
 		}
-		log.Info("added Containerd mirror configuration", "registry", mr.String(), "path", fp)
+		log.Info("added containerd mirror configuration", "registry", mr.String(), "path", fp)
 	}
 	return nil
 }
@@ -730,7 +733,7 @@ func CleanupMirrorConfiguration(ctx context.Context, configPath string) error {
 		if err != nil {
 			return err
 		}
-		log.Info("recovering Containerd host configuration", "path", oldPath)
+		log.Info("recovering containerd host configuration", "path", oldPath)
 	}
 
 	// Remove backup directory to indicate that cleanup has been run.
@@ -766,7 +769,7 @@ func backupConfig(log logr.Logger, configPath string) error {
 		if err != nil {
 			return err
 		}
-		log.Info("backing up Containerd host configuration", "path", oldPath)
+		log.Info("backing up containerd host configuration", "path", oldPath)
 	}
 	return nil
 }
