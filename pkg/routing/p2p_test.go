@@ -2,6 +2,7 @@ package routing
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -41,8 +42,7 @@ func TestP2PRouter(t *testing.T) {
 	t.Parallel()
 
 	log := tlog.NewTestLogger(t)
-	ctx := logr.NewContext(t.Context(), log)
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(t.Context())
 	g, gCtx := errgroup.WithContext(ctx)
 
 	// Remove the 8 connection per IP limit.
@@ -55,13 +55,16 @@ func TestP2PRouter(t *testing.T) {
 	primaryRouter, err := NewP2PRouter(t.Context(), "localhost:0", primaryBs, "9090", routerOpts...)
 	require.NoError(t, err)
 	g.Go(func() error {
-		return primaryRouter.Run(gCtx)
+		return primaryRouter.Run(logr.NewContext(gCtx, log.WithName("primary")))
 	})
-	ready, err := primaryRouter.Ready(t.Context())
-	require.NoError(t, err)
-	require.False(t, ready)
 	primaryIP, err := manet.ToIP(primaryRouter.host.Addrs()[0])
 	require.NoError(t, err)
+	for range 3 {
+		ready, err := primaryRouter.Ready(t.Context())
+		require.NoError(t, err)
+		require.False(t, ready)
+		time.Sleep(1 * time.Second)
+	}
 
 	// Advertise and Withdraw nil keys should not error.
 	err = primaryRouter.Advertise(t.Context(), nil)
@@ -81,20 +84,24 @@ func TestP2PRouter(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoNext)
 
 	// Create routers that all bootstrap with the primary router.
+	addrInfo := host.InfoFromHost(primaryRouter.host)
+	addrInfo.ID = ""
+	bs := NewStaticBootstrapper([]peer.AddrInfo{*addrInfo})
+	routerCount := 30
 	routers := []*P2PRouter{}
-	for range 30 {
-		bs := NewStaticBootstrapper([]peer.AddrInfo{*host.InfoFromHost(primaryRouter.host)})
+	for i := range routerCount {
 		r, err := NewP2PRouter(t.Context(), "localhost:0", bs, "9091", routerOpts...)
 		require.NoError(t, err)
 		g.Go(func() error {
-			return r.Run(gCtx)
+			return r.Run(logr.NewContext(gCtx, log.WithName(fmt.Sprintf("%d", i))))
 		})
 		routers = append(routers, r)
 	}
+	require.Len(t, routers, routerCount)
 
 	// All routers should eventually be ready as bootstrap has happened.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ready, err = primaryRouter.Ready(t.Context())
+		ready, err := primaryRouter.Ready(t.Context())
 		require.NoError(c, err)
 		require.True(c, ready)
 		require.Equal(c, int64(1), primaryRouter.prov.Stats().Operations.Past.KeysProvided, 1)
@@ -106,7 +113,7 @@ func TestP2PRouter(t *testing.T) {
 			require.True(c, ready)
 		}
 	}, 5*time.Second, time.Second)
-	require.Equal(t, 30, primaryRouter.kdht.RoutingTable().Size())
+	require.Equal(t, routerCount, primaryRouter.kdht.RoutingTable().Size())
 
 	// Advertised keys should be found.
 	for _, r := range routers {
@@ -205,91 +212,49 @@ func TestCreateCid(t *testing.T) {
 	require.Equal(t, "bafkreigdvoh7cnza5cwzar65hfdgwpejotszfqx2ha6uuolaofgk54ge6i", c.String())
 }
 
-func TestAddrInfoMatches(t *testing.T) {
+func TestAddrsEqual(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name     string
-		a        peer.AddrInfo
-		b        peer.AddrInfo
+		a        []ma.Multiaddr
+		b        []ma.Multiaddr
 		expected bool
 	}{
 		{
-			name: "ID match",
-			a: peer.AddrInfo{
-				ID:    "foo",
-				Addrs: []ma.Multiaddr{},
-			},
-			b: peer.AddrInfo{
-				ID:    "foo",
-				Addrs: []ma.Multiaddr{},
-			},
-			expected: true,
-		},
-		{
-			name: "ID do not match",
-			a: peer.AddrInfo{
-				ID:    "foo",
-				Addrs: []ma.Multiaddr{},
-			},
-			b: peer.AddrInfo{
-				ID:    "bar",
-				Addrs: []ma.Multiaddr{},
-			},
+			name:     "empty addresses",
+			a:        []ma.Multiaddr{},
+			b:        []ma.Multiaddr{},
 			expected: false,
 		},
 		{
-			name: "IP4 match",
-			a: peer.AddrInfo{
-				ID:    "",
-				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
-			},
-			b: peer.AddrInfo{
-				ID:    "",
-				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
-			},
+			name:     "IP4 match",
+			a:        []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
+			b:        []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
 			expected: true,
 		},
 		{
-			name: "IP4 do not match",
-			a: peer.AddrInfo{
-				ID:    "",
-				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
-			},
-			b: peer.AddrInfo{
-				ID:    "",
-				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.2")},
-			},
+			name:     "IP4 do not match",
+			a:        []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
+			b:        []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.2")},
 			expected: false,
 		},
 		{
 			name: "IP6 match",
-			a: peer.AddrInfo{
-				ID:    "",
-				Addrs: []ma.Multiaddr{ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba")},
-			},
-			b: peer.AddrInfo{
-				ID: "",
-				Addrs: []ma.Multiaddr{
-					ma.StringCast("/ip4/192.168.1.1"),
-					ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba"),
-				},
+			a:    []ma.Multiaddr{ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba")},
+			b: []ma.Multiaddr{
+				ma.StringCast("/ip4/192.168.1.1"),
+				ma.StringCast("/ip6/c3c9:152b:73d1:dad0:e2f9:a521:6356:88ba"),
 			},
 			expected: true,
 		},
 		{
 			name: "non IP address",
-			a: peer.AddrInfo{
-				ID: "",
-				Addrs: []ma.Multiaddr{
-					ma.StringCast("/tcp/5000"),
-					ma.StringCast("/ip4/192.168.1.1"),
-				},
+			a: []ma.Multiaddr{
+				ma.StringCast("/tcp/5000"),
+				ma.StringCast("/ip4/192.168.1.1"),
 			},
-			b: peer.AddrInfo{
-				ID:    "",
-				Addrs: []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
-			},
+			b:        []ma.Multiaddr{ma.StringCast("/ip4/192.168.1.1")},
 			expected: true,
 		},
 	}
@@ -297,7 +262,7 @@ func TestAddrInfoMatches(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			matches := addrInfoMatches(tt.a, tt.b)
+			matches := addrsEqual(tt.a, tt.b)
 			require.Equal(t, tt.expected, matches)
 		})
 	}

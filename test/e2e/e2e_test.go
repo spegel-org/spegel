@@ -95,6 +95,8 @@ func TestE2E(t *testing.T) {
 	command(t.Context(), t, fmt.Sprintf("docker exec %s-worker2 mkdir /etc/containerd/certs.d/_backup", kindName))
 
 	// Run conformance tests.
+	time.Sleep(10 * time.Second)
+
 	succeeded := t.Run("Run conformance tests", func(t *testing.T) {
 		t.Cleanup(func() {
 			if t.Failed() {
@@ -270,7 +272,7 @@ func createKindCluster(ctx context.Context, t *testing.T, kindName, proxyMode, i
 
 	workerNodes := []string{}
 	for range nodeCount {
-		workerNodes = append(workerNodes, "  - role: worker\n    labels:\n      spegel.dev/enabled: true")
+		workerNodes = append(workerNodes, "  - role: worker\n    image: kindest/node:v1.33.4\n    labels:\n      spegel.dev/enabled: true")
 	}
 	kindConfig := fmt.Sprintf(`apiVersion: kind.x-k8s.io/v1alpha4
 kind: Cluster
@@ -293,6 +295,7 @@ containerdConfigPatches:
     content_sharing_policy = "isolated"
 nodes:
   - role: control-plane
+    image: kindest/node:v1.33.4
 %s`, proxyMode, ipFamily, strings.Join(workerNodes, "\n"))
 
 	path := filepath.Join(t.TempDir(), "kind-config.yaml")
