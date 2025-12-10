@@ -505,25 +505,12 @@ func createCid(key string) (cid.Cid, error) {
 	return c, nil
 }
 
-func addrInfoMatches(a, b peer.AddrInfo) bool {
-	// Skip self when address ID matches host ID.
-	if a.ID != "" && b.ID != "" {
-		return a.ID == b.ID
-	}
-
-	// Skip self when IP matches
-	for _, aAddr := range a.Addrs {
-		if aAddr[0].Code() != ma.P_IP4 && aAddr[0].Code() != ma.P_IP6 {
-			continue
-		}
-		for _, bAddr := range b.Addrs {
-			if aAddr[0].Code() != bAddr[0].Code() {
-				continue
+func addrsEqual(a1, a2 []ma.Multiaddr) bool {
+	for _, a1Addr := range a1 {
+		for _, a2Addr := range a2 {
+			if a1Addr.Equal(a2Addr) {
+				return true
 			}
-			if aAddr[0].Value() != bAddr[0].Value() {
-				continue
-			}
-			return true
 		}
 	}
 	return false
@@ -555,8 +542,8 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT) err
 	errs := []error{}
 	self := *host.InfoFromHost(kdht.Host())
 	for _, addrInfo := range addrInfos {
-		matches := addrInfoMatches(self, addrInfo)
-		if matches {
+		// If ID is not empty and match it is self.
+		if self.ID != "" && addrInfo.ID != "" && self.ID == addrInfo.ID {
 			continue
 		}
 
@@ -577,6 +564,11 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT) err
 			modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &hostPort))
 		}
 		addrInfo.Addrs = modifiedAddrs
+
+		matches := addrsEqual(self.Addrs, addrInfo.Addrs)
+		if matches {
+			continue
+		}
 
 		if addrInfo.ID == "" {
 			addrInfo.ID = "id"
