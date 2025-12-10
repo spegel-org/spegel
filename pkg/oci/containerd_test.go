@@ -29,7 +29,7 @@ func TestVerifyStatusResponse(t *testing.T) {
 			name:               "empty config path",
 			configPath:         "",
 			requiredConfigPath: "/etc/containerd/certs.d",
-			expectedErrMsg:     "Containerd registry config path needs to be set for mirror configuration to take effect",
+			expectedErrMsg:     "containerd registry config path needs to be set for mirror configuration to take effect",
 		},
 		{
 			name:               "single config path",
@@ -40,7 +40,7 @@ func TestVerifyStatusResponse(t *testing.T) {
 			name:               "missing single config path",
 			configPath:         "/etc/containerd/certs.d",
 			requiredConfigPath: "/var/lib/containerd/certs.d",
-			expectedErrMsg:     "Containerd registry config path is /etc/containerd/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
+			expectedErrMsg:     "containerd registry config path is /etc/containerd/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
 		},
 		{
 			name:               "multiple config paths",
@@ -51,12 +51,12 @@ func TestVerifyStatusResponse(t *testing.T) {
 			name:               "missing multiple config paths",
 			configPath:         "/etc/containerd/certs.d:/etc/docker/certs.d",
 			requiredConfigPath: "/var/lib/containerd/certs.d",
-			expectedErrMsg:     "Containerd registry config path is /etc/containerd/certs.d:/etc/docker/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
+			expectedErrMsg:     "containerd registry config path is /etc/containerd/certs.d:/etc/docker/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
 		},
 		{
 			name:                  "discard unpacked layers enabled",
 			discardUnpackedLayers: true,
-			expectedErrMsg:        "Containerd discard unpacked layers cannot be enabled",
+			expectedErrMsg:        "containerd discard unpacked layers cannot be enabled",
 		},
 	}
 	for _, tt := range tests {
