@@ -178,6 +178,9 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		provider.WithMaxReprovideDelay(maxReprovideDelay),
 		provider.WithOfflineDelay(0),
 		provider.WithConnectivityCheckOnlineInterval(30 * time.Second),
+		provider.WithAddLocalRecord(func(h mh.Multihash) error {
+			return kdht.ProviderStore().AddProvider(ctx, h, peer.AddrInfo{ID: host.ID()})
+		}),
 	}
 	prov, err := provider.New(providerOpts...)
 	if err != nil {
@@ -313,6 +316,11 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer
 			for addrInfo := range addrInfoCh {
 				lookupTimer.ObserveDuration()
 
+				// Skip self if found in provider store.
+				if addrInfo.ID == r.host.ID() {
+					continue
+				}
+
 				ipAddr, err := toIPAddr(addrInfo.Addrs[0])
 				if err != nil {
 					log.Error(err, "could not get IP address")
@@ -335,15 +343,20 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	mhs := []mh.Multihash{}
+	hs := []mh.Multihash{}
 	for _, key := range keys {
 		c, err := createCid(key)
 		if err != nil {
 			return err
 		}
-		mhs = append(mhs, c.Hash())
+		h := c.Hash()
+		err = r.kdht.ProviderStore().AddProvider(ctx, h, peer.AddrInfo{ID: r.host.ID()})
+		if err != nil {
+			return err
+		}
+		hs = append(hs, h)
 	}
-	err := r.prov.StartProviding(false, mhs...)
+	err := r.prov.StartProviding(false, hs...)
 	if err != nil {
 		return err
 	}

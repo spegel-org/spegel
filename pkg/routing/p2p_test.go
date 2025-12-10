@@ -74,7 +74,15 @@ func TestP2PRouter(t *testing.T) {
 	err = primaryRouter.Advertise(t.Context(), []string{advertisedKey})
 	require.NoError(t, err)
 
-	// Lookup local key should not return self.
+	// Provider store should contain self.
+	c, err := createCid(advertisedKey)
+	require.NoError(t, err)
+	addrInfos, err := primaryRouter.kdht.FindProviders(t.Context(), c)
+	require.NoError(t, err)
+	require.Len(t, addrInfos, 1)
+	require.Equal(t, primaryRouter.host.ID(), addrInfos[0].ID)
+
+	// Lookup local key should not return self when offline.
 	bal, err := primaryRouter.Lookup(t.Context(), advertisedKey, 3)
 	require.NoError(t, err)
 	_, err = bal.Next()
@@ -107,6 +115,12 @@ func TestP2PRouter(t *testing.T) {
 		}
 	}, 5*time.Second, time.Second)
 	require.Equal(t, 30, primaryRouter.kdht.RoutingTable().Size())
+
+	// Lookup should not return self when online.
+	bal, err = primaryRouter.Lookup(t.Context(), advertisedKey, 3)
+	require.NoError(t, err)
+	_, err = bal.Next()
+	require.ErrorIs(t, err, ErrNoNext)
 
 	// Advertised keys should be found.
 	for _, r := range routers {
