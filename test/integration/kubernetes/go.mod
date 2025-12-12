@@ -6,7 +6,7 @@ toolchain go1.25.3
 
 require (
 	github.com/fluxcd/cli-utils v0.36.0-flux.15
-	github.com/fluxcd/pkg/runtime v0.91.0
+	github.com/fluxcd/pkg/runtime v0.92.0
 	github.com/moby/moby/client v0.2.1
 	github.com/stretchr/testify v1.11.1
 	helm.sh/helm/v4 v4.0.2
