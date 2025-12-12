@@ -81,9 +81,9 @@ func TestKubernetes(t *testing.T) {
 		v1alpha4.IPVSProxyMode,
 	}
 	ipFamilies := []v1alpha4.ClusterIPFamily{
+		v1alpha4.DualStackFamily,
 		v1alpha4.IPv4Family,
 		v1alpha4.IPv6Family,
-		v1alpha4.DualStackFamily,
 	}
 	switch testStrategy {
 	case "all":

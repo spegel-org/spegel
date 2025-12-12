@@ -76,7 +76,7 @@ func TestDNSBootstrap(t *testing.T) {
 		return srv.Shutdown()
 	})
 
-	bs := NewDNSBootstrapper("peers", 10)
+	bs := NewDNSBootstrapper("peers")
 	bs.resolver = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {

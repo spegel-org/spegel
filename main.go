@@ -301,7 +301,7 @@ func cleanupWaitCommand(ctx context.Context, args *CleanupWaitCmd) error {
 func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //nolint: ireturn // Return type can be different structs.
 	switch cfg.BootstrapKind {
 	case "dns":
-		return routing.NewDNSBootstrapper(cfg.DNSBootstrapDomain, 10), nil
+		return routing.NewDNSBootstrapper(cfg.DNSBootstrapDomain), nil
 	case "http":
 		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer), nil
 	case "static":

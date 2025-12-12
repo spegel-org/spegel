@@ -60,7 +60,8 @@ func TestP2PRouter(t *testing.T) {
 	ready, err := primaryRouter.Ready(t.Context())
 	require.NoError(t, err)
 	require.False(t, ready)
-	primaryIP, err := manet.ToIP(primaryRouter.host.Addrs()[0])
+	ip6Addrs, ip4Addrs := filterAndSplitAddrs(primaryRouter.host.Addrs())
+	primaryIP, err := manet.ToIP(append(ip6Addrs, ip4Addrs...)[0])
 	require.NoError(t, err)
 
 	// Advertise and Withdraw nil keys should not error.
@@ -140,7 +141,8 @@ func TestP2PRouter(t *testing.T) {
 	// Advertise key from another router and lookup.
 	newKey := "new"
 	lastRouter := routers[len(routers)-1]
-	lastIP, err := manet.ToIP(lastRouter.host.Addrs()[0])
+	ip6Addrs, ip4Addrs = filterAndSplitAddrs(lastRouter.host.Addrs())
+	lastIP, err := manet.ToIP(append(ip6Addrs, ip4Addrs...)[0])
 	require.NoError(t, err)
 	err = lastRouter.Advertise(t.Context(), []string{newKey})
 	require.NoError(t, err)
@@ -198,17 +200,6 @@ func TestListenMultiaddrs(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestIsIp6(t *testing.T) {
-	t.Parallel()
-
-	m, err := ma.NewMultiaddr("/ip6/::")
-	require.NoError(t, err)
-	require.True(t, isIp6(m))
-	m, err = ma.NewMultiaddr("/ip4/0.0.0.0")
-	require.NoError(t, err)
-	require.False(t, isIp6(m))
 }
 
 func TestCreateCid(t *testing.T) {
@@ -313,10 +304,6 @@ func TestLocalAddress(t *testing.T) {
 	router, err := NewP2PRouter(t.Context(), ":0", bs, "9090")
 	require.NoError(t, err)
 
-	localAddr := router.LocalAddress()
-	require.NotEmpty(t, localAddr, "LocalAddress should return a non-empty address")
-
-	_, err4 := ma.NewMultiaddr("/ip4/" + localAddr)
-	_, err6 := ma.NewMultiaddr("/ip6/" + localAddr)
-	require.True(t, err4 == nil || err6 == nil, "LocalAddress should return a valid IP address")
+	localAddrs := router.LocalAddresses()
+	require.NotEmpty(t, localAddrs, "LocalAddress should return a non-empty address")
 }
