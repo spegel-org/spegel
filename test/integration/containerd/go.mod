@@ -14,7 +14,7 @@ require (
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.77.0
-	k8s.io/cri-api v0.34.2
+	k8s.io/cri-api v0.34.3
 )
 
 require (
