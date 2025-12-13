@@ -575,13 +575,23 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT) err
 		}
 
 		if addrInfo.ID == "" {
-			addrInfo.ID = "id"
-			err := kdht.Host().Connect(bootstrapCtx, addrInfo)
+			priv, _, err := crypto.GenerateEd25519Key(nil)
+			if err != nil {
+				return err
+			}
+			id, err := peer.IDFromPrivateKey(priv)
+			if err != nil {
+				return err
+			}
+			addrInfo.ID = id
+			err = kdht.Host().Connect(bootstrapCtx, addrInfo)
 			var mismatchErr sec.ErrPeerIDMismatch
 			if !errors.As(err, &mismatchErr) {
 				errs = append(errs, err)
 				continue
 			}
+			kdht.Host().Peerstore().ClearAddrs(addrInfo.ID)
+			kdht.Host().Peerstore().RemovePeer(addrInfo.ID)
 			addrInfo.ID = mismatchErr.Actual
 		}
 
