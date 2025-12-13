@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/opencontainers/go-digest"
 
@@ -63,28 +64,44 @@ func (d DistributionPath) URL() *url.URL {
 	if ref == "" {
 		ref = d.Tag
 	}
-	return &url.URL{
-		Scheme:   "https",
-		Host:     d.Registry,
-		Path:     fmt.Sprintf("/v2/%s/%s/%s", d.Repository, d.Kind, ref),
-		RawQuery: fmt.Sprintf("ns=%s", d.Registry),
+	u := &url.URL{
+		Scheme: "https",
+		Host:   d.Registry,
+		Path:   fmt.Sprintf("/v2/%s/%s/%s", d.Repository, d.Kind, ref),
 	}
+	// Only add ns parameter if registry is set (containerd mode)
+	// CRI-O mode doesn't use ns parameter
+	if d.Registry != "" {
+		u.RawQuery = fmt.Sprintf("ns=%s", d.Registry)
+	}
+	return u
 }
 
 // ParseDistributionPath gets the parameters from a URL which conforms with the OCI distribution spec.
 // It returns a distribution path which contains all the individual parameters.
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md
+//
+// Supports two formats:
+// 1. Containerd: /v2/<repository>/manifests/<ref>?ns=<registry>
+// 2. CRI-O: /v2/<registry>/<repository>/manifests/<ref> (registry embedded in path)
 func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 	registry := u.Query().Get("ns")
 	comps := manifestRegexTag.FindStringSubmatch(u.Path)
 	if len(comps) == 3 {
+		repo := comps[1]
+		tag := comps[2]
+
+		// If no ns parameter, try to extract registry from repository path (CRI-O format)
 		if registry == "" {
-			return DistributionPath{}, errors.New("registry parameter needs to be set for tag references")
+			registry, repo = extractRegistryFromRepo(repo)
+			if registry == "" {
+				return DistributionPath{}, errors.New("registry parameter needs to be set for tag references")
+			}
 		}
 		ref := Reference{
 			Registry:   registry,
-			Repository: comps[1],
-			Tag:        comps[2],
+			Repository: repo,
+			Tag:        tag,
 		}
 		dist, err := NewDistributionPath(ref, DistributionKindManifest)
 		if err != nil {
@@ -94,13 +111,19 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 	}
 	comps = manifestRegexDigest.FindStringSubmatch(u.Path)
 	if len(comps) == 3 {
+		repo := comps[1]
 		dgst, err := digest.Parse(comps[2])
 		if err != nil {
 			return DistributionPath{}, err
 		}
+
+		// If no ns parameter, try to extract registry from repository path (CRI-O format)
+		if registry == "" {
+			registry, repo = extractRegistryFromRepo(repo)
+		}
 		ref := Reference{
 			Registry:   registry,
-			Repository: comps[1],
+			Repository: repo,
 			Digest:     dgst,
 		}
 		dist, err := NewDistributionPath(ref, DistributionKindManifest)
@@ -111,13 +134,19 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 	}
 	comps = blobsRegexDigest.FindStringSubmatch(u.Path)
 	if len(comps) == 3 {
+		repo := comps[1]
 		dgst, err := digest.Parse(comps[2])
 		if err != nil {
 			return DistributionPath{}, err
 		}
+
+		// If no ns parameter, try to extract registry from repository path (CRI-O format)
+		if registry == "" {
+			registry, repo = extractRegistryFromRepo(repo)
+		}
 		ref := Reference{
 			Registry:   registry,
-			Repository: comps[1],
+			Repository: repo,
 			Digest:     dgst,
 		}
 		dist, err := NewDistributionPath(ref, DistributionKindBlob)
@@ -127,6 +156,29 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 		return dist, nil
 	}
 	return DistributionPath{}, errors.New("distribution path could not be parsed")
+}
+
+// extractRegistryFromRepo handles CRI-O's format where the registry is embedded in the path.
+// For example: "docker.io/library/redis" -> registry="docker.io", repo="library/redis"
+// Returns empty registry if the first component doesn't look like a registry hostname.
+func extractRegistryFromRepo(fullRepo string) (registry, repo string) {
+	idx := strings.Index(fullRepo, "/")
+	if idx == -1 {
+		return "", fullRepo
+	}
+
+	firstComponent := fullRepo[:idx]
+	remainder := fullRepo[idx+1:]
+
+	// Check if the first component looks like a registry hostname
+	// (contains a dot or colon, or is "localhost")
+	if strings.Contains(firstComponent, ".") ||
+		strings.Contains(firstComponent, ":") ||
+		firstComponent == "localhost" {
+		return firstComponent, remainder
+	}
+
+	return "", fullRepo
 }
 
 var _ httpx.ResponseError = &DistributionError{}
