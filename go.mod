@@ -2,7 +2,7 @@ module github.com/spegel-org/spegel
 
 go 1.24.6
 
-toolchain go1.25.3
+toolchain go1.25.5
 
 require (
 	cuelabs.dev/go/oci/ociregistry v0.0.0-20250530080122-d0efc28a5723
