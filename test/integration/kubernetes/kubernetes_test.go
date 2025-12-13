@@ -370,22 +370,9 @@ func TestKubernetes(t *testing.T) {
 			for _, tt := range tests {
 				node, err := k8sClient.CoreV1().Nodes().Get(t.Context(), tt.node.String(), metav1.GetOptions{})
 				require.NoError(t, err)
-				hostIP := ""
-				for _, nodeAddress := range node.Status.Addresses {
-					if nodeAddress.Type != corev1.NodeInternalIP {
-						continue
-					}
-					hostIP = nodeAddress.Address
-					addr, err := netip.ParseAddr(hostIP)
-					require.NoError(t, err)
-					if addr.Is6() {
-						hostIP = fmt.Sprintf("[%s]", hostIP)
-					}
-					break
-				}
-				require.NotEmpty(t, hostIP)
+				nodeIP := getNodeIP(t, node)
 				buf := &bytes.Buffer{}
-				tt.node.CommandContext(t.Context(), "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", fmt.Sprintf("http://%s:%s/readyz", hostIP, tt.port)).SetStdout(buf).Run()
+				tt.node.CommandContext(t.Context(), "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", fmt.Sprintf("http://%s:%s/readyz", nodeIP, tt.port)).SetStdout(buf).Run()
 				require.Equal(t, tt.expected, buf.String())
 			}
 
@@ -630,6 +617,7 @@ func runConformanceTests(t *testing.T, k8sClient kubernetes.Interface, kindNodes
 		ns, err = k8sClient.CoreV1().Namespaces().Create(t.Context(), ns, metav1.CreateOptions{})
 		require.NoError(t, err)
 
+		podIP := getPodIP(t, &podList.Items[0])
 		job := &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "conformance",
@@ -651,7 +639,7 @@ func runConformanceTests(t *testing.T, k8sClient kubernetes.Interface, kindNodes
 									},
 									{
 										Name:  "OCI_ROOT_URL",
-										Value: fmt.Sprintf("http://%s:5000", podList.Items[0].Status.PodIP),
+										Value: fmt.Sprintf("http://%s:5000", podIP),
 									},
 									{
 										Name:  "OCI_MIRROR_URL",
@@ -749,4 +737,35 @@ func dumpPods(t *testing.T, k8sClient kubernetes.Interface, namespace string, in
 		}
 	}
 	t.Log("\n" + strings.Join(output, "\n") + "\n")
+}
+
+func getNodeIP(t *testing.T, node *corev1.Node) string {
+	t.Helper()
+
+	for _, a := range node.Status.Addresses {
+		if a.Type != corev1.NodeInternalIP {
+			continue
+		}
+		return getIP6SafeString(t, a.Address)
+	}
+	require.FailNow(t, "node ip not found")
+	return ""
+}
+
+func getPodIP(t *testing.T, pod *corev1.Pod) string {
+	t.Helper()
+
+	require.NotEmpty(t, pod.Status.PodIPs)
+	return getIP6SafeString(t, pod.Status.PodIPs[0].IP)
+}
+
+func getIP6SafeString(t *testing.T, s string) string {
+	t.Helper()
+
+	addr, err := netip.ParseAddr(s)
+	require.NoError(t, err)
+	if addr.Is6() {
+		return fmt.Sprintf("[%s]", addr.String())
+	}
+	return addr.String()
 }
