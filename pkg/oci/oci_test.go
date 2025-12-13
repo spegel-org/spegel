@@ -1,6 +1,7 @@
 package oci
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,8 +61,20 @@ func TestFingerprintMediaType(t *testing.T) {
 	}
 
 	mt, err := FingerprintMediaType(strings.NewReader("{}"))
+	require.NoError(t, err)
+	require.Equal(t, ocispec.MediaTypeEmptyJSON, mt)
+
+	_, err = FingerprintMediaType(strings.NewReader(" "))
+	require.ErrorIs(t, err, io.EOF)
+
+	_, err = FingerprintMediaType(strings.NewReader(" { } "))
 	require.EqualError(t, err, "could not determine media type")
-	require.Empty(t, mt)
+
+	_, err = FingerprintMediaType(strings.NewReader("{ }"))
+	require.EqualError(t, err, "could not determine media type")
+
+	_, err = FingerprintMediaType(strings.NewReader("{\"unexpected\":\"value\"}"))
+	require.EqualError(t, err, "could not determine media type")
 }
 
 func TestIsManifestMediatype(t *testing.T) {
