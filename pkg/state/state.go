@@ -53,11 +53,8 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 		if ok {
 			keys = append(keys, tagName)
 			metrics.AdvertisedImageTags.WithLabelValues(img.Registry).Inc()
-			metrics.AdvertisedKeys.WithLabelValues(img.Registry).Inc()
 		}
-		metrics.AdvertisedImages.WithLabelValues(img.Registry).Inc()
 		metrics.AdvertisedImageDigests.WithLabelValues(img.Registry).Inc()
-		metrics.AdvertisedKeys.WithLabelValues(img.Registry).Inc()
 	}
 	contents, err := ociStore.ListContent(ctx)
 	if err != nil {
@@ -69,7 +66,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 			continue
 		}
 		for _, ref := range refs {
-			metrics.AdvertisedKeys.WithLabelValues(ref.Registry).Inc()
+			metrics.AdvertisedContentDigests.WithLabelValues(ref.Registry).Inc()
 		}
 		keys = append(keys, refs[0].Digest.String())
 	}
@@ -79,8 +76,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 	}
 
 	// Watch for OCI events.
-	log := logr.FromContextOrDiscard(ctx)
-	log.Info("waiting for store events")
+	logr.FromContextOrDiscard(ctx).Info("waiting for store events")
 	for {
 		select {
 		case <-ctx.Done():
@@ -89,25 +85,38 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 			if !ok {
 				return errors.New("event channel closed")
 			}
-			log.Info("OCI event", "ref", event.Reference.String(), "type", event.Type)
-			err := handleEvent(ctx, router, event)
+			err := handleEvent(ctx, router, event, cfg.Filters)
 			if err != nil {
-				log.Error(err, "could not handle event")
+				logr.FromContextOrDiscard(ctx).Error(err, "could not handle event")
 				continue
 			}
 		}
 	}
 }
 
-func handleEvent(ctx context.Context, router routing.Router, event oci.OCIEvent) error {
+func handleEvent(ctx context.Context, router routing.Router, event oci.OCIEvent, filters []oci.Filter) error {
+	if oci.MatchesFilter(event.Reference, filters) {
+		return nil
+	}
+	logr.FromContextOrDiscard(ctx).Info("OCI event", "ref", event.Reference.String(), "type", event.Type)
 	switch event.Type {
 	case oci.CreateEvent:
+		if event.Reference.Tag != "" {
+			metrics.AdvertisedImageTags.WithLabelValues(event.Reference.Registry).Inc()
+		} else {
+			metrics.AdvertisedContentDigests.WithLabelValues(event.Reference.Registry).Inc()
+		}
 		err := router.Advertise(ctx, []string{event.Reference.Identifier()})
 		if err != nil {
 			return err
 		}
 		return nil
 	case oci.DeleteEvent:
+		if event.Reference.Tag != "" {
+			metrics.AdvertisedImageTags.WithLabelValues(event.Reference.Registry).Dec()
+		} else {
+			metrics.AdvertisedContentDigests.WithLabelValues(event.Reference.Registry).Dec()
+		}
 		err := router.Withdraw(ctx, []string{event.Reference.Identifier()})
 		if err != nil {
 			return err

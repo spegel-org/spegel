@@ -455,7 +455,7 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 			return fmt.Errorf("manifest with digest %s still exists", img.Digest.String())
 		}, retryOpts...)
 		if err != nil {
-			logr.FromContextOrDiscard(ctx).Error(err, "image manifest has not been deleted")
+			return nil, fmt.Errorf("image manifest has not been deleted: %w", err)
 		}
 		// Create delete events for contents that has been removed.
 		events := []OCIEvent{}
