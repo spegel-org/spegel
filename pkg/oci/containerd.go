@@ -156,7 +156,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 		if err != nil {
 			return nil, err
 		}
-		if img.Tag == "" {
+		if img.Tag != "" {
 			tagDgsts[img.Digest] = img.Tag
 		}
 		imgs = append(imgs, img)
