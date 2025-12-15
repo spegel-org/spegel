@@ -157,7 +157,6 @@ func TestContainerdPull(t *testing.T) {
 				}
 
 				t.Log("Pulling image with CRI", benchmarkImg.String())
-				fmt.Println(benchmarkImg.String())
 				_, err = imageClient.PullImage(t.Context(), &runtimeapi.PullImageRequest{Image: &runtimeapi.ImageSpec{Image: benchmarkImg.String()}})
 				require.NoError(t, err)
 				ensureEvents(t, eventCh, expectedCreateEvents)
