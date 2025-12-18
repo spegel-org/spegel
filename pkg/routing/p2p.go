@@ -46,9 +46,10 @@ const (
 )
 
 type P2PRouterConfig struct {
-	DataDir      string
-	Libp2pOpts   []libp2p.Option
-	AdvertiseTTL time.Duration
+	DataDir               string
+	Libp2pOpts            []libp2p.Option
+	AdvertiseTTL          time.Duration
+	LogConnectivityErrors bool
 }
 
 type P2PRouterOption = option.Option[P2PRouterConfig]
@@ -74,6 +75,13 @@ func WithAdvertiseTTL(ttl time.Duration) P2PRouterOption {
 	}
 }
 
+func WithLogConnectivityErrors(val bool) P2PRouterOption {
+	return func(cfg *P2PRouterConfig) error {
+		cfg.LogConnectivityErrors = val
+		return nil
+	}
+}
+
 var _ Router = &P2PRouter{}
 
 type P2PRouter struct {
@@ -84,13 +92,15 @@ type P2PRouter struct {
 	balancerGroup          *singleflight.Group
 	balancerCache          *expirable.LRU[string, *ClosableBalancer]
 	connectivityGate       *channel.Gate
+	connectivityErrors     bool
 	ip6Support, ip4Support bool
 	registryPort           uint16
 }
 
 func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
 	cfg := P2PRouterConfig{
-		AdvertiseTTL: 15 * time.Minute,
+		AdvertiseTTL:          15 * time.Minute,
+		LogConnectivityErrors: true,
 	}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
@@ -165,16 +175,17 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 	}
 
 	return &P2PRouter{
-		bootstrapper:     bs,
-		host:             host,
-		kdht:             kdht,
-		prov:             prov,
-		balancerGroup:    &singleflight.Group{},
-		balancerCache:    expirable.NewLRU[string, *ClosableBalancer](0, nil, 5*time.Second),
-		connectivityGate: connectivityGate,
-		ip6Support:       len(ip6Addrs) > 0,
-		ip4Support:       len(ip4Addrs) > 0,
-		registryPort:     uint16(registryPort),
+		bootstrapper:       bs,
+		host:               host,
+		kdht:               kdht,
+		prov:               prov,
+		balancerGroup:      &singleflight.Group{},
+		balancerCache:      expirable.NewLRU[string, *ClosableBalancer](0, nil, 5*time.Second),
+		connectivityGate:   connectivityGate,
+		connectivityErrors: cfg.LogConnectivityErrors,
+		ip6Support:         len(ip6Addrs) > 0,
+		ip4Support:         len(ip4Addrs) > 0,
+		registryPort:       uint16(registryPort),
 	}, nil
 }
 
@@ -204,7 +215,11 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 					retry.Delay(50 * time.Millisecond),
 					retry.MaxDelay(10 * time.Second),
 					retry.OnRetry(func(attempt uint, err error) {
-						log.Error(err, "failed to run bootstrap", "attempts", attempt+1)
+						if r.connectivityErrors {
+							log.Error(err, "failed to run bootstrap", "attempts", attempt+1)
+						} else {
+							log.V(1).Info("failed to run bootstrap", "error", err, "attempts", attempt+1)
+						}
 					}),
 				}
 				err := retry.Do(func() error {
