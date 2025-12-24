@@ -6,7 +6,7 @@ toolchain go1.25.5
 
 require (
 	cuelabs.dev/go/oci/ociregistry v0.0.0-20250530080122-d0efc28a5723
-	github.com/alexflint/go-arg v1.6.0
+	github.com/alexflint/go-arg v1.6.1
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/containerd/containerd/api v1.10.0
 	github.com/containerd/containerd/v2 v2.2.0
