@@ -6,7 +6,7 @@ toolchain go1.25.5
 
 require (
 	github.com/fluxcd/cli-utils v0.36.0-flux.15
-	github.com/fluxcd/pkg/runtime v0.92.0
+	github.com/fluxcd/pkg/runtime v0.93.0
 	github.com/moby/moby/client v0.2.1
 	github.com/stretchr/testify v1.11.1
 	helm.sh/helm/v4 v4.0.4
@@ -49,7 +49,7 @@ require (
 	github.com/extism/go-sdk v1.7.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.23.0 // indirect
+	github.com/fluxcd/pkg/apis/meta v1.24.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
