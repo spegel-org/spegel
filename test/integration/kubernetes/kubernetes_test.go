@@ -72,9 +72,9 @@ func TestKubernetes(t *testing.T) {
 	require.NoError(t, err)
 
 	kubernetesVersions := []string{
-		"v1.34.0",
-		"v1.33.4",
-		"v1.32.8",
+		"v1.35.0",
+		"v1.34.3",
+		"v1.33.7",
 	}
 	proxyModes := []v1alpha4.ProxyMode{
 		v1alpha4.IPTablesProxyMode,
