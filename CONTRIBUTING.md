@@ -17,19 +17,14 @@ The following tools are required to run the tests properly.
 Run the linter and the unit tests to quickly validate changes.
 
 ```shell
-make lint test
+make lint test-unit
 ```
 
-Run the e2e tests which take a bit more time.
+Run the e2e tests which take a bit more time. When run locally and in PRs only the latest versions of Containerd and Kubernetes will be tested. The nightly tests will run the tests with full coverage for all supported versions.
 
 ```shell
-make test-e2e
-```
-
-There are e2e tests for the different CNIs iptables, iptables-v6, and ipvs.
-
-```shell
-make test-e2e E2E_CNI=ipvs
+make test-integration-containerd
+make test-integration-kubernetes
 ```
 
 ## Building
@@ -75,8 +70,5 @@ make helm-docs
 Pull requests need to fulfill the following requirements to be accepted.
 
 * New code has tests where applicable.
-* The change has been added to the [changelog](./CHANGELOG.md).
-* Documentation has been generated if applicable.
-* The unit tests pass.
 * Linter does not report any errors.
-* All end to end tests pass.
+* All unit and integration tests pass.
