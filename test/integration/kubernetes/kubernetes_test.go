@@ -77,8 +77,8 @@ func TestKubernetes(t *testing.T) {
 		"v1.33.7",
 	}
 	proxyModes := []v1alpha4.ProxyMode{
+		v1alpha4.NFTablesProxyMode,
 		v1alpha4.IPTablesProxyMode,
-		v1alpha4.IPVSProxyMode,
 	}
 	ipFamilies := []v1alpha4.ClusterIPFamily{
 		v1alpha4.DualStackFamily,
