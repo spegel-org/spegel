@@ -22,7 +22,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/chart/loader"
+	"helm.sh/helm/v4/pkg/downloader"
+	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/registry"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -116,7 +119,6 @@ func TestKubernetes(t *testing.T) {
 	for _, tt := range tests {
 		name := strings.Join([]string{tt.kubernetesVersion, string(tt.ipFamily), string(tt.proxyMode)}, "-")
 		t.Run(name, func(t *testing.T) {
-			// Create Kind cluster.
 			t.Log("Creating Kind cluster")
 			kcPath := filepath.Join(t.TempDir(), "kind.kubeconfig")
 			provider := cluster.NewProvider()
@@ -194,29 +196,6 @@ func TestKubernetes(t *testing.T) {
 			k8sClient, err := kubernetes.NewForConfig(k8sCfg)
 			require.NoError(t, err)
 
-			// Pull test images.
-			t.Log("Pulling test images")
-			images := []string{
-				"ghcr.io/spegel-org/conformance:9d1b925",
-				"docker.io/library/busybox:1.37.0",
-				"ghcr.io/spegel-org/benchmark:v1-10MB-4",
-				"ghcr.io/spegel-org/benchmark:v2-10MB-4@sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b",
-			}
-			for _, image := range images[:3] {
-				t.Logf("Pulling image %s", image)
-				err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", image).Run()
-				require.NoError(t, err)
-			}
-
-			// Write existing configuration to test backup.
-			hostsToml := `server = https://docker.io
-
-[host.https://registry-1.docker.io]
-  capabilities = [push]`
-			err = nodeutils.WriteFile(kindNodes[0], "/etc/containerd/certs.d/docker.io/hosts.toml", hostsToml)
-			require.NoError(t, err)
-
-			// Load Spegel image onto Kind nodes.
 			t.Log("Loading Spegel image into nodes")
 			f, err := os.Open(imgPath)
 			require.NoError(t, err)
@@ -238,60 +217,38 @@ func TestKubernetes(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			// Deploy Spegel to cluster.
-			t.Log("Deploying Spegel")
-			charter, err := loader.Load("../../../charts/spegel/")
-			require.NoError(t, err)
-			actionCfg := &action.Configuration{}
-			actionCfg.SetLogger(slog.DiscardHandler)
-			clientGetter := &genericclioptions.ConfigFlags{KubeConfig: &kcPath}
-			err = actionCfg.Init(clientGetter, spegelNamespace, "secret")
-			require.NoError(t, err)
-			install := action.NewInstall(actionCfg)
-			install.ReleaseName = spegelNamespace
-			install.Namespace = spegelNamespace
-			install.CreateNamespace = true
-			install.WaitStrategy = kube.StatusWatcherStrategy
-			install.Timeout = 60 * time.Second
-			vals := map[string]any{
-				"image": map[string]any{
-					"pullPolicy": "Never",
-					"digest":     imageDigest,
-				},
-				"spegel": map[string]any{
-					"logLevel": "DEBUG",
-				},
-				"nodeSelector": map[string]any{
-					nodeTaintKey: "true",
-				},
-			}
-			t.Cleanup(func() {
-				if !t.Failed() {
-					return
-				}
-				dumpPods(t, k8sClient, spegelNamespace, true)
-			})
-			_, err = install.RunWithContext(t.Context(), charter, vals)
-			require.NoError(t, err)
-			require.EventuallyWithT(t, func(c *assert.CollectT) {
-				ds, err := k8sClient.AppsV1().DaemonSets(spegelNamespace).Get(t.Context(), spegelNamespace, metav1.GetOptions{})
-				require.NoError(c, err)
-				u, err := patch.ToUnstructured(ds)
-				require.NoError(c, err)
-				res, err := status.Compute(u)
-				require.NoError(c, err)
-				require.Equal(c, status.CurrentStatus, res.Status)
-			}, 10*time.Second, 1*time.Second)
-			podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{})
-			require.NoError(t, err)
-			require.Equal(t, len(kindNodes), len(podList.Items))
+			t.Log("Upgrading Spegel from latest release to dev build")
+			deploySpegel(t, k8sClient, kindNodes, kcPath, "")
+			deploySpegel(t, k8sClient, kindNodes, kcPath, imageDigest)
+			uninstallSpegel(t, kindNodes, kcPath)
 
-			// Pull image from registry after Spegel has started.
+			t.Log("Pulling test images")
+			images := []string{
+				"ghcr.io/spegel-org/conformance:9d1b925",
+				"docker.io/library/busybox:1.37.0",
+				"ghcr.io/spegel-org/benchmark:v1-10MB-4",
+				"ghcr.io/spegel-org/benchmark:v2-10MB-4@sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b",
+			}
+			for _, image := range images[:3] {
+				t.Logf("Pulling image %s", image)
+				err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", image).Run()
+				require.NoError(t, err)
+			}
+
+			t.Log("Write existing certs.d configuration")
+			hostsToml := `server = https://docker.io
+
+[host.https://registry-1.docker.io]
+  capabilities = [push]`
+			err = nodeutils.WriteFile(kindNodes[0], "/etc/containerd/certs.d/docker.io/hosts.toml", hostsToml)
+			require.NoError(t, err)
+
+			deploySpegel(t, k8sClient, kindNodes, kcPath, imageDigest)
+
 			t.Logf("Pulling image %s", images[3])
 			err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", images[3]).Run()
 			require.NoError(t, err)
 
-			// Block access to upstream registries by adding them to hosts file.
 			t.Log("Block upstream registry access")
 			for _, node := range kindNodes {
 				for _, domain := range []string{"ghcr.io", "docker.io", "registry-1.docker.io"} {
@@ -300,7 +257,6 @@ func TestKubernetes(t *testing.T) {
 				}
 			}
 
-			// Verify that configuration has been backed up and cleanup backup for uninstall tests.
 			t.Log("Checking backup content")
 			backupHostBuffer := bytes.NewBuffer(nil)
 			err = kindNodes[0].CommandContext(t.Context(), "cat", "/etc/containerd/certs.d/_backup/docker.io/hosts.toml").SetStdout(backupHostBuffer).Run()
@@ -311,12 +267,10 @@ func TestKubernetes(t *testing.T) {
 			err = kindNodes[0].CommandContext(t.Context(), "mkdir", "/etc/containerd/certs.d/_backup").Run()
 			require.NoError(t, err)
 
-			// Run conformance tests.
 			t.Log("Running conformance tests")
 			time.Sleep(10 * time.Second)
 			runConformanceTests(t, k8sClient, kindNodes)
 
-			// Remove Spegel from the last node to test that the mirror fallback is working.
 			t.Log("Remove Spegel from a node")
 			watcher, err := k8sClient.CoreV1().Pods(spegelNamespace).Watch(t.Context(), metav1.ListOptions{FieldSelector: "spec.nodeName=" + kindNodes[2].String()})
 			require.NoError(t, err)
@@ -339,7 +293,6 @@ func TestKubernetes(t *testing.T) {
 			}
 			watcher.Stop()
 
-			// Verify that both local and external ports are working.
 			t.Log("Checking node port accessibility")
 			tests := []struct {
 				node     kindnodes.Node
@@ -376,14 +329,12 @@ func TestKubernetes(t *testing.T) {
 				require.Equal(t, tt.expected, buf.String())
 			}
 
-			// Deploy pull test pods and verify deployment status.
 			t.Log("Deploy pull test pods")
 			runPullTests(t, k8sClient, k8sCfg, images[1:], kindNodes)
 			noSpegelRestart(t, k8sClient)
 
-			// Restart Containerd and verify that Spegel restarts.
 			t.Log("Restarting Containerd")
-			podList, err = k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{FieldSelector: "spec.nodeName=" + kindNodes[0].String()})
+			podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{FieldSelector: "spec.nodeName=" + kindNodes[0].String()})
 			require.NoError(t, err)
 			require.Len(t, podList.Items, 1)
 			err = kindNodes[0].CommandContext(t.Context(), "systemctl", "restart", "containerd").Run()
@@ -395,7 +346,6 @@ func TestKubernetes(t *testing.T) {
 				require.Equal(c, int32(0), pod.Status.ContainerStatuses[0].RestartCount)
 			}, 5*time.Second, 1*time.Second)
 
-			// Verify Spegel is not  ready with a single instance.
 			t.Log("Scale down Spegel to single instance")
 			node, err = k8sClient.CoreV1().Nodes().Get(t.Context(), kindNodes[1].String(), metav1.GetOptions{})
 			require.NoError(t, err)
@@ -427,19 +377,116 @@ func TestKubernetes(t *testing.T) {
 			}
 			noSpegelRestart(t, k8sClient)
 
-			// Uninstall Spegel and make sure cleanup is run
-			t.Log("Uninstalling Spegel")
-			uninstall := action.NewUninstall(actionCfg)
-			uninstall.WaitStrategy = kube.StatusWatcherStrategy
-			_, err = uninstall.Run(spegelNamespace)
-			require.NoError(t, err)
-			for _, node := range kindNodes {
-				buf := &bytes.Buffer{}
-				err = node.CommandContext(t.Context(), "ls", "/etc/containerd/certs.d").SetStdout(buf).Run()
-				require.NoError(t, err)
-				require.Empty(t, buf.String())
-			}
+			uninstallSpegel(t, kindNodes, kcPath)
 		})
+	}
+}
+
+func deploySpegel(t *testing.T, k8sClient kubernetes.Interface, kindNodes []kindnodes.Node, kcPath, imageDigest string) {
+	t.Helper()
+
+	chartPath, version := func() (string, string) {
+		if imageDigest == "" {
+			regClient, err := registry.NewClient()
+			require.NoError(t, err)
+			tags, err := regClient.Tags("ghcr.io/spegel-org/helm-charts/spegel")
+			require.NoError(t, err)
+			buf := bytes.NewBuffer(nil)
+			dl := downloader.ChartDownloader{
+				Out:            buf,
+				Verify:         downloader.VerifyIfPossible,
+				ContentCache:   t.TempDir(),
+				Getters:        getter.Getters(getter.WithRegistryClient(regClient)),
+				RegistryClient: regClient,
+			}
+			chartPath, _, err := dl.DownloadTo("oci://ghcr.io/spegel-org/helm-charts/spegel", tags[0], t.TempDir())
+			require.NoError(t, err, buf.String())
+			return chartPath, tags[0]
+		}
+		return "../../../charts/spegel/", "dev"
+	}()
+	charter, err := loader.Load(chartPath)
+	require.NoError(t, err)
+	actionCfg := &action.Configuration{}
+	actionCfg.SetLogger(slog.DiscardHandler)
+	clientGetter := &genericclioptions.ConfigFlags{KubeConfig: &kcPath}
+	err = actionCfg.Init(clientGetter, spegelNamespace, "secret")
+	require.NoError(t, err)
+
+	t.Log("Deploying Spegel", version)
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		dumpPods(t, k8sClient, spegelNamespace, true)
+	})
+	vals := map[string]any{
+		"spegel": map[string]any{
+			"logLevel": "DEBUG",
+		},
+		"nodeSelector": map[string]any{
+			nodeTaintKey: "true",
+		},
+	}
+	if imageDigest != "" {
+		vals["image"] = map[string]any{
+			"pullPolicy": "Never",
+			"digest":     imageDigest,
+		}
+	}
+	_, err = action.NewGet(actionCfg).Run(spegelNamespace)
+	if err != nil {
+		install := action.NewInstall(actionCfg)
+		install.ReleaseName = spegelNamespace
+		install.Namespace = spegelNamespace
+		install.CreateNamespace = true
+		install.WaitStrategy = kube.StatusWatcherStrategy
+		install.Timeout = 60 * time.Second
+		_, err = install.RunWithContext(t.Context(), charter, vals)
+		require.NoError(t, err)
+	} else {
+		upgrade := action.NewUpgrade(actionCfg)
+		upgrade.Namespace = spegelNamespace
+		upgrade.WaitStrategy = kube.StatusWatcherStrategy
+		upgrade.Timeout = 60 * time.Second
+		_, err := upgrade.RunWithContext(t.Context(), spegelNamespace, charter, vals)
+		require.NoError(t, err)
+	}
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		ds, err := k8sClient.AppsV1().DaemonSets(spegelNamespace).Get(t.Context(), spegelNamespace, metav1.GetOptions{})
+		require.NoError(c, err)
+		u, err := patch.ToUnstructured(ds)
+		require.NoError(c, err)
+		res, err := status.Compute(u)
+		require.NoError(c, err)
+		require.Equal(c, status.CurrentStatus, res.Status)
+	}, 10*time.Second, 1*time.Second)
+	podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{})
+	require.NoError(t, err)
+	require.Equal(t, len(kindNodes), len(podList.Items))
+}
+
+func uninstallSpegel(t *testing.T, kindNodes []kindnodes.Node, kcPath string) {
+	t.Helper()
+
+	t.Log("Uninstalling Spegel")
+	actionCfg := &action.Configuration{}
+	actionCfg.SetLogger(slog.DiscardHandler)
+	clientGetter := &genericclioptions.ConfigFlags{KubeConfig: &kcPath}
+	err := actionCfg.Init(clientGetter, spegelNamespace, "secret")
+	require.NoError(t, err)
+	uninstall := action.NewUninstall(actionCfg)
+	uninstall.WaitStrategy = kube.StatusWatcherStrategy
+	_, err = uninstall.Run(spegelNamespace)
+	require.NoError(t, err)
+
+	t.Log("Verify Spegel cleaned up host configuration")
+	for _, node := range kindNodes {
+		buf := &bytes.Buffer{}
+		err = node.CommandContext(t.Context(), "ls", "/etc/containerd/certs.d").SetStdout(buf).Run()
+		require.NoError(t, err)
+		require.Empty(t, buf.String())
 	}
 }
 
