@@ -1,6 +1,6 @@
 module github.com/spegel-org/spegel/test/integration/containerd
 
-go 1.24.6
+go 1.25.0
 
 toolchain go1.25.5
 
@@ -14,7 +14,7 @@ require (
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.78.0
-	k8s.io/cri-api v0.34.3
+	k8s.io/cri-api v0.35.0
 )
 
 require (
