@@ -217,10 +217,20 @@ func TestKubernetes(t *testing.T) {
 				require.NoError(t, err)
 			}
 
+			regClient, err := registry.NewClient()
+			require.NoError(t, err)
+			actionCfg := &action.Configuration{
+				RegistryClient: regClient,
+			}
+			actionCfg.SetLogger(slog.DiscardHandler)
+			clientGetter := &genericclioptions.ConfigFlags{KubeConfig: &kcPath}
+			err = actionCfg.Init(clientGetter, spegelNamespace, "secret")
+			require.NoError(t, err)
+
 			t.Log("Upgrading Spegel from latest release to dev build")
-			deploySpegel(t, k8sClient, kindNodes, kcPath, "")
-			deploySpegel(t, k8sClient, kindNodes, kcPath, imageDigest)
-			uninstallSpegel(t, kindNodes, kcPath)
+			installSpegel(t, actionCfg, k8sClient, kindNodes, "")
+			installSpegel(t, actionCfg, k8sClient, kindNodes, imageDigest)
+			uninstallSpegel(t, actionCfg, kindNodes)
 
 			t.Log("Pulling test images")
 			images := []string{
@@ -243,7 +253,7 @@ func TestKubernetes(t *testing.T) {
 			err = nodeutils.WriteFile(kindNodes[0], "/etc/containerd/certs.d/docker.io/hosts.toml", hostsToml)
 			require.NoError(t, err)
 
-			deploySpegel(t, k8sClient, kindNodes, kcPath, imageDigest)
+			installSpegel(t, actionCfg, k8sClient, kindNodes, imageDigest)
 
 			t.Logf("Pulling image %s", images[3])
 			err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", images[3]).Run()
@@ -268,7 +278,6 @@ func TestKubernetes(t *testing.T) {
 			require.NoError(t, err)
 
 			t.Log("Running conformance tests")
-			time.Sleep(10 * time.Second)
 			runConformanceTests(t, k8sClient, kindNodes)
 
 			t.Log("Remove Spegel from a node")
@@ -292,6 +301,9 @@ func TestKubernetes(t *testing.T) {
 				break
 			}
 			watcher.Stop()
+
+			// Give time for system to balance. Without this tests tend to be flaky.
+			time.Sleep(10 * time.Second)
 
 			t.Log("Checking node port accessibility")
 			tests := []struct {
@@ -326,7 +338,7 @@ func TestKubernetes(t *testing.T) {
 				nodeIP := getNodeIP(t, node)
 				buf := &bytes.Buffer{}
 				tt.node.CommandContext(t.Context(), "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", fmt.Sprintf("http://%s:%s/readyz", nodeIP, tt.port)).SetStdout(buf).Run()
-				require.Equal(t, tt.expected, buf.String())
+				require.Equal(t, tt.expected, buf.String(), fmt.Sprintf("%s %s", tt.node, tt.port))
 			}
 
 			t.Log("Deploy pull test pods")
@@ -377,27 +389,25 @@ func TestKubernetes(t *testing.T) {
 			}
 			noSpegelRestart(t, k8sClient)
 
-			uninstallSpegel(t, kindNodes, kcPath)
+			uninstallSpegel(t, actionCfg, kindNodes)
 		})
 	}
 }
 
-func deploySpegel(t *testing.T, k8sClient kubernetes.Interface, kindNodes []kindnodes.Node, kcPath, imageDigest string) {
+func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kubernetes.Interface, kindNodes []kindnodes.Node, imageDigest string) {
 	t.Helper()
 
 	chartPath, version := func() (string, string) {
 		if imageDigest == "" {
-			regClient, err := registry.NewClient()
-			require.NoError(t, err)
-			tags, err := regClient.Tags("ghcr.io/spegel-org/helm-charts/spegel")
+			tags, err := actionCfg.RegistryClient.Tags("ghcr.io/spegel-org/helm-charts/spegel")
 			require.NoError(t, err)
 			buf := bytes.NewBuffer(nil)
 			dl := downloader.ChartDownloader{
 				Out:            buf,
 				Verify:         downloader.VerifyIfPossible,
 				ContentCache:   t.TempDir(),
-				Getters:        getter.Getters(getter.WithRegistryClient(regClient)),
-				RegistryClient: regClient,
+				Getters:        getter.Getters(getter.WithRegistryClient(actionCfg.RegistryClient)),
+				RegistryClient: actionCfg.RegistryClient,
 			}
 			chartPath, _, err := dl.DownloadTo("oci://ghcr.io/spegel-org/helm-charts/spegel", tags[0], t.TempDir())
 			require.NoError(t, err, buf.String())
@@ -406,11 +416,6 @@ func deploySpegel(t *testing.T, k8sClient kubernetes.Interface, kindNodes []kind
 		return "../../../charts/spegel/", "dev"
 	}()
 	charter, err := loader.Load(chartPath)
-	require.NoError(t, err)
-	actionCfg := &action.Configuration{}
-	actionCfg.SetLogger(slog.DiscardHandler)
-	clientGetter := &genericclioptions.ConfigFlags{KubeConfig: &kcPath}
-	err = actionCfg.Init(clientGetter, spegelNamespace, "secret")
 	require.NoError(t, err)
 
 	t.Log("Deploying Spegel", version)
@@ -467,18 +472,14 @@ func deploySpegel(t *testing.T, k8sClient kubernetes.Interface, kindNodes []kind
 	require.Equal(t, len(kindNodes), len(podList.Items))
 }
 
-func uninstallSpegel(t *testing.T, kindNodes []kindnodes.Node, kcPath string) {
+func uninstallSpegel(t *testing.T, actionCfg *action.Configuration, kindNodes []kindnodes.Node) {
 	t.Helper()
 
 	t.Log("Uninstalling Spegel")
-	actionCfg := &action.Configuration{}
-	actionCfg.SetLogger(slog.DiscardHandler)
-	clientGetter := &genericclioptions.ConfigFlags{KubeConfig: &kcPath}
-	err := actionCfg.Init(clientGetter, spegelNamespace, "secret")
-	require.NoError(t, err)
 	uninstall := action.NewUninstall(actionCfg)
 	uninstall.WaitStrategy = kube.StatusWatcherStrategy
-	_, err = uninstall.Run(spegelNamespace)
+	uninstall.Timeout = 60 * time.Second
+	_, err := uninstall.Run(spegelNamespace)
 	require.NoError(t, err)
 
 	t.Log("Verify Spegel cleaned up host configuration")
