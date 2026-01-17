@@ -91,7 +91,7 @@ func TestKubernetes(t *testing.T) {
 	switch testStrategy {
 	case "all":
 		break
-	case "fast", "latest":
+	case "fast":
 		kubernetesVersions = []string{kubernetesVersions[0]}
 		proxyModes = []v1alpha4.ProxyMode{proxyModes[0]}
 		ipFamilies = []v1alpha4.ClusterIPFamily{ipFamilies[0]}

@@ -1,7 +1,6 @@
 package oci
 
 import (
-	"fmt"
 	iofs "io/fs"
 	"maps"
 	"net/url"
@@ -12,115 +11,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
-	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
-
-func TestVerifyStatusResponse(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name                  string
-		configPath            string
-		requiredConfigPath    string
-		expectedErrMsg        string
-		discardUnpackedLayers bool
-	}{
-		{
-			name:               "empty config path",
-			configPath:         "",
-			requiredConfigPath: "/etc/containerd/certs.d",
-			expectedErrMsg:     "containerd registry config path needs to be set for mirror configuration to take effect",
-		},
-		{
-			name:               "single config path",
-			configPath:         "/etc/containerd/certs.d",
-			requiredConfigPath: "/etc/containerd/certs.d",
-		},
-		{
-			name:               "missing single config path",
-			configPath:         "/etc/containerd/certs.d",
-			requiredConfigPath: "/var/lib/containerd/certs.d",
-			expectedErrMsg:     "containerd registry config path is /etc/containerd/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
-		},
-		{
-			name:               "multiple config paths",
-			configPath:         "/etc/containerd/certs.d:/etc/docker/certs.d",
-			requiredConfigPath: "/etc/containerd/certs.d",
-		},
-		{
-			name:               "missing multiple config paths",
-			configPath:         "/etc/containerd/certs.d:/etc/docker/certs.d",
-			requiredConfigPath: "/var/lib/containerd/certs.d",
-			expectedErrMsg:     "containerd registry config path is /etc/containerd/certs.d:/etc/docker/certs.d but needs to contain path /var/lib/containerd/certs.d for mirror configuration to take effect",
-		},
-		{
-			name:                  "discard unpacked layers enabled",
-			discardUnpackedLayers: true,
-			expectedErrMsg:        "containerd discard unpacked layers cannot be enabled",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			resp := &runtimeapi.StatusResponse{
-				Info: map[string]string{
-					"config": fmt.Sprintf(`{"registry": {"configPath": %q}, "containerd": {"discardUnpackedLayers": %v}}`, tt.configPath, tt.discardUnpackedLayers),
-				},
-			}
-			err := verifyStatusResponse(resp, tt.requiredConfigPath)
-			if tt.expectedErrMsg != "" {
-				require.EqualError(t, err, tt.expectedErrMsg)
-				return
-			}
-			require.NoError(t, err)
-		})
-	}
-}
-
-func TestVerifyStatusResponseMissingRequired(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name           string
-		config         string
-		expectedErrMsg string
-	}{
-		{
-			name:           "missing discard upacked layers false",
-			config:         `{"registry": {"configPath": "foo"}, "containerd": {"runtimes":{"discardUnpackedLayers": false}}}`,
-			expectedErrMsg: "field containerd.discardUnpackedLayers missing from config",
-		},
-		{
-			name:           "missing discard upacked layers true",
-			config:         `{"registry": {"configPath": "foo"}, "containerd": {"runtimes":{"discardUnpackedLayers": true}}}`,
-			expectedErrMsg: "field containerd.discardUnpackedLayers missing from config",
-		},
-		{
-			name:           "missing containerd field",
-			config:         `{"registry": {"configPath": "foo"}}`,
-			expectedErrMsg: "field containerd.discardUnpackedLayers missing from config",
-		},
-		{
-			name:           "missing registry field",
-			config:         `{"containerd": {"discardUnpackedLayers": false}}`,
-			expectedErrMsg: "field registry.configPath missing from config",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			resp := &runtimeapi.StatusResponse{
-				Info: map[string]string{
-					"config": tt.config,
-				},
-			}
-			err := verifyStatusResponse(resp, "foo")
-			require.EqualError(t, err, tt.expectedErrMsg)
-		})
-	}
-}
 
 func TestBackupConfig(t *testing.T) {
 	t.Parallel()
@@ -204,56 +95,6 @@ func TestContentLabelsToReferences(t *testing.T) {
 
 	_, err := contentLabelsToReferences(map[string]string{}, dgst)
 	require.EqualError(t, err, "no distribution source labels found for foo")
-}
-
-func TestFeaturesForVersion(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		version          string
-		expectedString   string
-		expectedFeatures []Feature
-	}{
-		{
-			version:          "v2.0.2",
-			expectedFeatures: []Feature{},
-			expectedString:   "",
-		},
-		{
-			version:          "2.1.0",
-			expectedFeatures: []Feature{FeatureContentEvent},
-			expectedString:   "ContentEvent",
-		},
-		{
-			version:          "v1.7.27",
-			expectedFeatures: []Feature{FeatureConfigCheck},
-			expectedString:   "ConfigCheck",
-		},
-		{
-			version:          "1.6.0",
-			expectedFeatures: []Feature{FeatureConfigCheck},
-			expectedString:   "ConfigCheck",
-		},
-	}
-	for _, tt := range tests {
-		// Testing with a suffix is important as some Linux distributions will modify the version
-		// with a non Semver compliant modification. Even if the version is supposed to comply with
-		// semver that may not always be the case.
-		for _, suffix := range []string{"", "~ds1"} {
-			version := tt.version + suffix
-			t.Run(version, func(t *testing.T) {
-				t.Parallel()
-
-				feats, err := featuresForVersion(tt.version)
-				require.NoError(t, err)
-				for _, feat := range tt.expectedFeatures {
-					ok := feats.Has(feat)
-					require.True(t, ok)
-				}
-				require.Equal(t, tt.expectedString, feats.String())
-			})
-		}
-	}
 }
 
 func TestMirrorConfiguration(t *testing.T) {
