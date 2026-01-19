@@ -227,7 +227,7 @@ livenessProbe:
 
 # -- Add additional volumes to the daemonset. This can be helpful when adding custom init containers that need
 # host path mounts to different locations than the already configured ones.
-extraVolumes:
+extraVolumes: []
 # - name: containerd
 #   hostPath:
 #     path: /etc/containerd/
@@ -235,7 +235,7 @@ extraVolumes:
 
 # -- Add additional initContainers *before* Spegel's own configuration init container
 # to run additional node init configuration tasks
-extraInitContainers:
+extraInitContainers: []
 # - name: gke-containerd-patch
 #   image: busybox:latest
 #   securityContext:

@@ -13,6 +13,8 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | clusterDomain | string | `"cluster.local."` | Domain configured for service domain names. |
 | commonLabels | object | `{}` | Common labels to apply to all rendered resources. |
 | daemonsetAnnotations | object | `{}` | Annotations to add to the DaemonSet. |
+| extraInitContainers | list | `[]` | Add additional initContainers *before* Spegel's own configuration init container to run additional node init configuration tasks |
+| extraVolumes | list | `[]` | Add additional volumes to the daemonset. This can be helpful when adding custom init containers that need host path mounts to different locations than the already configured ones. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
 | grafanaDashboard.annotations | object | `{}` | Annotations to add to the Sidecar configMap or GrafanaDashboard. |
 | grafanaDashboard.enabled | bool | `false` | If true creates a Grafana dashboard. |
