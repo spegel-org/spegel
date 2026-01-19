@@ -224,3 +224,49 @@ verticalPodAutoscaler:
 livenessProbe:
   # -- When enabled a liveness probe will be added to the registry.
   enabled: false
+
+# -- Add additional volumes to the daemonset. This can be helpful when adding custom init containers that need
+# host path mounts to different locations than the already configured ones.
+extraVolumes:
+# - name: containerd
+#   hostPath:
+#     path: /etc/containerd/
+#     type: Directory
+
+# -- Add additional initContainers *before* Spegel's own configuration init container
+# to run additional node init configuration tasks
+extraInitContainers:
+# - name: gke-containerd-patch
+#   image: busybox:latest
+#   securityContext:
+#     privileged: true
+#   command:
+#     - nsenter
+#     - --mount=/proc/1/ns/mnt
+#     - --
+#     - /bin/bash
+#     - -c
+#     - |-
+#       set -o errexit
+#       set -o pipefail
+#       if grep -q 'config_path' /etc/containerd/config.toml; then
+#         echo "Containerd drop-in config_path already configured, exiting";
+#         exit 0
+#       fi
+#       mkdir -p /etc/containerd/certs.d/docker.io
+#       # delete old mirror config
+#       sed -i '/registry\.mirrors\."docker.io"/,+1d' /etc/containerd/config.toml
+#       sed -i 's/discard_unpacked_layers = true/discard_unpacked_layers = false/' /etc/containerd/config.toml
+#       # add new mirror config
+#       cat > "/etc/containerd/certs.d/docker.io/hosts.toml" <<EOF
+#       server = ["https://mirror.gcr.io", "https://registry-1.docker.io"]
+#       EOF
+#       # configure drop-in dir
+#       cat >> "/etc/containerd/config.toml" <<EOF
+
+#       [plugins."io.containerd.grpc.v1.cri".registry]
+#         config_path = "/etc/containerd/certs.d"
+#       EOF
+#       chmod -R o+X+r /etc/containerd/
+#       echo "Restarting containerd ..."
+#       systemctl restart containerd
