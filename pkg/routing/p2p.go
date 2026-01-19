@@ -30,6 +30,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/sec"
+	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
@@ -84,6 +86,7 @@ type P2PRouter struct {
 	balancerGroup          *singleflight.Group
 	balancerCache          *expirable.LRU[string, *ClosableBalancer]
 	connectivityGate       *channel.Gate
+	protocols              []ma.Multiaddr
 	ip6Support, ip4Support bool
 	registryPort           uint16
 }
@@ -102,12 +105,17 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		return nil, err
 	}
 
-	multiAddrs, err := listenMultiaddrs(addr)
+	listenAddrs, err := listenMultiaddrs(addr)
 	if err != nil {
 		return nil, err
 	}
 	hostOpts := []libp2p.Option{
-		libp2p.ListenAddrs(multiAddrs...),
+		libp2p.ChainOptions(
+			libp2p.NoTransports,
+			libp2p.Transport(quic.NewTransport),
+			libp2p.Transport(tcp.NewTCPTransport),
+		),
+		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
 		libp2p.AddrsFactory(func(addrs []ma.Multiaddr) []ma.Multiaddr {
 			ip6Addrs, ip4Addrs := filterAndSplitAddrs(addrs)
@@ -126,6 +134,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 	if err != nil {
 		return nil, fmt.Errorf("could not create host: %w", err)
 	}
+	protocols := protocolsFromAddrs(host.Addrs())
 	ip6Addrs, ip4Addrs := filterAndSplitAddrs(host.Addrs())
 
 	dhtOpts := []dht.Option{
@@ -172,10 +181,15 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		balancerGroup:    &singleflight.Group{},
 		balancerCache:    expirable.NewLRU[string, *ClosableBalancer](0, nil, 5*time.Second),
 		connectivityGate: connectivityGate,
+		protocols:        protocols,
 		ip6Support:       len(ip6Addrs) > 0,
 		ip4Support:       len(ip4Addrs) > 0,
 		registryPort:     uint16(registryPort),
 	}, nil
+}
+
+func (r *P2PRouter) Host() host.Host {
+	return r.host
 }
 
 func (r *P2PRouter) Run(ctx context.Context) error {
@@ -211,7 +225,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 					if !r.connectivityGate.IsOpen() {
 						return nil
 					}
-					err := bootstrapPeers(gCtx, r.bootstrapper, r.kdht)
+					err := bootstrapPeers(gCtx, r.bootstrapper, r.kdht, r.protocols)
 					if err != nil {
 						return err
 					}
@@ -226,7 +240,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 				}
 				log.Info("bootstrap completed connectivity is reached", "duration", time.Since(start))
 			case <-time.After(30 * time.Minute):
-				err := bootstrapPeers(gCtx, r.bootstrapper, r.kdht)
+				err := bootstrapPeers(gCtx, r.bootstrapper, r.kdht, r.protocols)
 				if err != nil {
 					log.Error(err, "periodic bootstrap failed")
 					continue
@@ -444,33 +458,43 @@ func listenMultiaddrs(addr string) ([]ma.Multiaddr, error) {
 	if err != nil {
 		return nil, err
 	}
-	tcpComp, err := ma.NewMultiaddr(fmt.Sprintf("/tcp/%s", p))
+
+	ipComps := []ma.Component{}
+	ip := net.ParseIP(h)
+	if ip.To4() != nil {
+		ipComp, err := ma.NewComponent("ip4", h)
+		if err != nil {
+			return nil, err
+		}
+		ipComps = append(ipComps, *ipComp)
+	} else if ip.To16() != nil {
+		ipComp, err := ma.NewComponent("ip6", h)
+		if err != nil {
+			return nil, err
+		}
+		ipComps = append(ipComps, *ipComp)
+	}
+	if len(ipComps) == 0 {
+		ipComps = []ma.Component{manet.IP6Unspecified[0], manet.IP4Unspecified[0]}
+	}
+
+	listenAddrs := []ma.Multiaddr{}
+	udpComp, err := ma.NewComponent("udp", p)
 	if err != nil {
 		return nil, err
 	}
-	ipComps := []ma.Multiaddr{}
-	ip := net.ParseIP(h)
-	if ip.To4() != nil {
-		ipComp, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/%s", h))
-		if err != nil {
-			return nil, fmt.Errorf("could not create host multi address: %w", err)
-		}
-		ipComps = append(ipComps, ipComp)
-	} else if ip.To16() != nil {
-		ipComp, err := ma.NewMultiaddr(fmt.Sprintf("/ip6/%s", h))
-		if err != nil {
-			return nil, fmt.Errorf("could not create host multi address: %w", err)
-		}
-		ipComps = append(ipComps, ipComp)
+	quicComp, err := ma.NewComponent("quic-v1", "")
+	if err != nil {
+		return nil, err
 	}
-	if len(ipComps) == 0 {
-		ipComps = []ma.Multiaddr{manet.IP6Unspecified, manet.IP4Unspecified}
+	tcpComp, err := ma.NewComponent("tcp", p)
+	if err != nil {
+		return nil, err
 	}
-	multiAddrs := []ma.Multiaddr{}
 	for _, ipComp := range ipComps {
-		multiAddrs = append(multiAddrs, ipComp.Encapsulate(tcpComp))
+		listenAddrs = append(listenAddrs, ma.Join(ipComp.Multiaddr(), udpComp, quicComp), ma.Join(ipComp.Multiaddr(), tcpComp))
 	}
-	return multiAddrs, nil
+	return listenAddrs, nil
 }
 
 func filterAndSplitAddrs(addrs []ma.Multiaddr) ([]ma.Multiaddr, []ma.Multiaddr) {
@@ -492,6 +516,19 @@ func filterAndSplitAddrs(addrs []ma.Multiaddr) ([]ma.Multiaddr, []ma.Multiaddr) 
 		}
 	}
 	return ip6Addrs, ip4Addrs
+}
+
+func protocolsFromAddrs(addrs []ma.Multiaddr) []ma.Multiaddr {
+	protocolSet := map[string]ma.Multiaddr{}
+	for _, addr := range addrs {
+		_, protocol := ma.SplitFirst(addr)
+		protocolSet[protocol.String()] = protocol
+	}
+	protocols := []ma.Multiaddr{}
+	for _, v := range protocolSet {
+		protocols = append(protocols, v)
+	}
+	return protocols
 }
 
 func createCid(key string) (cid.Cid, error) {
@@ -519,21 +556,7 @@ func addrsEqual(a1, a2 []ma.Multiaddr) bool {
 	return false
 }
 
-func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT) error {
-	// Get port from host address.
-	hostAddrs := kdht.Host().Addrs()
-	if len(hostAddrs) == 0 {
-		return errors.New("host does not have any addresses")
-	}
-	var hostPort ma.Component
-	ma.ForEach(hostAddrs[0], func(c ma.Component) bool {
-		if c.Protocol().Code == ma.P_TCP {
-			hostPort = c
-			return false
-		}
-		return true
-	})
-
+func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, protocols []ma.Multiaddr) error {
 	// Attempt to connect to bootstrap peers.
 	bootstrapCtx, bootstrapCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer bootstrapCancel()
@@ -550,22 +573,17 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT) err
 			continue
 		}
 
-		// Add port if missing from address.
+		// Add protocol from host listener if missing.
 		modifiedAddrs := []ma.Multiaddr{}
 		for _, addr := range addrInfo.Addrs {
-			hasPort := false
-			ma.ForEach(addr, func(c ma.Component) bool {
-				if c.Protocol().Code == ma.P_TCP {
-					hasPort = true
-					return false
-				}
-				return true
-			})
-			if hasPort {
+			_, remainder := ma.SplitFirst(addr)
+			if len(remainder) > 0 {
 				modifiedAddrs = append(modifiedAddrs, addr)
 				continue
 			}
-			modifiedAddrs = append(modifiedAddrs, ma.Join(addr, &hostPort))
+			for _, protocol := range protocols {
+				modifiedAddrs = append(modifiedAddrs, ma.Join(addr, protocol))
+			}
 		}
 		addrInfo.Addrs = modifiedAddrs
 

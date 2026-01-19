@@ -56,6 +56,8 @@ linters:
           alias: dht
         - pkg: github.com/libp2p/go-libp2p/p2p/net/mock
           alias: mocknet
+        - pkg: github.com/libp2p/go-libp2p/p2p/transport/quic
+          alias: quic
         - pkg: go.etcd.io/bbolt
           alias: bolt
         - pkg: k8s.io/cri-api/pkg/apis/runtime/v1

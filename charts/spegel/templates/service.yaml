@@ -68,7 +68,3 @@ spec:
     {{- include "spegel.selectorLabels" . | nindent 4 }}
   clusterIP: None
   publishNotReadyAddresses: true
-  ports:
-    - name: router
-      port: {{ .Values.service.router.port }}
-      protocol: TCP
