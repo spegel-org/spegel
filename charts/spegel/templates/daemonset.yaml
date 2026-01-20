@@ -135,9 +135,12 @@ spec:
             hostPort: {{ .Values.service.registry.hostPort }}
             {{- end }}
             protocol: TCP
-          - name: router
+          - name: router-tcp
             containerPort: {{ .Values.service.router.port }}
             protocol: TCP
+          - name: router-quic
+            containerPort: {{ .Values.service.router.port }}
+            protocol: UDP
           - name: metrics
             containerPort: {{ .Values.service.metrics.port }}
             protocol: TCP
