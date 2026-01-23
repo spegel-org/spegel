@@ -68,6 +68,10 @@ linters:
           alias: digest
         - pkg: github.com/opencontainers/image-spec/specs-go/v1
           alias: ocispec
+        - pkg: go.opentelemetry.io/otel/semconv/v1.24.0
+          alias: semconv
+        - pkg: go.opentelemetry.io/otel/sdk/trace
+          alias: sdktrace
         - pkg: k8s.io/apimachinery/pkg/util/version
           alias: utilversion
         - pkg: github.com/hashicorp/golang-lru/v2
