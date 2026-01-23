@@ -27,6 +27,13 @@ make test-integration-containerd
 make test-integration-kubernetes
 ```
 
+Notes:
+- On macOS with Docker Desktop, you may need to point to the Docker socket manually if you see a `/var/run/docker.sock` error:
+
+```shell
+export DOCKER_HOST=unix://${HOME}/.docker/run/docker.sock
+```
+
 ## Building
 
 Build the Docker image locally.
@@ -43,17 +50,25 @@ make build-image IMG=example.com/spegel TAG=feature
 
 ### Local debugging
 
-Run the `dev-deploy` recipe which will create a Kind cluster with the proper configuration and deploy Spegel into it. If you run this command a second time the cluster will be kept but Spegel will be updated.
+Run the Kubernetes integration tests, which create a Kind cluster and deploy Spegel into it.
 
 ```shell
-make dev-deploy
+make test-integration-kubernetes
 ```
 
-After the command has run you can get a kubeconfig file to access the cluster and do any debugging.
+To increase the timeout or tweak options, run the test directly from the directory:
 
 ```shell
-kind get kubeconfig --name spegel-dev > kubeconfig
-export KUBECOONFIG=$(pwd)/kubeconfig
+cd test/integration/kubernetes
+INTEGRATION_TEST_STRATEGY="fast" IMG_REF=<image-ref> go test -v -timeout 400s -count 1 ./...
+```
+
+After the command has run you can get a kubeconfig file to access the cluster and do any debugging. The Kind cluster name is created by the test; use `kind get clusters` to find it.
+
+```shell
+kind get clusters
+kind get kubeconfig --name <cluster-name> > kubeconfig
+export KUBECONFIG=$(pwd)/kubeconfig
 kubectl -n spegel get pods
 ```
 
