@@ -40,6 +40,7 @@ import (
 
 	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/otelx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
@@ -199,7 +200,9 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		err := r.bootstrapper.Run(gCtx, *host.InfoFromHost(r.host))
+		spanCtx, end := otelx.StartSpan(gCtx, "p2p.bootstrapper.run")
+		defer end()
+		err := r.bootstrapper.Run(spanCtx, *host.InfoFromHost(r.host))
 		if err != nil {
 			return err
 		}
@@ -274,6 +277,8 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 
 func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) {
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
+	ctx, end := otelx.StartSpan(ctx, "p2p.lookup")
+	defer end()
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
