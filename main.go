@@ -21,7 +21,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spegel-org/spegel/internal/otelx"
+
 	"github.com/spegel-org/spegel/internal/cleanup"
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
@@ -48,18 +51,24 @@ type BootstrapConfig struct {
 
 type RegistryCmd struct {
 	BootstrapConfig
-	MetricsAddr           string           `arg:"--metrics-addr,env:METRICS_ADDR" default:":9090" help:"address to serve metrics."`
-	ContainerdSock        string           `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
-	ContainerdNamespace   string           `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
-	ContainerdContentPath string           `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
-	DataDir               string           `arg:"--data-dir,env:DATA_DIR" default:"/var/lib/spegel" help:"Directory where Spegel persists data."`
-	RouterAddr            string           `arg:"--router-addr,env:ROUTER_ADDR" default:":5001" help:"address to serve router."`
-	RegistryAddr          string           `arg:"--registry-addr,env:REGISTRY_ADDR" default:":5000" help:"address to server image registry."`
-	MirroredRegistries    []string         `arg:"--mirrored-registries,env:MIRRORED_REGISTRIES" help:"Registries that are configured to be mirrored, if slice is empty all registries are mirrored."`
-	RegistryFilters       []*regexp.Regexp `arg:"--registry-filters,env:REGISTRY_FILTERS" help:"Regular expressions to filter out tags/registries, if slice is empty all registries/tags are resolved."`
-	MirrorResolveTimeout  time.Duration    `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
-	MirrorResolveRetries  int              `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
-	DebugWebEnabled       bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
+	ContainerdRegistryConfigPath string           `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
+	MetricsAddr                  string           `arg:"--metrics-addr,env:METRICS_ADDR" default:":9090" help:"address to serve metrics."`
+	ContainerdSock               string           `arg:"--containerd-sock,env:CONTAINERD_SOCK" default:"/run/containerd/containerd.sock" help:"Endpoint of containerd service."`
+	ContainerdNamespace          string           `arg:"--containerd-namespace,env:CONTAINERD_NAMESPACE" default:"k8s.io" help:"Containerd namespace to fetch images from."`
+	ContainerdContentPath        string           `arg:"--containerd-content-path,env:CONTAINERD_CONTENT_PATH" default:"/var/lib/containerd/io.containerd.content.v1.content" help:"Path to Containerd content store"`
+	DataDir                      string           `arg:"--data-dir,env:DATA_DIR" default:"/var/lib/spegel" help:"Directory where Spegel persists data."`
+	RouterAddr                   string           `arg:"--router-addr,env:ROUTER_ADDR" default:":5001" help:"address to serve router."`
+	RegistryAddr                 string           `arg:"--registry-addr,env:REGISTRY_ADDR" default:":5000" help:"address to server image registry."`
+	OtelEndpoint                 string           `arg:"--otel-endpoint,env:OTEL_ENDPOINT" help:"OTEL exporter endpoint (e.g., http://otel-collector:4318)."`
+	OtelServiceName              string           `arg:"--otel-service-name,env:OTEL_SERVICE_NAME" default:"spegel" help:"Service name for OTEL traces."`
+	OtelSampler                  string           `arg:"--otel-sampler,env:OTEL_SAMPLER" default:"parentbased_always_off" help:"Trace sampler (always_on, always_off, parentbased_always_on, parentbased_always_off, or ratio 0.0-1.0)."`
+	MirroredRegistries           []string         `arg:"--mirrored-registries,env:MIRRORED_REGISTRIES" help:"Registries that are configured to be mirrored, if slice is empty all registries are mirrored."`
+	RegistryFilters              []*regexp.Regexp `arg:"--registry-filters,env:REGISTRY_FILTERS" help:"Regular expressions to filter out tags/registries, if slice is empty all registries/tags are resolved."`
+	MirrorResolveTimeout         time.Duration    `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
+	MirrorResolveRetries         int              `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
+	DebugWebEnabled              bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
+	ResolveLatestTag             bool             `arg:"--resolve-latest-tag,env:RESOLVE_LATEST_TAG" default:"true" help:"When true latest tags will be resolved to digests."`
+	OtelInsecure                 bool             `arg:"--otel-insecure,env:OTEL_INSECURE" help:"Use insecure connection for OTEL exporter."`
 }
 
 type CleanupCmd struct {
@@ -82,6 +91,10 @@ type Arguments struct {
 }
 
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	args := &Arguments{}
 	arg.MustParse(args)
 
@@ -93,12 +106,33 @@ func main() {
 	log := logr.FromSlogHandler(handler)
 	ctx := logr.NewContext(context.Background(), log)
 
+	if args.Registry != nil {
+		cfg := otelx.Config{
+			ServiceName: args.Registry.OtelServiceName,
+			Endpoint:    args.Registry.OtelEndpoint,
+			Sampler:     args.Registry.OtelSampler,
+			Insecure:    args.Registry.OtelInsecure,
+		}
+		shutdown, terr := otelx.Setup(ctx, cfg)
+		if terr != nil {
+			log.Error(terr, "failed to set up telemetry")
+		}
+		defer func() {
+			if shutdown != nil {
+				if err := shutdown(context.Background()); err != nil {
+					log.Error(err, "failed to shutdown telemetry")
+				}
+			}
+		}()
+	}
+
 	err := run(ctx, args)
 	if err != nil {
 		log.Error(err, "run exit with error")
-		os.Exit(1)
+		return 1
 	}
 	log.Info("gracefully shutdown")
+	return 0
 }
 
 func run(ctx context.Context, args *Arguments) error {
@@ -208,7 +242,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	regSrv := &http.Server{
 		Addr:    args.RegistryAddr,
-		Handler: reg.Handler(log),
+		Handler: httpx.WrapHandler("registry", reg.Handler(log)),
 	}
 	g.Go(func() error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -254,7 +288,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
-		Handler: mux,
+		Handler: httpx.WrapHandler("metrics", mux),
 	}
 	g.Go(func() error {
 		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
