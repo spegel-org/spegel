@@ -57,7 +57,6 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	httpClient := &http.Client{
 		Timeout: 0,
 	}
@@ -66,7 +65,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	transport.MaxIdleConns = 100
 	transport.MaxConnsPerHost = 100
 	transport.MaxIdleConnsPerHost = 100
-	httpClient.Transport = transport
+	httpClient.Transport = httpx.WrapTransport("oci", transport)
 
 	ociClient := &Client{
 		httpClient: httpClient,
