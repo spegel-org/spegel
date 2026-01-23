@@ -17,6 +17,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/otelx"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -238,7 +239,11 @@ type MirrorErrorDetails struct {
 func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "mirror")
 
-	log := logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path)
+	ctx, spanEnd := otelx.StartSpan(req.Context(), "registry.mirror")
+	defer spanEnd()
+	req = req.WithContext(ctx)
+
+	log := otelx.WithEnrichedLogger(req.Context(), logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path))
 
 	defer func() {
 		if rw.Error() == nil {
@@ -390,6 +395,10 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "manifest")
 
+	ctx, spanEnd := otelx.StartSpan(req.Context(), "registry.manifest")
+	defer spanEnd()
+	req = req.WithContext(ctx)
+
 	if dist.Digest == "" {
 		dgst, err := r.ociStore.Resolve(req.Context(), dist.Identifier())
 		if err != nil {
@@ -430,13 +439,18 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	rw.WriteHeader(http.StatusOK)
 	_, err = io.Copy(rw, rc)
 	if err != nil {
-		logr.FromContextOrDiscard(req.Context()).Error(err, "error occurred when writing manifest")
+		log := otelx.WithEnrichedLogger(req.Context(), logr.FromContextOrDiscard(req.Context()))
+		log.Error(err, "error occurred when writing manifest")
 		return
 	}
 }
 
 func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "blob")
+
+	ctx, spanEnd := otelx.StartSpan(req.Context(), "registry.blob")
+	defer spanEnd()
+	req = req.WithContext(ctx)
 
 	desc, err := r.ociStore.Descriptor(req.Context(), dist.Digest)
 	if err != nil {
@@ -494,7 +508,8 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 	rw.WriteHeader(status)
 	_, err = io.Copy(rw, src)
 	if err != nil {
-		logr.FromContextOrDiscard(req.Context()).Error(err, "failed to write blob")
+		log := otelx.WithEnrichedLogger(req.Context(), logr.FromContextOrDiscard(req.Context()))
+		log.Error(err, "failed to write blob")
 		return
 	}
 }
