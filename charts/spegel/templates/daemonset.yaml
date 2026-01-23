@@ -116,6 +116,14 @@ spec:
           - --containerd-content-path={{ . }}
           {{- end }}
           - --debug-web-enabled={{ .Values.spegel.debugWebEnabled }}
+          {{- if .Values.spegel.otel.endpoint }}
+          - --otel-endpoint={{ .Values.spegel.otel.endpoint }}
+          {{- end }}
+          {{- if .Values.spegel.otel.insecure }}
+          - --otel-insecure
+          {{- end }}
+          - --otel-service-name={{ .Values.spegel.otel.serviceName }}
+          - --otel-sampler={{ .Values.spegel.otel.sampler }}
         env:
         - name: DATA_DIR
           value: ""
