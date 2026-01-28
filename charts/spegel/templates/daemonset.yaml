@@ -50,9 +50,9 @@ spec:
           - configuration
           - --log-level={{ .Values.spegel.logLevel }}
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
-          {{- with .Values.spegel.mirroredRegistries }}
           - --mirrored-registries
-          {{- range . }}
+          {{- if .Values.spegel.mirroredRegistries }}
+          {{- range .Values.spegel.mirroredRegistries }}
           - {{ . | quote }}
           {{- end }}
           {{- end }}
@@ -96,9 +96,9 @@ spec:
           - --registry-addr=:{{ .Values.service.registry.port }}
           - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
-          {{- with .Values.spegel.mirroredRegistries }}
           - --mirrored-registries
-          {{- range . }}
+          {{- if .Values.spegel.mirroredRegistries }}
+          {{- range .Values.spegel.mirroredRegistries }}
           - {{ . | quote }}
           {{- end }}
           {{- end }}
