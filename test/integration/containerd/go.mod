@@ -8,7 +8,7 @@ replace github.com/spegel-org/spegel => ../../../
 
 require (
 	github.com/moby/go-archive v0.2.0
-	github.com/moby/moby/api v1.52.0
+	github.com/moby/moby/api v1.53.0
 	github.com/moby/moby/client v0.2.1
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
