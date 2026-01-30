@@ -29,12 +29,14 @@ func TestP2PRouterOptions(t *testing.T) {
 	opts := []P2PRouterOption{
 		WithLibP2POptions(libp2pOpts...),
 		WithDataDir("foobar"),
+		WithAdvertiseTTL(5 * time.Minute),
 	}
 	cfg := P2PRouterConfig{}
 	err := option.Apply(&cfg, opts...)
 	require.NoError(t, err)
 	require.Equal(t, libp2pOpts, cfg.Libp2pOpts)
 	require.Equal(t, "foobar", cfg.DataDir)
+	require.Equal(t, 5*time.Minute, cfg.AdvertiseTTL)
 }
 
 func TestP2PRouter(t *testing.T) {

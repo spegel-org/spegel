@@ -60,6 +60,7 @@ type RegistryCmd struct {
 	MirrorResolveTimeout  time.Duration    `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries  int              `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
 	DebugWebEnabled       bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
+	AdvertiseTTL          time.Duration    `arg:"--advertise-ttl,env:ADVERTISE_TTL" default:"15m" help:"How long content is advertised in the P2P network. Lower values recover faster from stale entries after node removal."`
 }
 
 type CleanupCmd struct {
@@ -173,6 +174,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	routerOpts := []routing.P2PRouterOption{
 		routing.WithDataDir(args.DataDir),
+		routing.WithAdvertiseTTL(args.AdvertiseTTL),
 	}
 	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort, routerOpts...)
 	if err != nil {

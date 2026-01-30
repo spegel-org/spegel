@@ -59,6 +59,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | serviceMonitor.relabelings | list | `[]` | List of relabeling rules to apply the target’s metadata labels. |
 | serviceMonitor.scrapeTimeout | string | `"30s"` | Prometheus scrape interval timeout. |
 | spegel.additionalMirrorTargets | list | `[]` | Additional target mirror registries other than Spegel. |
+| spegel.advertiseTTL | string | `"15m"` | How long content is advertised in the P2P network. Lower values recover faster from stale entries after node removal, but increase DHT churn. Format: Go duration string (e.g. "2m", "15m", "1h"). |
 | spegel.containerdContentPath | string | `"/var/lib/containerd/io.containerd.content.v1.content"` | Path to Containerd content store.. |
 | spegel.containerdMirrorAdd | bool | `true` | If true Spegel will add mirror configuration to the node. |
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
