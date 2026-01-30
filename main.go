@@ -59,6 +59,7 @@ type RegistryCmd struct {
 	RegistryFilters       []*regexp.Regexp `arg:"--registry-filters,env:REGISTRY_FILTERS" help:"Regular expressions to filter out tags/registries, if slice is empty all registries/tags are resolved."`
 	MirrorResolveTimeout  time.Duration    `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries  int              `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
+	MirrorDialTimeout     time.Duration    `arg:"--mirror-dial-timeout,env:MIRROR_DIAL_TIMEOUT" default:"30s" help:"Timeout for establishing TCP connections to mirrors."`
 	DebugWebEnabled       bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
 }
 
@@ -138,7 +139,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	if err != nil {
 		return err
 	}
-	ociClient, err := oci.NewClient()
+	ociClientOpts := []oci.ClientOption{
+		oci.WithDialTimeout(args.MirrorDialTimeout),
+	}
+	ociClient, err := oci.NewClient(ociClientOpts...)
 	if err != nil {
 		return err
 	}
