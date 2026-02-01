@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
@@ -91,6 +92,7 @@ func NewWeb(router *routing.P2PRouter, ociStore oci.Store, reg *registry.Registr
 func (w *Web) Handler(log logr.Logger) http.Handler {
 	m := httpx.NewServeMux(log)
 	m.Handle("GET /debug/web/", w.indexHandler)
+	m.Handle("GET /debug/web/self", w.selfHandler)
 	m.Handle("GET /debug/web/stats", w.statsHandler)
 	m.Handle("GET /debug/web/measure", w.measureHandler)
 	return m
@@ -98,6 +100,20 @@ func (w *Web) Handler(log logr.Logger) http.Handler {
 
 func (w *Web) indexHandler(rw httpx.ResponseWriter, req *http.Request) {
 	err := w.tmpls.ExecuteTemplate(rw, "index.html", nil)
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+}
+
+func (w *Web) selfHandler(rw httpx.ResponseWriter, req *http.Request) {
+	data := struct {
+		ID string `json:"id"`
+	}{
+		ID: w.router.Host().ID().String(),
+	}
+	rw.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(rw).Encode(data)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
