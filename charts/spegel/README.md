@@ -64,6 +64,10 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | spegel.containerdNamespace | string | `"k8s.io"` | Containerd namespace where images are stored. |
 | spegel.containerdRegistryConfigPath | string | `"/etc/containerd/certs.d"` | Path to Containerd mirror configuration. |
 | spegel.containerdSock | string | `"/run/containerd/containerd.sock"` | Path to Containerd socket. |
+| spegel.dataDir.enabled | bool | `false` | Enable persistent storage for the P2P private key. Uses a hostPath volume to store the key on the node. The key file is created with mode 0600. |
+| spegel.dataDir.hostPath | string | `"/var/lib/spegel"` | Host path mounted into the pod for persistence. |
+| spegel.dataDir.hostPathType | string | `"DirectoryOrCreate"` | HostPath type for the data directory. |
+| spegel.dataDir.path | string | `"/var/lib/spegel"` | Path in the container where data is stored. |
 | spegel.debugWebEnabled | bool | `true` | When true enables debug web page. |
 | spegel.logLevel | string | `"INFO"` | Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR. |
 | spegel.mirrorResolveRetries | int | `3` | Max amount of mirrors to attempt. |
