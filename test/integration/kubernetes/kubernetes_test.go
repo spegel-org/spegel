@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -31,6 +32,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
@@ -255,6 +257,9 @@ func TestKubernetes(t *testing.T) {
 
 			installSpegel(t, actionCfg, k8sClient, kindNodes, imageDigest)
 
+			t.Log("Checking peer ID persistence")
+			assertPeerIDPersistence(t, k8sClient)
+
 			t.Logf("Pulling image %s", images[3])
 			err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", images[3]).Run()
 			require.NoError(t, err)
@@ -428,6 +433,9 @@ func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kube
 	vals := map[string]any{
 		"spegel": map[string]any{
 			"logLevel": "DEBUG",
+			"dataDir": map[string]any{
+				"enabled": true,
+			},
 		},
 		"nodeSelector": map[string]any{
 			nodeTaintKey: "true",
@@ -745,6 +753,105 @@ func noSpegelRestart(t *testing.T, k8sClient kubernetes.Interface) {
 	for _, pod := range podList.Items {
 		require.Equal(t, int32(0), pod.Status.ContainerStatuses[0].RestartCount)
 	}
+}
+
+func assertPeerIDPersistence(t *testing.T, k8sClient kubernetes.Interface) {
+	t.Helper()
+
+	pod := getSpegelPod(t, k8sClient)
+	peerID := getSpegelPeerID(t, k8sClient, pod.Name)
+
+	err := k8sClient.CoreV1().Pods(spegelNamespace).Delete(t.Context(), pod.Name, metav1.DeleteOptions{})
+	require.NoError(t, err)
+
+	newPod := waitForNewSpegelPod(t, k8sClient, pod.Spec.NodeName, pod.UID)
+	require.NotEmpty(t, newPod.Name)
+	newPeerID := getSpegelPeerID(t, k8sClient, newPod.Name)
+	require.Equal(t, peerID, newPeerID)
+}
+
+func getSpegelPod(t *testing.T, k8sClient kubernetes.Interface) corev1.Pod {
+	t.Helper()
+
+	podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/component=spegel",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, podList.Items)
+	return podList.Items[0]
+}
+
+func waitForNewSpegelPod(t *testing.T, k8sClient kubernetes.Interface, nodeName string, oldUID types.UID) corev1.Pod {
+	t.Helper()
+
+	require.NotEmpty(t, nodeName)
+	var newPod corev1.Pod
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		found := false
+		podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{
+			FieldSelector: "spec.nodeName=" + nodeName,
+			LabelSelector: "app.kubernetes.io/component=spegel",
+		})
+		require.NoError(c, err)
+		for _, pod := range podList.Items {
+			if pod.UID == oldUID {
+				continue
+			}
+			u, err := patch.ToUnstructured(&pod)
+			require.NoError(c, err)
+			res, err := status.Compute(u)
+			require.NoError(c, err)
+			if res.Status != status.CurrentStatus {
+				continue
+			}
+			newPod = pod
+			found = true
+			break
+		}
+		require.True(c, found, "new spegel pod not ready yet")
+	}, 60*time.Second, 2*time.Second)
+
+	return newPod
+}
+
+func getSpegelPeerID(t *testing.T, k8sClient kubernetes.Interface, podName string) string {
+	t.Helper()
+
+	require.NotEmpty(t, podName)
+	var peerID string
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		logs, err := k8sClient.CoreV1().Pods(spegelNamespace).GetLogs(podName, &corev1.PodLogOptions{}).Stream(ctx)
+		require.NoError(c, err)
+		defer logs.Close()
+		b, err := io.ReadAll(logs)
+		require.NoError(c, err)
+		peerID = parsePeerIDFromLogs(string(b))
+		require.NotEmpty(c, peerID)
+	}, 10*time.Second, 1*time.Second)
+
+	return peerID
+}
+
+func parsePeerIDFromLogs(logs string) string {
+	for _, line := range strings.Split(logs, "\n") {
+		if line == "" {
+			continue
+		}
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+		msg, ok := entry["msg"].(string)
+		if !ok || msg != "starting p2p router" {
+			continue
+		}
+		if id, ok := entry["id"].(string); ok && id != "" {
+			return id
+		}
+	}
+	return ""
 }
 
 func dumpPods(t *testing.T, k8sClient kubernetes.Interface, namespace string, includeLogs bool) {
