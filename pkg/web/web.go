@@ -120,7 +120,7 @@ func (w *Web) metaDataHandler(rw httpx.ResponseWriter, req *http.Request) {
 			ID: w.router.Host().ID().String(),
 		},
 	}
-	rw.Header().Set("Content-Type", "application/json")
+	rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeJSON)
 	err := json.NewEncoder(rw).Encode(data)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
