@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
@@ -91,6 +92,7 @@ func NewWeb(router *routing.P2PRouter, ociStore oci.Store, reg *registry.Registr
 func (w *Web) Handler(log logr.Logger) http.Handler {
 	m := httpx.NewServeMux(log)
 	m.Handle("GET /debug/web/", w.indexHandler)
+	m.Handle("GET /debug/web/metadata", w.metaDataHandler)
 	m.Handle("GET /debug/web/stats", w.statsHandler)
 	m.Handle("GET /debug/web/measure", w.measureHandler)
 	return m
@@ -98,6 +100,28 @@ func (w *Web) Handler(log logr.Logger) http.Handler {
 
 func (w *Web) indexHandler(rw httpx.ResponseWriter, req *http.Request) {
 	err := w.tmpls.ExecuteTemplate(rw, "index.html", nil)
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+}
+
+type LibP2P struct {
+	ID string `json:"id"`
+}
+
+type Metadata struct {
+	LibP2P LibP2P `json:"libp2p"`
+}
+
+func (w *Web) metaDataHandler(rw httpx.ResponseWriter, req *http.Request) {
+	data := Metadata{
+		LibP2P{
+			ID: w.router.Host().ID().String(),
+		},
+	}
+	rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeJSON)
+	err := json.NewEncoder(rw).Encode(data)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
