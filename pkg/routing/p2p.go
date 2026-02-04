@@ -116,6 +116,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 			libp2p.Transport(tcp.NewTCPTransport),
 		),
 		libp2p.ListenAddrs(listenAddrs...),
+		libp2p.DisableIdentifyAddressDiscovery(),
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
 		libp2p.AddrsFactory(func(addrs []ma.Multiaddr) []ma.Multiaddr {
 			ip6Addrs, ip4Addrs := filterAndSplitAddrs(addrs)
