@@ -108,7 +108,8 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	for _, cImg := range cImgs {
 		img, err := ParseImage(cImg.Name, WithDigest(cImg.Target.Digest))
 		if err != nil {
-			return nil, err
+			logr.FromContextOrDiscard(ctx).Error(err, "skipping image")
+			continue
 		}
 		if img.Tag != "" {
 			tagDgsts[img.Digest] = img.Tag
