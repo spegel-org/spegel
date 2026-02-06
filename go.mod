@@ -16,6 +16,7 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ipfs/go-cid v0.6.0
+	github.com/ipfs/go-datastore v0.9.0
 	github.com/libp2p/go-libp2p v0.47.0
 	github.com/libp2p/go-libp2p-kad-dht v0.37.0
 	github.com/miekg/dns v1.1.72
@@ -76,7 +77,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/boxo v0.35.2 // indirect
 	github.com/ipfs/go-block-format v0.2.3 // indirect
-	github.com/ipfs/go-datastore v0.9.0 // indirect
 	github.com/ipfs/go-log/v2 v2.9.0 // indirect
 	github.com/ipfs/go-test v0.2.3 // indirect
 	github.com/ipld/go-ipld-prime v0.21.0 // indirect

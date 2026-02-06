@@ -66,10 +66,10 @@ func (b *StaticBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 	return b.peers, nil
 }
 
-func (b *StaticBootstrapper) SetPeers(peers []peer.AddrInfo) {
+func (b *StaticBootstrapper) Add(peer peer.AddrInfo) {
 	b.mx.Lock()
 	defer b.mx.Unlock()
-	b.peers = peers
+	b.peers = append(b.peers, peer)
 }
 
 var _ Bootstrapper = &DNSBootstrapper{}
