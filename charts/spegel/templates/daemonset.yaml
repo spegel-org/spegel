@@ -93,6 +93,7 @@ spec:
           - --log-level={{ .Values.spegel.logLevel }}
           - --mirror-resolve-retries={{ .Values.spegel.mirrorResolveRetries }}
           - --mirror-resolve-timeout={{ .Values.spegel.mirrorResolveTimeout }}
+          - --mirror-dial-timeout={{ .Values.spegel.mirrorDialTimeout }}
           - --registry-addr=:{{ .Values.service.registry.port }}
           - --router-addr=:{{ .Values.service.router.port }}
           - --metrics-addr=:{{ .Values.service.metrics.port }}
