@@ -116,6 +116,7 @@ spec:
           - --containerd-content-path={{ . }}
           {{- end }}
           - --debug-web-enabled={{ .Values.spegel.debugWebEnabled }}
+          - --advertise-ttl={{ .Values.spegel.advertiseTTL }}
         env:
         - name: DATA_DIR
           value: ""
