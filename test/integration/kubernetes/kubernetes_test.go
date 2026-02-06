@@ -51,6 +51,8 @@ const (
 	conformanceNamespace = "conformance"
 	pullTestNamespace    = "pull-test"
 	nodeTaintKey         = "spegel.dev/enabled"
+	// debugWebPort is the container port for metrics/debug web (GET /debug/web/metadata).
+	debugWebPort = 9090
 )
 
 func TestKubernetes(t *testing.T) {
@@ -433,9 +435,6 @@ func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kube
 	vals := map[string]any{
 		"spegel": map[string]any{
 			"logLevel": "DEBUG",
-			"dataDir": map[string]any{
-				"enabled": true,
-			},
 		},
 		"nodeSelector": map[string]any{
 			nodeTaintKey: "true",
@@ -820,38 +819,27 @@ func getSpegelPeerID(t *testing.T, k8sClient kubernetes.Interface, podName strin
 	require.NotEmpty(t, podName)
 	var peerID string
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		logs, err := k8sClient.CoreV1().Pods(spegelNamespace).GetLogs(podName, &corev1.PodLogOptions{}).Stream(ctx)
+		b, err := k8sClient.CoreV1().RESTClient().Get().
+			Namespace(spegelNamespace).
+			Resource("pods").
+			Name(fmt.Sprintf("%s:%d", podName, debugWebPort)).
+			SubResource("proxy").
+			Suffix("debug", "web", "metadata").
+			DoRaw(t.Context())
 		require.NoError(c, err)
-		defer logs.Close()
-		b, err := io.ReadAll(logs)
+
+		var meta struct {
+			LibP2P struct {
+				ID string `json:"id"`
+			} `json:"libp2p"`
+		}
+		err = json.Unmarshal(b, &meta)
 		require.NoError(c, err)
-		peerID = parsePeerIDFromLogs(string(b))
+		peerID = meta.LibP2P.ID
 		require.NotEmpty(c, peerID)
 	}, 10*time.Second, 1*time.Second)
 
 	return peerID
-}
-
-func parsePeerIDFromLogs(logs string) string {
-	for _, line := range strings.Split(logs, "\n") {
-		if line == "" {
-			continue
-		}
-		var entry map[string]any
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-		msg, ok := entry["msg"].(string)
-		if !ok || msg != "starting p2p router" {
-			continue
-		}
-		if id, ok := entry["id"].(string); ok && id != "" {
-			return id
-		}
-	}
-	return ""
 }
 
 func dumpPods(t *testing.T, k8sClient kubernetes.Interface, namespace string, includeLogs bool) {
