@@ -100,35 +100,41 @@ func ParseImage(s string, opts ...ParseImageOption) (Image, error) {
 		return Image{}, err
 	}
 
-	registry, repository, tag, dgst, err := parseImage(s)
+	img, err := func() (Image, error) {
+		registry, repository, tag, dgst, err := parseImage(s)
+		if err != nil {
+			return Image{}, err
+		}
+		if cfg.Digest != "" {
+			if dgst != "" && dgst != cfg.Digest {
+				return Image{}, fmt.Errorf("set digest %s does not match parsed digest %s", cfg.Digest.String(), dgst.String())
+			}
+			dgst = cfg.Digest
+		}
+		if cfg.RequireDigest {
+			if dgst == "" {
+				return Image{}, errors.New("image needs to contain a digest")
+			}
+		}
+		if !cfg.Strict {
+			if registry == "" {
+				registry = DefaultRegistry
+			}
+			if len(strings.Split(repository, "/")) == 1 && registry == DefaultRegistry {
+				repository = DefaultNamespace + "/" + repository
+			}
+			if tag == "" {
+				tag = DefaultTag
+			}
+		}
+		img, err := NewImage(registry, repository, tag, dgst)
+		if err != nil {
+			return Image{}, err
+		}
+		return img, err
+	}()
 	if err != nil {
-		return Image{}, err
-	}
-	if cfg.Digest != "" {
-		if dgst != "" && dgst != cfg.Digest {
-			return Image{}, fmt.Errorf("set digest %s does not match parsed digest %s", dgst.String(), s)
-		}
-		dgst = cfg.Digest
-	}
-	if cfg.RequireDigest {
-		if dgst == "" {
-			return Image{}, errors.New("image needs to contain a digest")
-		}
-	}
-	if !cfg.Strict {
-		if registry == "" {
-			registry = DefaultRegistry
-		}
-		if len(strings.Split(repository, "/")) == 1 && registry == DefaultRegistry {
-			repository = DefaultNamespace + "/" + repository
-		}
-		if tag == "" {
-			tag = DefaultTag
-		}
-	}
-	img, err := NewImage(registry, repository, tag, dgst)
-	if err != nil {
-		return Image{}, err
+		return Image{}, fmt.Errorf("could not parse image %s: %w", s, err)
 	}
 	return img, nil
 }
