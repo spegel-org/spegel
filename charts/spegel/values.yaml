@@ -163,13 +163,11 @@ spegel:
   dataDir:
     # -- Enable persistent storage for the P2P private key. Uses a hostPath volume
     # to store the key on the node. The key file is created with mode 0600.
-    enabled: false
+    enabled: true
     # -- Path in the container where data is stored.
     path: "/var/lib/spegel"
     # -- Host path mounted into the pod for persistence.
     hostPath: "/var/lib/spegel"
-    # -- HostPath type for the data directory.
-    hostPathType: DirectoryOrCreate
   # -- Registries for which mirror configuration will be created. Empty means all registires will be mirrored.
   mirroredRegistries: []
     # - https://docker.io

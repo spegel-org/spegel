@@ -116,13 +116,12 @@ spec:
           - --containerd-content-path={{ . }}
           {{- end }}
           - --debug-web-enabled={{ .Values.spegel.debugWebEnabled }}
+          {{- with .Values.spegel.dataDir }}
+          {{- if .enabled }}
+          - --data-dir={{ .path }}
+          {{- end }}
+          {{- end }}
         env:
-        - name: DATA_DIR
-        {{- if .Values.spegel.dataDir.enabled }}
-          value: {{ .Values.spegel.dataDir.path | quote }}
-        {{- else }}
-          value: ""
-        {{- end }}
         {{- if ((.Values.resources).limits).memory }}
         - name: GOMEMLIMIT
           valueFrom:
@@ -195,7 +194,7 @@ spec:
         - name: spegel-data
           hostPath:
             path: {{ .Values.spegel.dataDir.hostPath }}
-            type: {{ .Values.spegel.dataDir.hostPathType }}
+            type: DirectoryOrCreate
         {{- end }}
         - name: containerd-sock
           hostPath:
