@@ -167,7 +167,7 @@ func TestKubernetes(t *testing.T) {
 				cluster.CreateWithV1Alpha4Config(clusterCfg),
 				cluster.CreateWithKubeconfigPath(kcPath),
 			}
-			kindName := fmt.Sprintf("spegel-e2e-%s", name)
+			kindName := fmt.Sprintf("spegel-e2e-%s", strings.ReplaceAll(name, ".", "-"))
 			err := provider.Create(kindName, createOpts...)
 			require.NoError(t, err)
 			t.Cleanup(func() {
