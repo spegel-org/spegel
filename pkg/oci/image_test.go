@@ -67,6 +67,7 @@ func TestParseImageStrict(t *testing.T) {
 		"[::1]",
 		"localhost",
 		"localhost:5000",
+		"registry:5000",
 		"1234.dkr.ecr.eu-west-1.amazonaws.com",
 	}
 	for _, registry := range registries {

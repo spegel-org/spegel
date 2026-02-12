@@ -218,8 +218,8 @@ func isRegistry(s string) (bool, error) {
 	if hostname == "localhost" {
 		return true, nil
 	}
-	// Single label domains that are not localhost is not a registry.
-	if !strings.Contains(hostname, ".") {
+	// Single label domains without port that are not localhost is not a registry.
+	if !strings.Contains(hostname, ".") && u.Port() == "" {
 		return false, nil
 	}
 	return true, nil
