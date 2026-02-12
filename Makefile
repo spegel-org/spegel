@@ -1,4 +1,4 @@
-TAG = $$(git rev-parse --short HEAD)
+TAG ?= $$(git rev-parse --short HEAD)
 IMG_NAME ?= ghcr.io/spegel-org/spegel
 IMG_REF = $(IMG_NAME):$(TAG)
 
@@ -10,6 +10,9 @@ lint:
 
 build:
 	@goreleaser build --snapshot --clean --single-target --skip before
+
+build-cross:
+	@goreleaser build --snapshot --clean
 
 build-image: build
 	@docker buildx build -t ${IMG_REF} .

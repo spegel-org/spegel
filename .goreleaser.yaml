@@ -8,7 +8,6 @@ builds:
       - linux
     goarch:
       - amd64
-      - arm
       - arm64
     goarm:
       - 7
@@ -27,3 +26,14 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - none*
+
+dockers_v2:
+  - images:
+      - "harbor.infini-ai.com/mizar/spegel-org/spegel"
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms:                            # 一次性声明所有目标平台
+      - linux/amd64
+      - linux/arm64
+    dockerfile: Dockerfile

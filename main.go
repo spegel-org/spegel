@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/alexflint/go-arg"
+	"github.com/fsnotify/fsnotify"
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
@@ -155,6 +156,30 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	for _, r := range args.RegistryFilters {
 		filters = append(filters, oci.RegexFilter{Regex: r})
 	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	defer watcher.Close()
+	watcher.Add(args.ContainerdSock)
+
+	ctx, stopApp := context.WithCancel(ctx)
+	defer stopApp()
+
+	go func() {
+		select {
+		case event := <-watcher.Events:
+			if event.Name == args.ContainerdSock && event.Op&fsnotify.Create == fsnotify.Create {
+				log.Info("inotify: socket recreated, restarting.", "sock", args.ContainerdSock)
+				stopApp()
+				os.Exit(1)
+			}
+		case err := <-watcher.Errors:
+			log.Info("inotify: ", "error", err)
+			// Watch for any signals from the OS. On SIGHU
+		}
+	}()
 
 	// OCI Store
 	ociStore, err := oci.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, oci.WithContentPath(args.ContainerdContentPath))
