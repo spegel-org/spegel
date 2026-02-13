@@ -17,19 +17,21 @@ The following tools are required to run the tests properly.
 Run the linter and the unit tests to quickly validate changes.
 
 ```shell
-make lint test
+make lint test-unit
 ```
 
-Run the e2e tests which take a bit more time.
+Run the e2e tests which take a bit more time. When run locally and in PRs only the latest versions of Containerd and Kubernetes will be tested. The nightly tests will run the tests with full coverage for all supported versions.
 
 ```shell
-make test-e2e
+make test-integration-containerd
+make test-integration-kubernetes
 ```
 
-There are e2e tests for the different CNIs iptables, iptables-v6, and ipvs.
+Notes:
+- On macOS with Docker Desktop, you may need to point to the Docker socket manually if you see a `/var/run/docker.sock` error:
 
 ```shell
-make test-e2e E2E_CNI=ipvs
+export DOCKER_HOST=unix://${HOME}/.docker/run/docker.sock
 ```
 
 ## Building
@@ -48,17 +50,25 @@ make build-image IMG=example.com/spegel TAG=feature
 
 ### Local debugging
 
-Run the `dev-deploy` recipe which will create a Kind cluster with the proper configuration and deploy Spegel into it. If you run this command a second time the cluster will be kept but Spegel will be updated.
+Run the Kubernetes integration tests, which create a Kind cluster and deploy Spegel into it.
 
 ```shell
-make dev-deploy
+make test-integration-kubernetes
 ```
 
-After the command has run you can get a kubeconfig file to access the cluster and do any debugging.
+To increase the timeout or tweak options, run the test directly from the directory:
 
 ```shell
-kind get kubeconfig --name spegel-dev > kubeconfig
-export KUBECOONFIG=$(pwd)/kubeconfig
+cd test/integration/kubernetes
+INTEGRATION_TEST_STRATEGY="fast" IMG_REF=<image-ref> go test -v -timeout 400s -count 1 ./...
+```
+
+After the command has run you can get a kubeconfig file to access the cluster and do any debugging. The Kind cluster name is created by the test; use `kind get clusters` to find it.
+
+```shell
+kind get clusters
+kind get kubeconfig --name <cluster-name> > kubeconfig
+export KUBECONFIG=$(pwd)/kubeconfig
 kubectl -n spegel get pods
 ```
 
@@ -75,8 +85,5 @@ make helm-docs
 Pull requests need to fulfill the following requirements to be accepted.
 
 * New code has tests where applicable.
-* The change has been added to the [changelog](./CHANGELOG.md).
-* Documentation has been generated if applicable.
-* The unit tests pass.
 * Linter does not report any errors.
-* All end to end tests pass.
+* All unit and integration tests pass.

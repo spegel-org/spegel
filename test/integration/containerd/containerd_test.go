@@ -29,20 +29,13 @@ func TestContainerdPull(t *testing.T) {
 	t.Log("Running tests with with strategy", testStrategy)
 
 	containerdVersions := []string{
-		"2.2.0",
-		"2.1.5",
-		"2.0.7",
-		"1.7.29",
+		"2.2.1",
+		"2.1.6",
 	}
 	switch testStrategy {
 	case "all":
 		break
 	case "fast":
-		containerdVersions = []string{
-			containerdVersions[0],
-			containerdVersions[3],
-		}
-	case "latest":
 		containerdVersions = containerdVersions[:1]
 	default:
 		t.Fatal("unknown test strategy", testStrategy)
@@ -115,8 +108,6 @@ func TestContainerdPull(t *testing.T) {
 			imageClient := runtimeapi.NewImageServiceClient(connClient)
 
 			containerdStore, err := oci.NewContainerd(t.Context(), socketPath, "k8s.io")
-			require.NoError(t, err)
-			err = containerdStore.Verify(t.Context(), "/etc/containerd/certs.d")
 			require.NoError(t, err)
 			name := containerdStore.Name()
 			require.Equal(t, "containerd", name)

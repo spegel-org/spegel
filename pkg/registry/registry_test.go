@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -155,6 +156,8 @@ func TestBasicAuth(t *testing.T) {
 func TestRegistryHandler(t *testing.T) {
 	t.Parallel()
 
+	unreachableAddrPort := netip.MustParseAddrPort("127.0.0.1:0")
+
 	badAddrPorts := []netip.AddrPort{}
 	for range 2 {
 		badReg, err := NewRegistry(oci.NewMemory(), routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.AddrPort{}))
@@ -176,7 +179,7 @@ func TestRegistryHandler(t *testing.T) {
 	require.NoError(t, err)
 	err = memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba"), MediaType: "dummy"}, []byte("last peer working"))
 	require.NoError(t, err)
-	err = memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d"), MediaType: "application/vnd.oci.image.index.v1+json"}, []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`))
+	err = memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2"), MediaType: "application/vnd.oci.image.index.v1+json"}, []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`))
 	require.NoError(t, err)
 	err = memStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"), MediaType: "application/vnd.oci.image.layer.v1.tar+gzip"}, []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
 	require.NoError(t, err)
@@ -188,7 +191,22 @@ func TestRegistryHandler(t *testing.T) {
 	})
 	goodAddrPort := netip.MustParseAddrPort(goodSvr.Listener.Addr().String())
 
-	unreachableAddrPort := netip.MustParseAddrPort("127.0.0.1:0")
+	flakyAddrPorts := []netip.AddrPort{}
+	for range 3 {
+		flakyStore := &flakyStore{Memory: oci.NewMemory()}
+		err = flakyStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd"), MediaType: "dummy"}, []byte("Only a single peer"))
+		require.NoError(t, err)
+		err = flakyStore.Write(ocispec.Descriptor{Digest: digest.Digest("sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0"), MediaType: "dummy"}, []byte("Lorem Ipsum Dolor"))
+		require.NoError(t, err)
+		flakyReg, err := NewRegistry(flakyStore, routing.NewMemoryRouter(map[string][]netip.AddrPort{}, netip.AddrPort{}))
+		require.NoError(t, err)
+		flakySvr := httptest.NewServer(flakyReg.Handler(logr.Discard()))
+		t.Cleanup(func() {
+			flakySvr.Close()
+		})
+		flakyAddrPort := netip.MustParseAddrPort(flakySvr.Listener.Addr().String())
+		flakyAddrPorts = append(flakyAddrPorts, flakyAddrPort)
+	}
 
 	resolver := map[string][]netip.AddrPort{
 		// No working peers.
@@ -200,8 +218,11 @@ func TestRegistryHandler(t *testing.T) {
 		// Last peer working.
 		"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba": {badAddrPorts[0], badAddrPorts[1], goodAddrPort},
 		// Valid manifest and blob.
-		"sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d": {goodAddrPort},
+		"sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2": {goodAddrPort},
 		"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83": {goodAddrPort},
+		// Flaky content.
+		"sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd": {flakyAddrPorts[0]},
+		"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0": flakyAddrPorts,
 	}
 	router := routing.NewMemoryRouter(resolver, netip.AddrPort{})
 	reg, err := NewRegistry(oci.NewMemory(), router, WithRegistryFilters([]oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}}))
@@ -301,25 +322,25 @@ func TestRegistryHandler(t *testing.T) {
 		},
 		{
 			name:             "manifest requested as blob should not be found",
-			key:              "sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d",
+			key:              "sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2",
 			distributionKind: oci.DistributionKindBlob,
 			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":1},"message":"could not find peer for sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d"}]}`),
+			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":1},"message":"all request retries exhausted for sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2"}]}`),
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"168"},
+				httpx.HeaderContentLength: {"178"},
 			},
 		},
 		{
 			name:             "existing manifest should be found",
-			key:              "sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d",
+			key:              "sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2",
 			distributionKind: oci.DistributionKindManifest,
 			expectedStatus:   http.StatusOK,
 			expectedBody:     []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`),
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {"application/vnd.oci.image.index.v1+json"},
 				httpx.HeaderContentLength: {"88"},
-				oci.HeaderDockerDigest:    {"sha256:ef3a5e9aba91d942f5f888b4e855e785395387aab0f122a6e49d0eaea215e98d"},
+				oci.HeaderDockerDigest:    {"sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2"},
 			},
 		},
 		{
@@ -327,10 +348,10 @@ func TestRegistryHandler(t *testing.T) {
 			key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
 			distributionKind: oci.DistributionKindManifest,
 			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":1},"message":"could not find peer for sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"}]}`),
+			expectedBody:     []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":1},"message":"all request retries exhausted for sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"}]}`),
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"172"},
+				httpx.HeaderContentLength: {"182"},
 			},
 		},
 		{
@@ -346,6 +367,47 @@ func TestRegistryHandler(t *testing.T) {
 				httpx.HeaderContentLength: {"3"},
 				httpx.HeaderContentRange:  {"bytes 1-3/20"},
 				oci.HeaderDockerDigest:    {"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"},
+			},
+		},
+		{
+			name:             "flaky reader with one peers should fail",
+			key:              "sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd",
+			distributionKind: oci.DistributionKindBlob,
+			expectedStatus:   http.StatusOK,
+			expectedBody:     []byte("Only a "),
+			expectedHeaders: http.Header{
+				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+				httpx.HeaderContentType:   {"dummy"},
+				httpx.HeaderContentLength: {"18"},
+				oci.HeaderDockerDigest:    {"sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd"},
+			},
+		},
+		{
+			name:             "flaky reader with multiple peers should resume with next peer",
+			key:              "sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0",
+			distributionKind: oci.DistributionKindBlob,
+			expectedStatus:   http.StatusOK,
+			expectedBody:     []byte("Lorem Ipsum Dolor"),
+			expectedHeaders: http.Header{
+				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+				httpx.HeaderContentType:   {"dummy"},
+				httpx.HeaderContentLength: {"17"},
+				oci.HeaderDockerDigest:    {"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0"},
+			},
+		},
+		{
+			name:             "flaky reader with range should return partial",
+			key:              "sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0",
+			distributionKind: oci.DistributionKindBlob,
+			rng:              &httpx.Range{Start: 2, End: 15},
+			expectedStatus:   http.StatusPartialContent,
+			expectedBody:     []byte("rem Ipsum Dolo"),
+			expectedHeaders: http.Header{
+				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+				httpx.HeaderContentLength: {"14"},
+				httpx.HeaderContentRange:  {"bytes 2-15/17"},
+				oci.HeaderDockerDigest:    {"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0"},
 			},
 		},
 	}
@@ -384,4 +446,49 @@ func TestRegistryHandler(t *testing.T) {
 			})
 		}
 	}
+}
+
+type flakyStore struct {
+	*oci.Memory
+}
+
+func (s *flakyStore) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
+	rc, err := s.Memory.Open(ctx, dgst)
+	if err != nil {
+		return nil, err
+	}
+	desc, err := s.Descriptor(ctx, dgst)
+	if err != nil {
+		return nil, err
+	}
+	rc = &flakyReadSeekCloser{ReadSeekCloser: rc, limit: int(0.4 * float64(desc.Size))}
+	return rc, nil
+}
+
+type flakyReadSeekCloser struct {
+	io.ReadSeekCloser
+	limit     int
+	readSoFar int
+}
+
+func (f *flakyReadSeekCloser) Read(p []byte) (int, error) {
+	if f.readSoFar >= f.limit {
+		return 0, io.ErrUnexpectedEOF
+	}
+
+	// Limit how much can be read this call
+	remaining := f.limit - f.readSoFar
+	if len(p) > remaining {
+		p = p[:remaining]
+	}
+
+	n, err := f.ReadSeekCloser.Read(p)
+	f.readSoFar += n
+
+	// If we hit the limit, force an unexpected EOF
+	if f.readSoFar >= f.limit {
+		return n, io.ErrUnexpectedEOF
+	}
+
+	return n, err
 }

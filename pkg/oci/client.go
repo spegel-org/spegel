@@ -342,7 +342,7 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 		if resp.StatusCode == http.StatusUnauthorized {
 			c.tokenCache.Delete(tcKey)
 			wwwAuth := resp.Header.Get(httpx.HeaderWWWAuthenticate)
-			token, err = getBearerToken(ctx, wwwAuth, c.httpClient)
+			token, err = getBearerToken(ctx, c.httpClient, dist.Repository, wwwAuth)
 			if err != nil {
 				return nil, ocispec.Descriptor{}, err
 			}
@@ -376,7 +376,7 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 	return nil, ocispec.Descriptor{}, errors.New("could not perform request")
 }
 
-func getBearerToken(ctx context.Context, wwwAuth string, client *http.Client) (string, error) {
+func getBearerToken(ctx context.Context, client *http.Client, repository, wwwAuth string) (string, error) {
 	if !strings.HasPrefix(wwwAuth, "Bearer ") {
 		return "", errors.New("unsupported auth scheme")
 	}
@@ -397,6 +397,9 @@ func getBearerToken(ctx context.Context, wwwAuth string, client *http.Client) (s
 		q.Set("service", service)
 	}
 	if scope, ok := params["scope"]; ok {
+		if authURL.Host == "ghcr.io" {
+			scope = strings.ReplaceAll(scope, "user/image", repository)
+		}
 		q.Set("scope", scope)
 	}
 	authURL.RawQuery = q.Encode()

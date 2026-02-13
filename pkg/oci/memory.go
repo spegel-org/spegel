@@ -119,11 +119,15 @@ func (m *Memory) Write(desc ocispec.Descriptor, b []byte) error {
 	if desc.Size != int64(len(b)) {
 		return errors.New("descriptor size and byte size do not match")
 	}
+	if desc.MediaType == "" {
+		return errors.New("media type cannot be empty")
+	}
 	if desc.Digest == "" {
 		return errors.New("digest cannot be empty")
 	}
-	if desc.MediaType == "" {
-		return errors.New("media type cannot be empty")
+	computedDgst := desc.Digest.Algorithm().FromBytes(b)
+	if desc.Digest != computedDgst {
+		return fmt.Errorf("computed digest %s does not match given digest %s", computedDgst, desc.Digest)
 	}
 
 	m.descs[desc.Digest] = desc
