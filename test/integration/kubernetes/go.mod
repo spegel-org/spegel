@@ -9,7 +9,7 @@ require (
 	github.com/fluxcd/pkg/runtime v0.99.0
 	github.com/moby/moby/client v0.2.2
 	github.com/stretchr/testify v1.11.1
-	helm.sh/helm/v4 v4.1.0
+	helm.sh/helm/v4 v4.1.1
 	k8s.io/api v0.35.0
 	k8s.io/apimachinery v0.35.0
 	k8s.io/cli-runtime v0.35.0
