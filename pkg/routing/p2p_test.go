@@ -106,7 +106,7 @@ func TestP2PRouter(t *testing.T) {
 		ready, err = primaryRouter.Ready(t.Context())
 		require.NoError(c, err)
 		require.True(c, ready)
-		require.Equal(c, int64(1), primaryRouter.prov.Stats().Operations.Past.KeysProvided, 1)
+		require.Equal(c, int64(1), primaryRouter.prov.Stats().Operations.Past.KeysProvided)
 	}, 5*time.Second, time.Second)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		for _, r := range routers {
@@ -148,7 +148,7 @@ func TestP2PRouter(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Equal(c, int64(1), lastRouter.prov.Stats().Operations.Past.KeysProvided, 1)
+		require.Equal(c, int64(1), lastRouter.prov.Stats().Operations.Past.KeysProvided)
 	}, 5*time.Second, 1*time.Second)
 
 	bal, err = primaryRouter.Lookup(t.Context(), newKey, 3)
@@ -159,6 +159,58 @@ func TestP2PRouter(t *testing.T) {
 
 	// Shutdown should complete without errors.
 	cancel()
+	err = g.Wait()
+	require.NoError(t, err)
+}
+
+func TestProvideTTL(t *testing.T) {
+	t.Parallel()
+
+	runCtx, runCancel := context.WithCancel(t.Context())
+	g, runCtx := errgroup.WithContext(runCtx)
+
+	routers := []*P2PRouter{}
+	for range 5 {
+		bs := NewStaticBootstrapper(nil)
+		router, err := NewP2PRouter(t.Context(), ":0", bs, "9090", WithAdvertiseTTL(5*time.Second), WithMaxReprovideDelay(1*time.Second))
+		require.NoError(t, err)
+		g.Go(func() error {
+			return router.Run(runCtx)
+		})
+		for _, r := range routers {
+			bs.Add(*host.InfoFromHost(r.host))
+		}
+		routers = append(routers, router)
+	}
+
+	// Advertise a key that is expected to expire.
+	err := routers[0].Advertise(t.Context(), []string{"foo"})
+	require.NoError(t, err)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Equal(c, int64(1), routers[0].prov.Stats().Operations.Past.KeysProvided)
+	}, 5*time.Second, time.Second)
+	err = routers[0].Withdraw(t.Context(), []string{"foo"})
+	require.NoError(t, err)
+
+	// Do lookup immediately which should be found.
+	for _, router := range routers[1:] {
+		bal, err := router.Lookup(t.Context(), "foo", 1)
+		require.NoError(t, err)
+		_, err = bal.Next()
+		require.NoError(t, err)
+	}
+
+	// Wait past TTL and expect content to not be found.
+	time.Sleep(10 * time.Second)
+
+	for _, router := range routers[1:] {
+		bal, err := router.Lookup(t.Context(), "foo", 1)
+		require.NoError(t, err)
+		_, err = bal.Next()
+		require.ErrorIs(t, err, ErrNoNext)
+	}
+
+	runCancel()
 	err = g.Wait()
 	require.NoError(t, err)
 }
