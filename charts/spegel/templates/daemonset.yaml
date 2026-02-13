@@ -41,6 +41,9 @@ spec:
       priorityClassName: {{ .Values.priorityClassName }}
       {{- if .Values.spegel.containerdMirrorAdd }}
       initContainers:
+      {{- with .Values.extraInitContainers }}
+        {{- toYaml . | nindent 6 }}
+      {{- end }}
       - name: configuration
         image: "{{ include "spegel.image" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -198,6 +201,9 @@ spec:
           hostPath:
             path: {{ .Values.spegel.containerdRegistryConfigPath }}
             type: DirectoryOrCreate
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
