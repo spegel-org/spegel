@@ -2,7 +2,7 @@ module github.com/spegel-org/spegel/test/integration/kubernetes
 
 go 1.25.0
 
-toolchain go1.25.6
+toolchain go1.26.0
 
 require (
 	github.com/fluxcd/cli-utils v0.37.1-flux.1
