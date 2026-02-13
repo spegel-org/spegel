@@ -45,7 +45,7 @@ jobs:
           go-version-file: ./test/integration/containerd/go.mod
           cache-dependency-path: ./test/integration/containerd/go.sum
       - name: Run tests
-        run: INTEGRATION_TEST_STRATEGY="fast" go test -v -race -coverprofile=coverage.txt -coverpkg=github.com/spegel-org/spegel/... -covermode=atomic ./...
+        run: INTEGRATION_TEST_STRATEGY="fast" go test -v -race -coverprofile=coverage.txt -coverpkg=github.com/spegel-org/spegel/... -covermode=atomic -count 1 ./...
         working-directory: ./test/integration/containerd
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de #v5.5.2
@@ -73,5 +73,5 @@ jobs:
           IMG_REF=$(make build-image)
           echo "IMG_REF=${IMG_REF}" >> $GITHUB_OUTPUT
       - name: Run tests
-        run: INTEGRATION_TEST_STRATEGY="fast" IMG_REF=${{ steps.build.outputs.IMG_REF }} go test -v -race ./...
+        run: INTEGRATION_TEST_STRATEGY="fast" IMG_REF=${{ steps.build.outputs.IMG_REF }} go test -v -race -count 1 ./...
         working-directory: ./test/integration/kubernetes
