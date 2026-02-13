@@ -1,4 +1,4 @@
-FROM gcr.io/distroless/static:nonroot
+FROM harbor.infini-ai.com/share/alpine:3.20
 ARG TARGETOS
 ARG TARGETARCH
 COPY ./dist/spegel_${TARGETOS}_${TARGETARCH}/spegel /
