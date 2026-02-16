@@ -224,3 +224,11 @@ verticalPodAutoscaler:
 livenessProbe:
   # -- When enabled a liveness probe will be added to the registry.
   enabled: false
+
+# -- Add additional volumes to the daemonset. This can be helpful when adding custom init containers that need
+# host path mounts to different locations than the already configured ones.
+extraVolumes: []
+
+# -- Add additional initContainers *before* Spegel's own configuration init container
+# to run additional node init configuration tasks
+extraInitContainers: []
