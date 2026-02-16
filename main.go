@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spegel-org/spegel/internal/cleanup"
+	"github.com/spegel-org/spegel/internal/text"
+	"github.com/spegel-org/spegel/internal/version"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
@@ -29,6 +32,10 @@ import (
 	"github.com/spegel-org/spegel/pkg/state"
 	"github.com/spegel-org/spegel/pkg/web"
 )
+
+type VersionCmd struct {
+	Format string `arg:"--format" default:"text" help:"Format to output version information in."`
+}
 
 type ConfigurationCmd struct {
 	ContainerdRegistryConfigPath string   `arg:"--containerd-registry-config-path,env:CONTAINERD_REGISTRY_CONFIG_PATH" default:"/etc/containerd/certs.d" help:"Directory where mirror configuration is written."`
@@ -74,6 +81,7 @@ type CleanupWaitCmd struct {
 }
 
 type Arguments struct {
+	Version       *VersionCmd       `arg:"subcommand:version"`
 	Configuration *ConfigurationCmd `arg:"subcommand:configuration"`
 	Registry      *RegistryCmd      `arg:"subcommand:registry"`
 	Cleanup       *CleanupCmd       `arg:"subcommand:cleanup"`
@@ -85,26 +93,30 @@ func main() {
 	args := &Arguments{}
 	arg.MustParse(args)
 
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM)
+	defer cancel()
 	opts := slog.HandlerOptions{
 		AddSource: true,
 		Level:     args.LogLevel,
 	}
 	handler := slog.NewJSONHandler(os.Stderr, &opts)
 	log := logr.FromSlogHandler(handler)
-	ctx := logr.NewContext(context.Background(), log)
+	ctx = logr.NewContext(ctx, log)
 
 	err := run(ctx, args)
 	if err != nil {
 		log.Error(err, "run exit with error")
 		os.Exit(1)
 	}
-	log.Info("gracefully shutdown")
+	if args.Version == nil {
+		log.Info("gracefully shutdown")
+	}
 }
 
 func run(ctx context.Context, args *Arguments) error {
-	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
-	defer cancel()
 	switch {
+	case args.Version != nil:
+		return versionCommand(ctx, args.Version)
 	case args.Configuration != nil:
 		return configurationCommand(ctx, args.Configuration)
 	case args.Registry != nil:
@@ -116,6 +128,30 @@ func run(ctx context.Context, args *Arguments) error {
 	default:
 		return errors.New("unknown subcommand")
 	}
+}
+
+func versionCommand(_ context.Context, args *VersionCmd) error {
+	info, err := version.Load()
+	if err != nil {
+		return err
+	}
+	switch args.Format {
+	case "text":
+		s, err := text.Marshal(&info)
+		if err != nil {
+			return err
+		}
+		fmt.Print(s)
+	case "json":
+		b, err := json.Marshal(&info)
+		if err != nil {
+			return err
+		}
+		fmt.Print(string(b))
+	default:
+		return fmt.Errorf("unknown output format %s", args.Format)
+	}
+	return nil
 }
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
