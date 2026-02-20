@@ -188,6 +188,10 @@ spegel:
   prependExisting: false
   # -- When true enables debug web page.
   debugWebEnabled: true
+  # -- How long content is advertised in the P2P network. Lower values recover
+  # faster from stale entries after node removal, but increase DHT churn.
+  # Format: Go duration string (e.g. "2m", "15m", "1h").
+  advertiseTTL: "15m"
 
 verticalPodAutoscaler:
   # -- If true creates a Vertical Pod Autoscaler.
