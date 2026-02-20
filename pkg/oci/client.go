@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -32,6 +33,7 @@ const (
 
 type ClientConfig struct {
 	TLSClientConfig *tls.Config
+	DialTimeout     time.Duration
 }
 
 type ClientOption = option.Option[ClientConfig]
@@ -46,13 +48,23 @@ func WithTLS(rootCAs *x509.CertPool, certificates []tls.Certificate) ClientOptio
 	}
 }
 
+// WithDialTimeout sets the TCP dial timeout for HTTP connections.
+func WithDialTimeout(dialTimeout time.Duration) ClientOption {
+	return func(cfg *ClientConfig) error {
+		cfg.DialTimeout = dialTimeout
+		return nil
+	}
+}
+
 type Client struct {
 	httpClient *http.Client
 	tokenCache sync.Map
 }
 
 func NewClient(opts ...ClientOption) (*Client, error) {
-	cfg := ClientConfig{}
+	cfg := ClientConfig{
+		DialTimeout: 30 * time.Second,
+	}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
@@ -62,6 +74,10 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		Timeout: 0,
 	}
 	transport := httpx.BaseTransport()
+	transport.DialContext = (&net.Dialer{
+		Timeout:   cfg.DialTimeout,
+		KeepAlive: 30 * time.Second,
+	}).DialContext
 	transport.TLSClientConfig = cfg.TLSClientConfig
 	transport.MaxIdleConns = 100
 	transport.MaxConnsPerHost = 100

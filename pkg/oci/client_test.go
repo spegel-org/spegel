@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"cuelabs.dev/go/oci/ociregistry/ocimem"
 	"cuelabs.dev/go/oci/ociregistry/ociserver"
@@ -37,6 +38,21 @@ func TestClient(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, certPool, cfg.TLSClientConfig.RootCAs)
 		require.Equal(t, certificates, cfg.TLSClientConfig.Certificates)
+	})
+
+	t.Run("dial timeout option configuration", func(t *testing.T) {
+		t.Parallel()
+
+		dialTimeout := 5 * time.Second
+		opts := []ClientOption{
+			WithDialTimeout(dialTimeout),
+		}
+		cfg := ClientConfig{
+			DialTimeout: 30 * time.Second,
+		}
+		err := option.Apply(&cfg, opts...)
+		require.NoError(t, err)
+		require.Equal(t, dialTimeout, cfg.DialTimeout)
 	})
 
 	img, err := ParseImage("docker.io/test/image:latest", AllowTagOnly())

@@ -167,6 +167,10 @@ spegel:
   mirrorResolveRetries: 3
   # -- Max duration spent finding a mirror.
   mirrorResolveTimeout: "20ms"
+  # -- Timeout for establishing TCP connections to peer mirrors.
+  # Lower values = faster failover to next peer when one is unreachable.
+  # Higher values = more tolerant of slow networks.
+  mirrorDialTimeout: "30s"
   # -- Path to Containerd socket.
   containerdSock: "/run/containerd/containerd.sock"
   # -- Containerd namespace where images are stored.
