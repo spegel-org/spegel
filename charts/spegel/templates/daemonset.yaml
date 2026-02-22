@@ -116,9 +116,12 @@ spec:
           - --containerd-content-path={{ . }}
           {{- end }}
           - --debug-web-enabled={{ .Values.spegel.debugWebEnabled }}
+          {{- with .Values.spegel.dataDir }}
+          {{- if .enabled }}
+          - --data-dir={{ .path }}
+          {{- end }}
+          {{- end }}
         env:
-        - name: DATA_DIR
-          value: ""
         {{- if ((.Values.resources).limits).memory }}
         - name: GOMEMLIMIT
           valueFrom:
@@ -168,6 +171,10 @@ spec:
             mountPath: "/etc/secrets/basic-auth"
             readOnly: true
           {{- end }}
+          {{- if .Values.spegel.dataDir.enabled }}
+          - name: spegel-data
+            mountPath: {{ .Values.spegel.dataDir.path }}
+          {{- end }}
           - name: containerd-sock
             mountPath: {{ .Values.spegel.containerdSock }}
           {{- with .Values.spegel.containerdContentPath }}
@@ -182,6 +189,12 @@ spec:
         - name: basic-auth
           secret:
             secretName: {{ . }}
+        {{- end }}
+        {{- if .Values.spegel.dataDir.enabled }}
+        - name: spegel-data
+          hostPath:
+            path: {{ .Values.spegel.dataDir.hostPath }}
+            type: DirectoryOrCreate
         {{- end }}
         - name: containerd-sock
           hostPath:
