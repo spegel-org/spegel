@@ -67,6 +67,7 @@ func TestParseImageStrict(t *testing.T) {
 		"[::1]",
 		"localhost",
 		"localhost:5000",
+		"registry:5000",
 		"1234.dkr.ecr.eu-west-1.amazonaws.com",
 	}
 	for _, registry := range registries {
@@ -77,7 +78,7 @@ func TestParseImageStrict(t *testing.T) {
 				for _, extraDgst := range []string{tt.expectedDigest.String(), ""} {
 					img, err := ParseImage(fmt.Sprintf("%s/%s", registry, tt.image), WithDigest(digest.Digest(extraDgst)))
 					if !tt.digestInImage && extraDgst == "" {
-						require.EqualError(t, err, "image needs to contain a digest")
+						require.EqualError(t, err, fmt.Sprintf("could not parse image %s: image needs to contain a digest", fmt.Sprintf("%s/%s", registry, tt.image)))
 						continue
 					}
 					require.NoError(t, err)
@@ -113,37 +114,37 @@ func TestParseImageStrictErrors(t *testing.T) {
 			name:          "digests do not match",
 			s:             "quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb",
 			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
-			expectedError: "set digest sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb does not match parsed digest quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb",
+			expectedError: "could not parse image quay.io/jetstack/cert-manager-webhook@sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb: set digest sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c does not match parsed digest sha256:13fd9eaadb4e491ef0e1d82de60cb199f5ad2ea5a3f8e0c19fdf31d91175b9cb",
 		},
 		{
 			name:          "no tag or digest",
 			s:             "ghcr.io/spegel-org/spegel",
 			dgst:          "",
-			expectedError: "image needs to contain a digest",
+			expectedError: "could not parse image ghcr.io/spegel-org/spegel: image needs to contain a digest",
 		},
 		{
 			name:          "reference contains protocol",
 			s:             "https://example.com/test:latest",
 			dgst:          "",
-			expectedError: "invalid reference format",
+			expectedError: "could not parse image https://example.com/test:latest: invalid reference format",
 		},
 		{
 			name:          "unparsable url",
 			s:             "example%#$.com/foo",
 			dgst:          "",
-			expectedError: "parse \"//example%\": invalid URL escape \"%\"",
+			expectedError: "could not parse image example%#$.com/foo: parse \"//example%\": invalid URL escape \"%\"",
 		},
 		{
 			name:          "missing registry",
 			s:             "library/ubuntu:latest",
 			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
-			expectedError: "reference needs to contain a registry",
+			expectedError: "could not parse image library/ubuntu:latest: reference needs to contain a registry",
 		},
 		{
 			name:          "ipv6 registry without brackets",
 			s:             "::1/library/ubuntu:latest",
 			dgst:          digest.Digest("sha256:ec4306b243d98cce7c3b1f994f2dae660059ef521b2b24588cfdc950bd816d4c"),
-			expectedError: "ip6 address ::1 needs to be encaplsulated in square brackets",
+			expectedError: "could not parse image ::1/library/ubuntu:latest: ip6 address ::1 needs to be encaplsulated in square brackets",
 		},
 	}
 	for _, tt := range tests {

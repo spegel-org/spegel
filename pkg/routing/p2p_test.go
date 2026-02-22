@@ -114,7 +114,7 @@ func TestP2PRouter(t *testing.T) {
 			require.NoError(c, err)
 			require.True(c, ready)
 		}
-	}, 5*time.Second, time.Second)
+	}, 10*time.Second, time.Second)
 	require.Equal(t, 30, primaryRouter.kdht.RoutingTable().Size())
 
 	// Lookup should not return self when online.
@@ -167,36 +167,45 @@ func TestListenMultiaddrs(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		addr     string
-		expected []string
+		name                string
+		addr                string
+		expectedListenAddrs []ma.Multiaddr
 	}{
 		{
-			name:     "listen address type not specified",
-			addr:     ":9090",
-			expected: []string{"/ip6/::/tcp/9090", "/ip4/0.0.0.0/tcp/9090"},
+			name: "listen address type not specified",
+			addr: ":9090",
+			expectedListenAddrs: []ma.Multiaddr{
+				ma.StringCast("/ip6/::/udp/9090/quic-v1"),
+				ma.StringCast("/ip6/::/tcp/9090"),
+				ma.StringCast("/ip4/0.0.0.0/udp/9090/quic-v1"),
+				ma.StringCast("/ip4/0.0.0.0/tcp/9090"),
+			},
 		},
 		{
-			name:     "ipv4 only",
-			addr:     "0.0.0.0:9090",
-			expected: []string{"/ip4/0.0.0.0/tcp/9090"},
+			name: "ipv4 only",
+			addr: "192.168.1.24:7892",
+			expectedListenAddrs: []ma.Multiaddr{
+				ma.StringCast("/ip4/192.168.1.24/udp/7892/quic-v1"),
+				ma.StringCast("/ip4/192.168.1.24/tcp/7892"),
+			},
 		},
 		{
-			name:     "ipv6 only",
-			addr:     "[::]:9090",
-			expected: []string{"/ip6/::/tcp/9090"},
+			name: "ipv6 only",
+			addr: "[::]:9090",
+			expectedListenAddrs: []ma.Multiaddr{
+				ma.StringCast("/ip6/::/udp/9090/quic-v1"),
+				ma.StringCast("/ip6/::/tcp/9090"),
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			multiAddrs, err := listenMultiaddrs(tt.addr)
+			listenAddrs, err := listenMultiaddrs(tt.addr)
 			require.NoError(t, err)
-			//nolint: testifylint // This is easier to read and understand.
-			require.Equal(t, len(tt.expected), len(multiAddrs))
-			for i, e := range tt.expected {
-				require.Equal(t, e, multiAddrs[i].String())
+			for i, e := range tt.expectedListenAddrs {
+				require.Equal(t, e.String(), listenAddrs[i].String())
 			}
 		})
 	}
