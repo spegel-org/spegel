@@ -26,6 +26,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/provider"
+	"github.com/libp2p/go-libp2p-kad-dht/records"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -43,14 +44,11 @@ import (
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
-const (
-	maxReprovideDelay = 5 * time.Minute
-)
-
 type P2PRouterConfig struct {
-	DataDir      string
-	Libp2pOpts   []libp2p.Option
-	AdvertiseTTL time.Duration
+	DataDir           string
+	Libp2pOpts        []libp2p.Option
+	AdvertiseTTL      time.Duration
+	MaxReprovideDelay time.Duration
 }
 
 type P2PRouterOption = option.Option[P2PRouterConfig]
@@ -76,6 +74,13 @@ func WithAdvertiseTTL(ttl time.Duration) P2PRouterOption {
 	}
 }
 
+func WithMaxReprovideDelay(delay time.Duration) P2PRouterOption {
+	return func(cfg *P2PRouterConfig) error {
+		cfg.MaxReprovideDelay = delay
+		return nil
+	}
+}
+
 var _ Router = &P2PRouter{}
 
 type P2PRouter struct {
@@ -92,7 +97,8 @@ type P2PRouter struct {
 
 func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
 	cfg := P2PRouterConfig{
-		AdvertiseTTL: 15 * time.Minute,
+		AdvertiseTTL:      15 * time.Minute,
+		MaxReprovideDelay: 2 * time.Minute,
 	}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
@@ -145,7 +151,10 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 	dhtOpts := []dht.Option{
 		dht.Mode(dht.ModeServer),
 		dht.ProtocolPrefix("/spegel"),
-		dht.MaxRecordAge(cfg.AdvertiseTTL + maxReprovideDelay),
+		dht.ProviderManagerOpts(
+			records.ProvideValidity(cfg.AdvertiseTTL+(2*cfg.MaxReprovideDelay)),
+			records.ProviderAddrTTL(1*time.Hour),
+		),
 	}
 	kdht, err := dht.New(ctx, host, dhtOpts...)
 	if err != nil {
@@ -166,7 +175,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 			return host.Addrs()
 		}),
 		provider.WithReprovideInterval(cfg.AdvertiseTTL),
-		provider.WithMaxReprovideDelay(maxReprovideDelay),
+		provider.WithMaxReprovideDelay(cfg.MaxReprovideDelay),
 		provider.WithOfflineDelay(0),
 		provider.WithConnectivityCheckOnlineInterval(30 * time.Second),
 		provider.WithAddLocalRecord(func(h mh.Multihash) error {
