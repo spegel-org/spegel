@@ -66,21 +66,21 @@ func TestProbeHandlers(t *testing.T) {
 	handler := reg.Handler(logr.Discard())
 
 	rw := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/readyz", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/readyz", nil)
 	handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 	rw = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "http://localhost/livez", nil)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/livez", nil)
 	handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 
 	router.SetReadiness(false)
 	rw = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "http://localhost/readyz", nil)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/readyz", nil)
 	handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusInternalServerError, rw.Result().StatusCode)
 	rw = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "http://localhost/livez", nil)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/livez", nil)
 	handler.ServeHTTP(rw, req)
 	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
 }
@@ -150,7 +150,7 @@ func TestBasicAuth(t *testing.T) {
 			reg, err := NewRegistry(nil, nil, WithBasicAuth(tt.username, tt.password))
 			require.NoError(t, err)
 			rw := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "http://localhost/v2/", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/v2/", nil)
 			req.SetBasicAuth(tt.reqUsername, tt.reqPassword)
 			handler := reg.Handler(logr.Discard())
 			handler.ServeHTTP(rw, req)
@@ -452,7 +452,7 @@ func TestRegistryHandler(t *testing.T) {
 
 				target := fmt.Sprintf("http://example.com/v2/foo/bar/%s/%s?ns=docker.io", tt.distributionKind, tt.key)
 				rw := httptest.NewRecorder()
-				req := httptest.NewRequest(method, target, nil)
+				req := httptest.NewRequestWithContext(t.Context(), method, target, nil)
 				if tt.rng != nil {
 					req.Header.Set(httpx.HeaderRange, tt.rng.String())
 				}
