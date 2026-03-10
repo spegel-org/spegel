@@ -29,7 +29,7 @@ func TestServeMux(t *testing.T) {
 	paths := []string{"/prefix/", "/exact", "/exact/foo", "/prefix/bar"}
 	for _, path := range paths {
 		rw := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "http://localhost"+path, nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost"+path, nil)
 		m.ServeHTTP(rw, req)
 	}
 
