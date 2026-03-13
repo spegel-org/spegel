@@ -2,11 +2,16 @@ package routing
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"slices"
 	"sync"
 	"time"
@@ -197,4 +202,82 @@ func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 		return nil, err
 	}
 	return []peer.AddrInfo{*addrInfo}, nil
+}
+
+var _ Bootstrapper = &ExternalBootstrapper{}
+
+type ExternalBootstrapper struct {
+	httpClient *http.Client
+	url        url.URL
+}
+
+func NewExternalBootstrapper(url url.URL, tlsCA, tlsCert, tlsKey []byte) (*ExternalBootstrapper, error) {
+	client := httpx.BaseClient()
+	if len(tlsCA) > 0 {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(tlsCA) {
+			return nil, errors.New("failed to parse CA certificate")
+		}
+		tlsConfig.RootCAs = caCertPool
+		if len(tlsCert) > 0 && len(tlsKey) > 0 {
+			cert, err := tls.X509KeyPair(tlsCert, tlsKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse client certificate: %w", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+		transport := httpx.BaseTransport()
+		transport.TLSClientConfig = tlsConfig
+		client.Transport = transport
+	}
+	return &ExternalBootstrapper{
+		httpClient: client,
+		url:        url,
+	}, nil
+}
+
+func (eb *ExternalBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error {
+	<-ctx.Done()
+	return nil
+}
+
+func (eb *ExternalBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
+	limit := 3
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, eb.url.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := eb.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer httpx.DrainAndClose(resp.Body)
+	err = httpx.CheckResponseStatus(resp, http.StatusOK)
+	if err != nil {
+		return nil, err
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var ipAddrs []netip.Addr
+	if err := json.Unmarshal(b, &ipAddrs); err != nil {
+		return nil, err
+	}
+	addrInfos := []peer.AddrInfo{}
+	for _, ipAddr := range ipAddrs[:min(len(ipAddrs), limit)] {
+		addr, err := manet.FromIPAndZone(ipAddr.AsSlice(), ipAddr.Zone())
+		if err != nil {
+			return nil, err
+		}
+		addrInfo := peer.AddrInfo{
+			ID:    "",
+			Addrs: []ma.Multiaddr{addr},
+		}
+		addrInfos = append(addrInfos, addrInfo)
+	}
+	return addrInfos, nil
 }
