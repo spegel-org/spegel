@@ -1,8 +1,8 @@
 {
   "__inputs": [
     {
-      "name": "datasource",
-      "label": "datasource",
+      "name": "DS_PROMETHEUS",
+      "label": "prometheus",
       "description": "",
       "type": "datasource",
       "pluginId": "prometheus",
@@ -15,7 +15,7 @@
       "type": "grafana",
       "id": "grafana",
       "name": "Grafana",
-      "version": "11.5.2"
+      "version": "12.1.0"
     },
     {
       "type": "datasource",
@@ -106,7 +106,7 @@
             "steps": [
               {
                 "color": "transparent",
-                "value": null
+                "value": 0
               }
             ]
           }
@@ -115,7 +115,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 3,
+        "w": 2,
         "x": 0,
         "y": 1
       },
@@ -137,15 +137,15 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(spegel_advertised_keys{instance=~\"$instance\"})",
+          "expr": "count(spegel_advertised_content_digests{instance=~\"$instance\"})",
           "hide": false,
           "legendFormat": "__auto",
           "range": true,
@@ -172,7 +172,7 @@
             "steps": [
               {
                 "color": "transparent",
-                "value": null
+                "value": 0
               }
             ]
           }
@@ -181,8 +181,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 3,
-        "x": 3,
+        "w": 2,
+        "x": 2,
         "y": 1
       },
       "id": 29,
@@ -203,12 +203,12 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_node_name{job=\"kubelet\"})",
@@ -235,7 +235,7 @@
             "steps": [
               {
                 "color": "transparent",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -246,7 +246,7 @@
       "gridPos": {
         "h": 4,
         "w": 3,
-        "x": 6,
+        "x": 4,
         "y": 1
       },
       "id": 22,
@@ -267,12 +267,12 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_running_containers)",
@@ -303,7 +303,7 @@
             "steps": [
               {
                 "color": "transparent",
-                "value": null
+                "value": 0
               }
             ]
           }
@@ -312,8 +312,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 3,
-        "x": 9,
+        "w": 2,
+        "x": 7,
         "y": 1
       },
       "id": 20,
@@ -334,12 +334,12 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "expr": "sum(kubelet_running_pods)",
@@ -350,6 +350,142 @@
       ],
       "title": "Running Pods",
       "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 2,
+        "x": 9,
+        "y": 1
+      },
+      "id": 36,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(spegel_mirror_requests_total{pod=~\"$pod\", cache=\"hit\"})",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ],
+      "title": "Cache Hits",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 2,
+        "x": 11,
+        "y": 1
+      },
+      "id": 37,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.1.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(spegel_mirror_requests_total{pod=~\"$pod\", cache=\"miss\"})",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ],
+      "title": "Cache Miss",
       "type": "stat"
     },
     {
@@ -370,7 +506,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -385,7 +521,7 @@
       "gridPos": {
         "h": 4,
         "w": 3,
-        "x": 12,
+        "x": 13,
         "y": 1
       },
       "id": 12,
@@ -406,16 +542,16 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "max(rate(http_request_duration_seconds_bucket{job=\"$job\"}[$__interval]))",
+          "expr": "max(rate(http_request_duration_seconds_bucket{pod=~\"$pod\"}[$__interval]))",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -444,7 +580,7 @@
         "content": "<br>\n<div style=\"text-align: center;\"><a href=\"https://github.com/XenitAB/spegel\" target=\"_blank\">Spegel at GitHub</a> </div>\n\n",
         "mode": "html"
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "title": "Github link",
       "transparent": true,
       "type": "text"
@@ -485,7 +621,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -539,20 +675,20 @@
           ],
           "show": false
         },
-        "frameIndex": 0,
+        "frameIndex": 1,
         "showHeader": true,
         "sortBy": []
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${datasource}"
+            "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_images{job=~\"$job\",instance=~\"$instance\"}",
+          "expr": "spegel_advertised_image_digests{pod=~\"$pod\", registry=~\"$registry\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -566,7 +702,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_keys{job=~\"$job\",instance=~\"$instance\"} ",
+          "expr": "spegel_advertised_content_digests{pod=~\"$pod\", registry=~\"$registry\"} ",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -581,9 +717,10 @@
           "options": {
             "include": {
               "names": [
-                "pod",
                 "Value #A",
-                "Value #B"
+                "Value #B",
+                "registry",
+                "pod"
               ]
             }
           }
@@ -613,7 +750,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "",
       "fieldConfig": {
@@ -663,7 +800,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -694,7 +831,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
@@ -703,10 +840,10 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_images{job=~\"$job\",instance=~\"$instance\"}",
+          "expr": "spegel_advertised_image_digests{pod=~\"$pod\", registry=~\"$registry\"}",
           "format": "time_series",
           "instant": false,
-          "legendFormat": "{{ instance }}",
+          "legendFormat": "{{ pod }}: {{ registry }}",
           "range": true,
           "refId": "A"
         }
@@ -718,7 +855,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -764,7 +901,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -857,7 +994,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
@@ -882,7 +1019,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "",
       "fieldConfig": {
@@ -929,7 +1066,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -960,7 +1097,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
@@ -969,10 +1106,10 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "spegel_advertised_keys{job=~\"$job\",instance=~\"$instance\"} ",
+          "expr": "spegel_advertised_content_digests{pod=~\"$pod\", registry=~\"$registry\"} ",
           "format": "time_series",
           "instant": false,
-          "legendFormat": "{{ instance }}",
+          "legendFormat": "{{ pod }}: {{ registry }}",
           "range": true,
           "refId": "A"
         }
@@ -997,7 +1134,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1043,7 +1180,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1075,7 +1212,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
@@ -1096,7 +1233,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1142,7 +1279,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1174,7 +1311,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.5.2",
+      "pluginVersion": "12.1.0",
       "targets": [
         {
           "datasource": {
@@ -1195,14 +1332,14 @@
     }
   ],
   "refresh": "30s",
-  "schemaVersion": 40,
+  "schemaVersion": 41,
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {},
         "includeAll": false,
-        "label": "Data Source",
+        "label": "datasource",
         "name": "datasource",
         "options": [],
         "query": "prometheus",
@@ -1211,43 +1348,25 @@
         "type": "datasource"
       },
       {
-        "current": {
-          "text": "registry",
-          "value": "registry"
-        },
-        "description": "",
-        "hide": 2,
-        "includeAll": false,
-        "label": "container",
-        "name": "container",
-        "options": [
-          {
-            "selected": true,
-            "text": "registry",
-            "value": "registry"
-          }
-        ],
-        "query": "registry",
-        "type": "custom"
-      },
-      {
+        "allowCustomValue": false,
         "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "${DS_PROMETHEUS}"
         },
-        "definition": "label_values(spegel_advertised_images,pod)",
+        "definition": "label_values(spegel_advertised_content_digests,pod)",
         "description": "",
-        "hide": 2,
-        "includeAll": false,
+        "includeAll": true,
         "label": "pod",
+        "multi": true,
         "name": "pod",
         "options": [],
         "query": {
-          "query": "label_values(spegel_advertised_images,pod)",
-          "refId": "StandardVariableQuery"
+          "qryType": 1,
+          "query": "label_values(spegel_advertised_content_digests,pod)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
-        "refresh": 1,
+        "refresh": 2,
         "regex": "",
         "type": "query"
       },
@@ -1258,40 +1377,39 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(spegel_advertised_keys,job)",
-        "hide": 2,
-        "label": "job",
-        "name": "job",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(spegel_advertised_keys,job)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "type": "query"
-      },
-      {
-        "current": {},
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "definition": "label_values(spegel_advertised_keys{job=\"$job\"},instance)",
+        "definition": "label_values(spegel_advertised_content_digests,registry)",
         "includeAll": true,
-        "label": "instance",
+        "label": "registry",
         "multi": true,
-        "name": "instance",
+        "name": "registry",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(spegel_advertised_keys{job=\"$job\"},instance)",
+          "query": "label_values(spegel_advertised_content_digests,registry)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
         "regex": "",
         "type": "query"
+      },
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": "registry",
+          "value": "registry"
+        },
+        "description": "",
+        "hide": 2,
+        "name": "container",
+        "options": [
+          {
+            "selected": true,
+            "text": "registry",
+            "value": "registry"
+          }
+        ],
+        "query": "registry",
+        "type": "custom"
       }
     ]
   },
@@ -1304,6 +1422,6 @@
   "title": "Spegel stateless cluster local OCI registry mirror",
   "uid": "1iY4QMJVk-psee",
   "gnetId": 18089,
-  "version": 4,
+  "version": 5,
   "weekStart": ""
 }
