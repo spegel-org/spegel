@@ -66,6 +66,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | spegel.containerdSock | string | `"/run/containerd/containerd.sock"` | Path to Containerd socket. |
 | spegel.debugWebEnabled | bool | `true` | When true enables debug web page. |
 | spegel.logLevel | string | `"INFO"` | Minimum log level to output. Value should be DEBUG, INFO, WARN, or ERROR. |
+| spegel.mirrorDialTimeout | string | `"30s"` | Timeout for establishing TCP connections to peer mirrors. Lower values = faster failover to next peer when one is unreachable. Higher values = more tolerant of slow networks. |
 | spegel.mirrorResolveRetries | int | `3` | Max amount of mirrors to attempt. |
 | spegel.mirrorResolveTimeout | string | `"20ms"` | Max duration spent finding a mirror. |
 | spegel.mirroredRegistries | list | `[]` | Registries for which mirror configuration will be created. Empty means all registires will be mirrored. |
