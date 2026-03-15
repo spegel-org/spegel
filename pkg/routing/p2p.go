@@ -19,7 +19,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/avast/retry-go/v4"
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	cid "github.com/ipfs/go-cid"
@@ -40,6 +39,7 @@ import (
 
 	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
@@ -214,21 +214,16 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 				return nil
 			case <-r.connectivityGate.Wait():
 				start := time.Now()
-				retryOpts := []retry.Option{
-					retry.Context(gCtx),
-					retry.Attempts(0),
-					retry.DelayType(retry.FullJitterBackoffDelay),
-					retry.Delay(50 * time.Millisecond),
-					retry.MaxDelay(10 * time.Second),
-					retry.OnRetry(func(attempt uint, err error) {
+				retryOpts := []resilient.RetryOption{
+					resilient.WithOnRetry(func(attempt int, err error) {
 						log.Error(err, "failed to run bootstrap", "attempts", attempt+1)
 					}),
 				}
-				err := retry.Do(func() error {
+				err := resilient.Retry(gCtx, 0, resilient.BackoffDelay(50*time.Millisecond, 10*time.Second), func(ctx context.Context) error {
 					if !r.connectivityGate.IsOpen() {
 						return nil
 					}
-					err := bootstrapPeers(gCtx, r.bootstrapper, r.kdht, r.protocols)
+					err := bootstrapPeers(ctx, r.bootstrapper, r.kdht, r.protocols)
 					if err != nil {
 						return err
 					}

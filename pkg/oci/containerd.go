@@ -17,7 +17,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/avast/retry-go/v4"
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/content"
@@ -34,6 +33,7 @@ import (
 	tomlu "github.com/pelletier/go-toml/v2/unstable"
 
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
@@ -309,22 +309,17 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 	switch e := evt.(type) {
 	case *eventtypes.ContentCreate:
 		dgst := digest.Digest(e.GetDigest())
-		retryOpts := []retry.Option{
-			retry.Context(ctx),
-			retry.Attempts(10),
-			retry.MaxDelay(100 * time.Millisecond),
-		}
-		refs, err := retry.DoWithData(func() ([]Reference, error) {
+		refs, err := resilient.RetryValue(ctx, 10, resilient.BackoffDelay(10*time.Millisecond, 100*time.Millisecond), func(ctx context.Context) ([]Reference, error) {
 			info, err := c.client.ContentStore().Info(ctx, dgst)
 			if err != nil {
-				return nil, retry.Unrecoverable(err)
+				return nil, resilient.Unrecoverable(err)
 			}
 			refs, err := contentLabelsToReferences(info.Labels, dgst)
 			if err != nil {
 				return nil, err
 			}
 			return refs, nil
-		}, retryOpts...)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -387,21 +382,16 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		}
 		delete(contentIdx, img.Digest)
 		// Delete events are sent before garbage collection is run.
-		retryOpts := []retry.Option{
-			retry.Context(ctx),
-			retry.Attempts(10),
-			retry.MaxDelay(100 * time.Millisecond),
-		}
-		err = retry.Do(func() error {
+		err = resilient.Retry(ctx, 10, resilient.BackoffDelay(10*time.Millisecond, 100*time.Microsecond), func(ctx context.Context) error {
 			_, err := c.client.ContentStore().Info(ctx, img.Digest)
 			if errors.Is(err, errdefs.ErrNotFound) {
 				return nil
 			}
 			if err != nil {
-				return retry.Unrecoverable(err)
+				return resilient.Unrecoverable(err)
 			}
 			return fmt.Errorf("manifest with digest %s still exists", img.Digest.String())
-		}, retryOpts...)
+		})
 		if err != nil {
 			return nil, fmt.Errorf("image manifest has not been deleted: %w", err)
 		}
