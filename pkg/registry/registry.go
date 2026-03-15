@@ -14,11 +14,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/avast/retry-go/v4"
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
@@ -280,19 +280,15 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		defer reqCancel()
 	}
 
-	retryOpts := []retry.Option{
-		retry.Context(req.Context()),
-		retry.Attempts(uint(r.resolveRetries)),
-		retry.DelayType(retry.FixedDelay),
-		retry.Delay(0),
-		retry.OnRetry(func(attempt uint, err error) {
+	retryOpts := []resilient.RetryOption{
+		resilient.WithOnRetry(func(attempt int, err error) {
 			log.Error(err, "retrying mirror request", "attempt", attempt)
 		}),
 	}
-	err = retry.Do(func() error {
+	err = resilient.Retry(fetchCtx, r.resolveRetries, resilient.FixedDelay(0), func(ctx context.Context) error {
 		peer, err := balancer.Next()
 		if err != nil {
-			return retry.Unrecoverable(err)
+			return resilient.Unrecoverable(err)
 		}
 
 		mirrorDetails.Attempts += 1
@@ -347,7 +343,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 			case oci.DistributionKindBlob:
 				rng, err := httpx.ParseRangeHeader(req.Header, desc.Size)
 				if err != nil {
-					return retry.Unrecoverable(err)
+					return resilient.Unrecoverable(err)
 				}
 				resumeRng = rng
 
@@ -373,7 +369,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		if err != nil {
 			switch dist.Kind {
 			case oci.DistributionKindManifest:
-				return retry.Unrecoverable(fmt.Errorf("copying of manifest data failed: %w", err))
+				return resilient.Unrecoverable(fmt.Errorf("copying of manifest data failed: %w", err))
 			case oci.DistributionKindBlob:
 				if resumeRng == nil {
 					resumeRng = &httpx.Range{
