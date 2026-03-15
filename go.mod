@@ -199,3 +199,5 @@ require (
 )
 
 tool github.com/norwoodj/helm-docs/cmd/helm-docs
+
+replace github.com/libp2p/go-libp2p-kad-dht => github.com/phillebaba/go-libp2p-kad-dht v0.0.0-20260303084230-1d7ff4e7f593
