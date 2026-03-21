@@ -7,7 +7,7 @@ toolchain go1.26.0
 require (
 	github.com/fluxcd/cli-utils v0.37.2-flux.1
 	github.com/fluxcd/pkg/runtime v0.102.0
-	github.com/moby/moby/client v0.2.2
+	github.com/moby/moby/client v0.3.0
 	github.com/stretchr/testify v1.11.1
 	helm.sh/helm/v4 v4.1.1
 	k8s.io/api v0.35.2
@@ -84,7 +84,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/moby/api v1.53.0 // indirect
+	github.com/moby/moby/api v1.54.0 // indirect
 	github.com/moby/spdystream v0.5.0 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
