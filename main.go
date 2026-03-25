@@ -50,9 +50,9 @@ type BootstrapConfig struct {
 	HTTPBootstrapAddr       string   `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap."`
 	HTTPBootstrapPeer       string   `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
 	ExternalBootstrapURL    url.URL  `arg:"--external-bootstrap-url,env:EXTERNAL_BOOTSTRAP_URL" help:"External bootstrap URL."`
-	ExternalBootstrapCA     string   `arg:"--external-bootstrap-ca,env:EXTERNAL_BOOTSTRAP_CA" help:"Path to external bootstrap CA."`
-	ExternalBootstrapTLSCrt string   `arg:"--external-bootstrap-tls-crt,env:EXTERNAL_BOOTSTRAP_TLS_CRT" help:"Path to external bootstrap client TLS certificate."`
-	ExternalBootstrapTLSKey string   `arg:"--external-bootstrap-tls-key,env:EXTERNAL_BOOTSTRAP_TLS_KEY" help:"Path to external bootstrap client TLS key."`
+	ExternalBootstrapCA     *string  `arg:"--external-bootstrap-ca,env:EXTERNAL_BOOTSTRAP_CA" help:"Path to external bootstrap CA."`
+	ExternalBootstrapTLSCrt *string  `arg:"--external-bootstrap-tls-crt,env:EXTERNAL_BOOTSTRAP_TLS_CRT" help:"Path to external bootstrap client TLS certificate."`
+	ExternalBootstrapTLSKey *string  `arg:"--external-bootstrap-tls-key,env:EXTERNAL_BOOTSTRAP_TLS_KEY" help:"Path to external bootstrap client TLS key."`
 	StaticBootstrapPeers    []string `arg:"--static-bootstrap-peers,env:STATIC_BOOTSTRAP_PEERS" help:"Static list of peers to bootstrap with."`
 }
 
@@ -379,20 +379,22 @@ func loadBasicAuth() (string, string, error) {
 	return string(username), string(password), nil
 }
 
-func loadExternalBootstrapperCerts(tlsCAFile, tlsCertFile, tlsKeyFile string) (tlsCA, tlsCert, tlsKey []byte, err error) {
-	if tlsCAFile != "" {
-		if tlsCA, err = os.ReadFile(filepath.Clean(tlsCAFile)); err != nil {
-			err = fmt.Errorf("failed to read '%s' CA file: %w", filepath.Clean(tlsCAFile), err)
+func loadExternalBootstrapperCerts(tlsCAFile, tlsCertFile, tlsKeyFile *string) (tlsCA, tlsCert, tlsKey []byte, err error) {
+	if tlsCAFile != nil {
+		if tlsCA, err = os.ReadFile(filepath.Clean(*tlsCAFile)); err != nil {
+			err = fmt.Errorf("failed to read '%s' CA file: %w", filepath.Clean(*tlsCAFile), err)
 			return
 		}
 	}
-	if tlsCertFile != "" && tlsKeyFile != "" {
-		if tlsCert, err = os.ReadFile(filepath.Clean(tlsCertFile)); err != nil {
-			err = fmt.Errorf("failed to read '%s' client TLS certificate file: %w", filepath.Clean(tlsCertFile), err)
+	if tlsCertFile != nil {
+		if tlsCert, err = os.ReadFile(filepath.Clean(*tlsCertFile)); err != nil {
+			err = fmt.Errorf("failed to read '%s' client TLS certificate file: %w", filepath.Clean(*tlsCertFile), err)
 			return
 		}
-		if tlsKey, err = os.ReadFile(filepath.Clean(tlsKeyFile)); err != nil {
-			err = fmt.Errorf("failed to read '%s' client TLS key file: %w", filepath.Clean(tlsKeyFile), err)
+	}
+	if tlsKeyFile != nil {
+		if tlsKey, err = os.ReadFile(filepath.Clean(*tlsKeyFile)); err != nil {
+			err = fmt.Errorf("failed to read '%s' client TLS key file: %w", filepath.Clean(*tlsKeyFile), err)
 			return
 		}
 	}
