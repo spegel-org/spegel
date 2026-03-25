@@ -213,22 +213,29 @@ type ExternalBootstrapper struct {
 
 func NewExternalBootstrapper(url url.URL, tlsCA, tlsCert, tlsKey []byte) (*ExternalBootstrapper, error) {
 	client := httpx.BaseClient()
+	var tlsConfig *tls.Config
 	if len(tlsCA) > 0 {
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
+		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 		caCertPool := x509.NewCertPool()
 		if !caCertPool.AppendCertsFromPEM(tlsCA) {
 			return nil, errors.New("failed to parse CA certificate")
 		}
 		tlsConfig.RootCAs = caCertPool
-		if len(tlsCert) > 0 && len(tlsKey) > 0 {
-			cert, err := tls.X509KeyPair(tlsCert, tlsKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse client certificate: %w", err)
-			}
-			tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	if len(tlsCert) > 0 || len(tlsKey) > 0 {
+		if len(tlsCert) == 0 || len(tlsKey) == 0 {
+			return nil, errors.New("both client TLS certificate and client TLS key must be provided")
 		}
+		cert, err := tls.X509KeyPair(tlsCert, tlsKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse client certificate: %w", err)
+		}
+		if tlsConfig == nil {
+			tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	if tlsConfig != nil {
 		transport := httpx.BaseTransport()
 		transport.TLSClientConfig = tlsConfig
 		client.Transport = transport
