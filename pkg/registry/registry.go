@@ -85,6 +85,7 @@ type Statistics struct {
 
 type Registry struct {
 	bufferPool     *sync.Pool
+	hedger         *resilient.Hedger
 	ociStore       oci.Store
 	ociClient      *oci.Client
 	router         routing.Router
@@ -131,6 +132,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		password:       cfg.Password,
 		bufferPool:     bufferPool,
 		stats:          Statistics{},
+		hedger:         resilient.NewHedger([]float64{80, 85, 90}, 50*time.Millisecond),
 	}
 	return r, nil
 }
@@ -234,14 +236,11 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 }
 
-type MirrorErrorDetails struct {
-	Attempts int `json:"attempts"`
-}
-
 func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
 	rw.SetAttrs(HandlerAttrKey, "mirror")
 
 	log := logr.FromContextOrDiscard(ctx).WithValues("ref", dist.Identifier(), "path", dist.URL().Path)
+	ctx = logr.NewContext(ctx, log)
 
 	defer func() {
 		if rw.Error() == nil {
@@ -253,15 +252,107 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 		}
 	}()
 
-	// Set timeout for non blob data requests.
-	fetchCtx := ctx
+	// Set max duration for non blob requests.
 	if dist.Method == http.MethodHead || dist.Kind == oci.DistributionKindManifest {
-		var fetchCancel context.CancelFunc
-		fetchCtx, fetchCancel = context.WithTimeout(ctx, 3*time.Second)
-		defer fetchCancel()
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
 	}
 
-	mirrorDetails := MirrorErrorDetails{
+	// Lookup peers for the given key.
+	iter, err := r.router.Lookup(ctx, dist.Identifier(), r.resolveRetries)
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	// Retry requests until success or timeout.
+	for {
+		done := func() bool {
+			res, err := r.raceFetch(ctx, iter, dist)
+			if err != nil {
+				rw.WriteError(http.StatusNotFound, err)
+				return true
+			}
+			defer httpx.DrainAndClose(res.rc)
+
+			if !rw.HeadersWritten() {
+				oci.WriteDescriptorToHeader(res.desc, rw.Header())
+
+				switch dist.Kind {
+				case oci.DistributionKindManifest:
+					rw.WriteHeader(http.StatusOK)
+				case oci.DistributionKindBlob:
+					rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
+					if dist.Range == nil {
+						rw.WriteHeader(http.StatusOK)
+					} else {
+						crng, err := httpx.ContentRangeFromRange(*dist.Range, res.desc.Size)
+						if err != nil {
+							rw.WriteError(http.StatusRequestedRangeNotSatisfiable, err)
+							return true
+						}
+						rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
+						rw.Header().Set(httpx.HeaderContentRange, crng.String())
+						rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(crng.Length(), 10))
+						rw.WriteHeader(http.StatusPartialContent)
+					}
+				}
+			}
+			if dist.Method == http.MethodHead {
+				return true
+			}
+
+			// Copy the data to the response writer.
+			//nolint: errcheck // Ignore
+			buf := r.bufferPool.Get().(*[]byte)
+			defer r.bufferPool.Put(buf)
+			n, err := io.CopyBuffer(rw, res.rc, *buf)
+			if err != nil {
+				switch dist.Kind {
+				case oci.DistributionKindManifest:
+					log.Error(err, "copying of manifest data failed")
+					return true
+				case oci.DistributionKindBlob:
+					// TODO: Avoid modifying a pointer.
+					if dist.Range == nil {
+						dist.Range = &httpx.Range{
+							Start: ptr.To(int64(0)),
+							End:   ptr.To(res.desc.Size - 1),
+						}
+					}
+					dist.Range.Start = ptr.To(*dist.Range.Start + n)
+					log.Error(err, "copying of blob data failed")
+					return false
+				}
+			}
+			return true
+		}()
+		if done {
+			return
+		}
+	}
+}
+
+type mirrorErrorDetails struct {
+	Attempts int `json:"attempts"`
+}
+
+type fetchResponse struct {
+	rc   io.ReadCloser
+	desc ocispec.Descriptor
+	peer routing.Peer
+}
+
+type fetchFailure struct {
+	err  error
+	peer routing.Peer
+}
+
+func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, dist oci.DistributionPath) (fetchResponse, error) {
+	log := logr.FromContextOrDiscard(ctx)
+
+	errDetails := mirrorErrorDetails{
 		Attempts: 0,
 	}
 	errCode := map[oci.DistributionKind]oci.DistributionErrorCode{
@@ -269,128 +360,118 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 		oci.DistributionKindManifest: oci.ErrCodeManifestUnknown,
 	}[dist.Kind]
 
-	iter, err := r.router.Lookup(fetchCtx, dist.Identifier(), r.resolveRetries)
-	if err != nil {
-		respErr := oci.NewDistributionError(errCode, fmt.Sprintf("lookup failed for %s", dist.Identifier()), mirrorDetails)
-		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
-		return
-	}
+	fetchCh, immediateCh := fetchChannel(ctx, r.hedger, iterator)
+	resCh := make(chan fetchResponse)
+	failureCh := make(chan fetchFailure)
 
-	retryOpts := []resilient.RetryOption{
-		resilient.WithOnRetry(func(attempt int, err error) {
-			log.Error(err, "retrying mirror request", "attempt", attempt)
-		}),
-	}
-	err = resilient.Retry(fetchCtx, 0, resilient.NoDelay(), func(ctx context.Context) error {
+	fetchCtxs := map[string]context.Context{}
+	fetchCancels := map[string]context.CancelFunc{}
+	defer func() {
+		for _, cancel := range fetchCancels {
+			cancel()
+		}
+	}()
+
+	for {
+		// We only want to return early when there are no inflight requests.
+		var idleTimeoutCh <-chan time.Time
+		var exhaustedCh <-chan any
+		if len(fetchCtxs) == 0 {
+			idleTimeoutCh = time.After(r.resolveTimeout)
+			exhaustedCh = iterator.Exhausted()
+		}
+
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		case <-iter.Exhausted():
-			return resilient.Unrecoverable(errors.New("iterator has become exhausted"))
-		case <-time.After(r.resolveTimeout):
-			return resilient.Unrecoverable(errors.New("waited too long for new peer"))
-		case <-iter.Ready():
-		}
-
-		peer, ok := iter.Acquire()
-		if !ok {
-			return errors.New("could not acquire peer")
-		}
-
-		mirrorDetails.Attempts += 1
-
-		type fetchResult struct {
-			rc   io.ReadCloser
-			desc ocispec.Descriptor
-		}
-		res, err := httpx.HappyEyeballs(ctx, peer.Addresses, func(ctx context.Context, ipAddr netip.Addr) (fetchResult, error) {
-			mirror := &url.URL{
-				Scheme: dist.Scheme,
-				Host:   netip.AddrPortFrom(ipAddr, peer.Metadata.RegistryPort).String(),
+			return fetchResponse{}, ctx.Err()
+		case <-exhaustedCh:
+			if errDetails.Attempts == 0 {
+				return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("could not find peer for %s", dist.Identifier()), errDetails)
 			}
-			fetchOpts := []oci.FetchOption{
-				oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
-				oci.WithFetchMirror(mirror),
-				oci.WithFetchBasicAuth(r.username, r.password),
+			return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("all request retries exhausted for %s", dist.Identifier()), errDetails)
+		case <-idleTimeoutCh:
+			return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("waited too long for new peer with no inflight fetches for %s", dist.Identifier()), errDetails)
+		case <-fetchCh:
+			peer, ok := iterator.Acquire()
+			if !ok {
+				immediateCh <- false
+				continue
 			}
-			rc, desc, err := r.ociClient.Fetch(ctx, dist, fetchOpts...)
-			if err != nil {
-				return fetchResult{}, err
-			}
-			res := fetchResult{
-				desc: desc,
-				rc:   rc,
-			}
-			return res, nil
-		})
-		if err != nil {
-			iter.Remove(peer)
-			return fmt.Errorf("request to mirror failed: %w", err)
-		}
 
-		iter.Release(peer)
+			errDetails.Attempts += 1
 
-		defer httpx.DrainAndClose(res.rc)
-		if !rw.HeadersWritten() {
-			oci.WriteDescriptorToHeader(res.desc, rw.Header())
+			fetchCtx, fetchCancel := context.WithCancel(ctx)
+			fetchCtxs[peer.Host] = fetchCtx
+			fetchCancels[peer.Host] = fetchCancel
 
-			switch dist.Kind {
-			case oci.DistributionKindManifest:
-				rw.WriteHeader(http.StatusOK)
-			case oci.DistributionKindBlob:
-				rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
-				if dist.Range == nil {
-					rw.WriteHeader(http.StatusOK)
-				} else {
-					crng, err := httpx.ContentRangeFromRange(*dist.Range, res.desc.Size)
+			go func() {
+				start := time.Now()
+				res, err := httpx.HappyEyeballs(fetchCtx, peer.Addresses, func(ctx context.Context, ipAddr netip.Addr) (fetchResponse, error) {
+					mirror := &url.URL{
+						Scheme: dist.Scheme,
+						Host:   netip.AddrPortFrom(ipAddr, peer.Metadata.RegistryPort).String(),
+					}
+					fetchOpts := []oci.FetchOption{
+						oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
+						oci.WithFetchMirror(mirror),
+						oci.WithFetchBasicAuth(r.username, r.password),
+					}
+					rc, desc, err := r.ociClient.Fetch(ctx, dist, fetchOpts...)
 					if err != nil {
-						rw.WriteError(http.StatusBadRequest, err)
-						return resilient.Unrecoverable(err)
+						return fetchResponse{}, err
 					}
-					rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
-					rw.Header().Set(httpx.HeaderContentRange, crng.String())
-					rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(crng.Length(), 10))
-					rw.WriteHeader(http.StatusPartialContent)
-				}
-			}
-		}
-		if dist.Method == http.MethodHead {
-			return nil
-		}
+					res := fetchResponse{
+						peer: peer,
+						desc: desc,
+						rc:   rc,
+					}
+					return res, nil
+				})
+				if err != nil {
+					if fetchCtx.Err() != nil {
+						return
+					}
 
-		//nolint: errcheck // Ignore
-		buf := r.bufferPool.Get().(*[]byte)
-		defer r.bufferPool.Put(buf)
-		n, err := io.CopyBuffer(rw, res.rc, *buf)
-		if err != nil {
-			switch dist.Kind {
-			case oci.DistributionKindManifest:
-				return resilient.Unrecoverable(fmt.Errorf("copying of manifest data failed: %w", err))
-			case oci.DistributionKindBlob:
-				// TODO: Avoid modifying a pointer.
-				if dist.Range == nil {
-					dist.Range = &httpx.Range{
-						Start: ptr.To(int64(0)),
-						End:   ptr.To(res.desc.Size - 1),
+					iterator.Remove(peer)
+
+					failure := fetchFailure{
+						peer: peer,
+						err:  err,
 					}
+					select {
+					case <-fetchCtx.Done():
+					case failureCh <- failure:
+					}
+					return
 				}
-				dist.Range.Start = ptr.To(*dist.Range.Start + n)
-				return fmt.Errorf("copying of blob data failed: %w", err)
-			}
+
+				iterator.Release(peer)
+				err = r.hedger.Observe(time.Since(start))
+				if err != nil {
+					log.Error(err, "could not observe fetch duration for hedger")
+				}
+
+				select {
+				case <-fetchCtx.Done():
+					err = httpx.DrainAndClose(res.rc)
+					if err != nil {
+						log.Error(err, "could not drain and close")
+					}
+				case resCh <- res:
+				}
+			}()
+		case failure := <-failureCh:
+			// Remove context to indicate fetch is not inflight.
+			delete(fetchCtxs, failure.peer.Host)
+			delete(fetchCancels, failure.peer.Host)
+			log.Error(failure.err, "request to peer failed")
+			immediateCh <- true
+		case res := <-resCh:
+			// Remove context so successful request is not cancelled.
+			delete(fetchCtxs, res.peer.Host)
+			delete(fetchCancels, res.peer.Host)
+			return res, nil
 		}
-		return nil
-	}, retryOpts...)
-	if err != nil {
-		if !rw.HeadersWritten() {
-			respErr := oci.NewDistributionError(errCode, fmt.Sprintf("all request retries exhausted for %s", dist.Identifier()), mirrorDetails)
-			if mirrorDetails.Attempts == 0 {
-				respErr = oci.NewDistributionError(errCode, fmt.Sprintf("could not find peer for %s", dist.Identifier()), mirrorDetails)
-			}
-			rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
-		} else {
-			log.Error(err, "failure after headers written")
-		}
-		return
 	}
 }
 
@@ -513,4 +594,47 @@ func (r *Registry) blobHandler(ctx context.Context, dist oci.DistributionPath, r
 		logr.FromContextOrDiscard(ctx).Error(err, "failed to write blob")
 		return
 	}
+}
+
+func fetchChannel(ctx context.Context, hedger *resilient.Hedger, iterator *routing.Iterator) (<-chan any, chan<- bool) {
+	fetchCh := make(chan any)
+	immediateCh := make(chan bool, hedger.Size()+1)
+	immediateCh <- false
+	go func() {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		hedgeCount := 0
+		hedgeCh := hedger.Channel(ctx)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hedgeCh:
+				hedgeCount += 1
+			case count := <-immediateCh:
+				if count {
+					hedgeCount += 1
+				}
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-iterator.Ready():
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case fetchCh <- nil:
+			}
+
+			// We dont want to trigger fetch more than want hedger would.
+			if hedgeCount == hedger.Size() {
+				return
+			}
+		}
+	}()
+	return fetchCh, immediateCh
 }
