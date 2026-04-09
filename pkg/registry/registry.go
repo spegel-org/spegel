@@ -190,7 +190,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 
 	// Parse out path components from request.
-	dist, err := oci.ParseDistributionPath(req.URL)
+	dist, err := oci.ParseDistributionPath(req)
 	if err != nil {
 		rw.WriteError(http.StatusNotFound, fmt.Errorf("could not parse path according to OCI distribution spec: %w", err))
 		return
@@ -214,7 +214,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 			_, ociErr = r.ociStore.Descriptor(req.Context(), dist.Digest)
 		}
 		if ociErr != nil {
-			r.mirrorHandler(rw, req, dist)
+			r.mirrorHandler(req.Context(), dist, rw)
 			return
 		}
 	}
@@ -222,10 +222,10 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	// Serve registry endpoints.
 	switch dist.Kind {
 	case oci.DistributionKindManifest:
-		r.manifestHandler(rw, req, dist)
+		r.manifestHandler(req.Context(), dist, rw)
 		return
 	case oci.DistributionKindBlob:
-		r.blobHandler(rw, req, dist)
+		r.blobHandler(req.Context(), dist, rw)
 		return
 	default:
 		// This should never happen as it would be caught when parsing the path.
@@ -238,10 +238,10 @@ type MirrorErrorDetails struct {
 	Attempts int `json:"attempts"`
 }
 
-func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
 	rw.SetAttrs(HandlerAttrKey, "mirror")
 
-	log := logr.FromContextOrDiscard(req.Context()).WithValues("ref", dist.Identifier(), "path", req.URL.Path)
+	log := logr.FromContextOrDiscard(ctx).WithValues("ref", dist.Identifier(), "path", dist.URL().Path)
 
 	defer func() {
 		if rw.Error() == nil {
@@ -253,13 +253,6 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		}
 	}()
 
-	// Range for initial request and to resume failed peer requests.
-	rng, err := httpx.ParseRangeHeader(req.Header)
-	if err != nil {
-		rw.WriteError(http.StatusBadRequest, err)
-		return
-	}
-
 	mirrorDetails := MirrorErrorDetails{
 		Attempts: 0,
 	}
@@ -268,7 +261,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		oci.DistributionKindManifest: oci.ErrCodeManifestUnknown,
 	}[dist.Kind]
 
-	lookupCtx, lookupCancel := context.WithTimeout(req.Context(), r.resolveTimeout)
+	lookupCtx, lookupCancel := context.WithTimeout(ctx, r.resolveTimeout)
 	defer lookupCancel()
 	balancer, err := r.router.Lookup(lookupCtx, dist.Identifier(), r.resolveRetries)
 	if err != nil {
@@ -278,10 +271,10 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 	}
 
 	// Set timeout for non blob data requests.
-	fetchCtx := req.Context()
-	if req.Method == http.MethodHead || dist.Kind == oci.DistributionKindManifest {
+	fetchCtx := ctx
+	if dist.Method == http.MethodHead || dist.Kind == oci.DistributionKindManifest {
 		var reqCancel context.CancelFunc
-		fetchCtx, reqCancel = context.WithTimeout(req.Context(), 3*time.Second)
+		fetchCtx, reqCancel = context.WithTimeout(ctx, 3*time.Second)
 		defer reqCancel()
 	}
 
@@ -304,22 +297,15 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		}
 		res, err := httpx.HappyEyeballs(fetchCtx, peer.Addresses, func(ctx context.Context, ipAddr netip.Addr) (fetchResult, error) {
 			mirror := &url.URL{
-				Scheme: "http",
+				Scheme: dist.Scheme,
 				Host:   netip.AddrPortFrom(peer.Addresses[0], peer.Metadata.RegistryPort).String(),
-			}
-			if req.TLS != nil {
-				mirror.Scheme = "https"
 			}
 			fetchOpts := []oci.FetchOption{
 				oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
 				oci.WithFetchMirror(mirror),
 				oci.WithFetchBasicAuth(r.username, r.password),
 			}
-			// Override range header with resume range if set.
-			if rng != nil {
-				fetchOpts = append(fetchOpts, oci.WithFetchRange(*rng))
-			}
-			rc, desc, err := r.ociClient.Fetch(fetchCtx, req.Method, dist, fetchOpts...)
+			rc, desc, err := r.ociClient.Fetch(fetchCtx, dist, fetchOpts...)
 			if err != nil {
 				return fetchResult{}, err
 			}
@@ -345,10 +331,10 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 				rw.WriteHeader(http.StatusOK)
 			case oci.DistributionKindBlob:
 				rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
-				if rng == nil {
+				if dist.Range == nil {
 					rw.WriteHeader(http.StatusOK)
 				} else {
-					crng, err := httpx.ContentRangeFromRange(*rng, desc.Size)
+					crng, err := httpx.ContentRangeFromRange(*dist.Range, desc.Size)
 					if err != nil {
 						rw.WriteError(http.StatusBadRequest, err)
 						return resilient.Unrecoverable(err)
@@ -360,7 +346,7 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 				}
 			}
 		}
-		if req.Method == http.MethodHead {
+		if dist.Method == http.MethodHead {
 			return nil
 		}
 
@@ -373,13 +359,14 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 			case oci.DistributionKindManifest:
 				return resilient.Unrecoverable(fmt.Errorf("copying of manifest data failed: %w", err))
 			case oci.DistributionKindBlob:
-				if rng == nil {
-					rng = &httpx.Range{
+				// TODO: Avoid modifying a pointer.
+				if dist.Range == nil {
+					dist.Range = &httpx.Range{
 						Start: ptr.To(int64(0)),
 						End:   ptr.To(desc.Size - 1),
 					}
 				}
-				rng.Start = ptr.To(*rng.Start + n)
+				dist.Range.Start = ptr.To(*dist.Range.Start + n)
 				balancer.Remove(peer)
 				return fmt.Errorf("copying of blob data failed: %w", err)
 			}
@@ -400,11 +387,11 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 	}
 }
 
-func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
 	rw.SetAttrs(HandlerAttrKey, "manifest")
 
 	if dist.Digest == "" {
-		dgst, err := r.ociStore.Resolve(req.Context(), dist.Identifier())
+		dgst, err := r.ociStore.Resolve(ctx, dist.Identifier())
 		if err != nil {
 			respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get digest for image tag %s", dist.Identifier()), nil)
 			rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -412,7 +399,7 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 		}
 		dist.Digest = dgst
 	}
-	desc, err := r.ociStore.Descriptor(req.Context(), dist.Digest)
+	desc, err := r.ociStore.Descriptor(ctx, dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -428,12 +415,12 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
 	rw.Header().Set(oci.HeaderDockerDigest, desc.Digest.String())
 	rw.Header().Set(oci.HeaderNamespace, dist.Registry)
-	if req.Method == http.MethodHead {
+	if dist.Method == http.MethodHead {
 		rw.WriteHeader(http.StatusOK)
 		return
 	}
 
-	rc, err := r.ociStore.Open(req.Context(), dist.Digest)
+	rc, err := r.ociStore.Open(ctx, dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -443,21 +430,15 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 	rw.WriteHeader(http.StatusOK)
 	_, err = io.Copy(rw, rc)
 	if err != nil {
-		logr.FromContextOrDiscard(req.Context()).Error(err, "error occurred when writing manifest")
+		logr.FromContextOrDiscard(ctx).Error(err, "error occurred when writing manifest")
 		return
 	}
 }
 
-func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
+func (r *Registry) blobHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
 	rw.SetAttrs(HandlerAttrKey, "blob")
 
-	rng, err := httpx.ParseRangeHeader(req.Header)
-	if err != nil {
-		rw.WriteError(http.StatusBadRequest, err)
-		return
-	}
-
-	desc, err := r.ociStore.Descriptor(req.Context(), dist.Digest)
+	desc, err := r.ociStore.Descriptor(ctx, dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get blob %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -469,14 +450,19 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 		return
 	}
 
-	var crng *httpx.ContentRange
-	if rng != nil {
-		v, err := httpx.ContentRangeFromRange(*rng, desc.Size)
-		if err != nil {
-			rw.WriteError(http.StatusBadRequest, err)
-			return
+	crng, err := func() (*httpx.ContentRange, error) {
+		if dist.Range == nil {
+			return nil, nil
 		}
-		crng = &v
+		crng, err := httpx.ContentRangeFromRange(*dist.Range, desc.Size)
+		if err != nil {
+			return nil, err
+		}
+		return &crng, nil
+	}()
+	if err != nil {
+		rw.WriteError(http.StatusBadRequest, err)
+		return
 	}
 
 	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
@@ -493,12 +479,12 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 		rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(crng.Length(), 10))
 		rw.Header().Set(httpx.HeaderContentRange, crng.String())
 	}
-	if req.Method == http.MethodHead {
+	if dist.Method == http.MethodHead {
 		rw.WriteHeader(status)
 		return
 	}
 
-	rc, err := r.ociStore.Open(req.Context(), dist.Digest)
+	rc, err := r.ociStore.Open(ctx, dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get reader for blob %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -517,7 +503,7 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 	rw.WriteHeader(status)
 	_, err = io.Copy(rw, src)
 	if err != nil {
-		logr.FromContextOrDiscard(req.Context()).Error(err, "failed to write blob")
+		logr.FromContextOrDiscard(ctx).Error(err, "failed to write blob")
 		return
 	}
 }

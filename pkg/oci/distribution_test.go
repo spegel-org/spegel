@@ -2,6 +2,7 @@ package oci
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"testing"
 
@@ -81,7 +82,9 @@ func TestParseDistributionPath(t *testing.T) {
 				Path:     tt.path,
 				RawQuery: fmt.Sprintf("ns=%s", tt.registry),
 			}
-			dist, err := ParseDistributionPath(u)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, u.String(), nil)
+			require.NoError(t, err)
+			dist, err := ParseDistributionPath(req)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedName, dist.Repository)
 			require.Equal(t, tt.expectedDgst, dist.Digest)
@@ -153,7 +156,9 @@ func TestParseDistributionPathErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := ParseDistributionPath(tt.url)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tt.url.String(), nil)
+			require.NoError(t, err)
+			_, err = ParseDistributionPath(req)
 			require.EqualError(t, err, tt.expectedError)
 		})
 	}

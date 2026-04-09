@@ -46,15 +46,12 @@ func (i Image) TagName() (string, bool) {
 }
 
 // DistributionPath returns the distribution path for the images top layer.
-func (i Image) DistributionPath() DistributionPath {
+func (i Image) DistributionPath(scheme, method string) (DistributionPath, error) {
 	ref := i.Reference
 	if ref.Digest != "" {
 		ref.Tag = ""
 	}
-	return DistributionPath{
-		Reference: ref,
-		Kind:      DistributionKindManifest,
-	}
+	return NewDistributionPath(ref, DistributionKindManifest, scheme, method, nil)
 }
 
 type ParseImageConfig struct {
