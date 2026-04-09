@@ -94,9 +94,9 @@ func TestClient(t *testing.T) {
 		Repository: img.Repository,
 		Digest:     blobs[0].Digest,
 	}
-	dist, err := NewDistributionPath(ref, DistributionKindBlob)
+	dist, err := NewDistributionPath(ref, DistributionKindBlob, "http", http.MethodHead, nil)
 	require.NoError(t, err)
-	desc, err := ociClient.Head(t.Context(), dist, WithFetchMirror(mirror))
+	_, desc, err := ociClient.Fetch(t.Context(), dist, WithFetchMirror(mirror))
 	require.NoError(t, err)
 	require.Equal(t, dist.Digest, desc.Digest)
 	require.Equal(t, httpx.ContentTypeBinary, desc.MediaType)

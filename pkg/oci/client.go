@@ -119,22 +119,17 @@ func WithPullPlatform(platform ocispec.Platform) PullOption {
 	}
 }
 
-type FetchConfig struct {
-	Range *httpx.Range
-	CommonConfig
-}
-
-type FetchOption = option.Option[FetchConfig]
+type FetchOption = option.Option[CommonConfig]
 
 func WithFetchMirror(mirror *url.URL) FetchOption {
-	return func(cfg *FetchConfig) error {
+	return func(cfg *CommonConfig) error {
 		cfg.Mirror = mirror
 		return nil
 	}
 }
 
 func WithFetchHeader(k, v string) FetchOption {
-	return func(cfg *FetchConfig) error {
+	return func(cfg *CommonConfig) error {
 		if cfg.Header == nil {
 			cfg.Header = http.Header{}
 		}
@@ -144,16 +139,9 @@ func WithFetchHeader(k, v string) FetchOption {
 }
 
 func WithFetchBasicAuth(username, password string) FetchOption {
-	return func(cfg *FetchConfig) error {
+	return func(cfg *CommonConfig) error {
 		cfg.Username = username
 		cfg.Password = password
-		return nil
-	}
-}
-
-func WithFetchRange(rng httpx.Range) FetchOption {
-	return func(cfg *FetchConfig) error {
-		cfg.Range = &rng
 		return nil
 	}
 }
@@ -173,22 +161,29 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 	if err != nil {
 		return nil, err
 	}
-	fetchOpt := func(fetchCfg *FetchConfig) error {
-		fetchCfg.CommonConfig = cfg.CommonConfig
+	fetchOpt := func(commonCfg *CommonConfig) error {
+		commonCfg.Mirror = cfg.Mirror
+		commonCfg.Header = cfg.Header
+		commonCfg.Username = cfg.Username
+		commonCfg.Password = cfg.Password
 		return nil
 	}
 
-	pullMetrics := []PullMetric{}
-	queue := []DistributionPath{
-		img.DistributionPath(),
+	imgDist, err := img.DistributionPath("http", http.MethodGet)
+	if err != nil {
+		return nil, err
 	}
+	queue := []DistributionPath{
+		imgDist,
+	}
+	pullMetrics := []PullMetric{}
 	for len(queue) > 0 {
 		dist := queue[0]
 		queue = queue[1:]
 
 		start := time.Now()
 		desc, err := func() (ocispec.Descriptor, error) {
-			rc, desc, err := c.Get(ctx, dist, fetchOpt)
+			rc, desc, err := c.Fetch(ctx, dist, fetchOpt)
 			if err != nil {
 				return ocispec.Descriptor{}, err
 			}
@@ -220,14 +215,16 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 						if !platforms.Only(cfg.Platform).Match(*m.Platform) {
 							continue
 						}
-						queue = append(queue, DistributionPath{
-							Kind: DistributionKindManifest,
-							Reference: Reference{
-								Registry:   dist.Registry,
-								Repository: dist.Repository,
-								Digest:     m.Digest,
-							},
-						})
+						nextRef := Reference{
+							Registry:   dist.Registry,
+							Repository: dist.Repository,
+							Digest:     m.Digest,
+						}
+						nextDist, err := NewDistributionPath(nextRef, DistributionKindManifest, dist.Scheme, http.MethodGet, nil)
+						if err != nil {
+							return ocispec.Descriptor{}, err
+						}
+						queue = append(queue, nextDist)
 					}
 				case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 					var manifest ocispec.Manifest
@@ -235,23 +232,27 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 					if err != nil {
 						return ocispec.Descriptor{}, err
 					}
-					queue = append(queue, DistributionPath{
-						Kind: DistributionKindBlob,
-						Reference: Reference{
+					nextRef := Reference{
+						Registry:   dist.Registry,
+						Repository: dist.Repository,
+						Digest:     manifest.Config.Digest,
+					}
+					nextDist, err := NewDistributionPath(nextRef, DistributionKindBlob, dist.Scheme, http.MethodGet, nil)
+					if err != nil {
+						return ocispec.Descriptor{}, err
+					}
+					queue = append(queue, nextDist)
+					for _, layer := range manifest.Layers {
+						nextRef := Reference{
 							Registry:   dist.Registry,
 							Repository: dist.Repository,
-							Digest:     manifest.Config.Digest,
-						},
-					})
-					for _, layer := range manifest.Layers {
-						queue = append(queue, DistributionPath{
-							Kind: DistributionKindBlob,
-							Reference: Reference{
-								Registry:   dist.Registry,
-								Repository: dist.Repository,
-								Digest:     layer.Digest,
-							},
-						})
+							Digest:     layer.Digest,
+						}
+						nextDist, err := NewDistributionPath(nextRef, DistributionKindBlob, dist.Scheme, http.MethodGet, nil)
+						if err != nil {
+							return ocispec.Descriptor{}, err
+						}
+						queue = append(queue, nextDist)
 					}
 				}
 			}
@@ -273,35 +274,15 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 	return pullMetrics, nil
 }
 
-func (c *Client) Head(ctx context.Context, dist DistributionPath, opts ...FetchOption) (ocispec.Descriptor, error) {
-	rc, desc, err := c.Fetch(ctx, http.MethodHead, dist, opts...)
-	if err != nil {
-		return ocispec.Descriptor{}, err
-	}
-	defer httpx.DrainAndClose(rc)
-	return desc, nil
-}
-
-func (c *Client) Get(ctx context.Context, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
-	rc, desc, err := c.Fetch(ctx, http.MethodGet, dist, opts...)
-	if err != nil {
+func (c *Client) Fetch(ctx context.Context, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
+	if err := dist.Validate(); err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}
-	return rc, desc, nil
-}
 
-func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
-	if method != http.MethodHead && method != http.MethodGet {
-		return nil, ocispec.Descriptor{}, errors.New("fetch only supports HEAD and GET requests")
-	}
-
-	cfg := FetchConfig{}
+	cfg := CommonConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
-	}
-	if dist.Kind == DistributionKindManifest && cfg.Range != nil {
-		return nil, ocispec.Descriptor{}, errors.New("cannot make range requests for manifests")
 	}
 
 	tcKey := dist.Registry + dist.Repository
@@ -319,7 +300,7 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 	var body io.ReadCloser
 	var desc ocispec.Descriptor
 	err = resilient.Retry(ctx, 2, resilient.NoDelay(), func(ctx context.Context) error {
-		req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
+		req, err := http.NewRequestWithContext(ctx, dist.Method, u.String(), nil)
 		if err != nil {
 			return resilient.Unrecoverable(err)
 		}
@@ -330,8 +311,8 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2Manifest)
 		req.Header.Add(httpx.HeaderAccept, ocispec.MediaTypeImageIndex)
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2ManifestList)
-		if cfg.Range != nil {
-			req.Header.Add(httpx.HeaderRange, cfg.Range.String())
+		if dist.Range != nil {
+			req.Header.Add(httpx.HeaderRange, dist.Range.String())
 		}
 		token, ok := c.tokenCache.Load(tcKey)
 		if ok {

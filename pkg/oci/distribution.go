@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
 
@@ -33,10 +34,13 @@ const (
 // DistributionPath contains the individual parameters from a OCI distribution spec request.
 type DistributionPath struct {
 	Reference
-	Kind DistributionKind
+	Range  *httpx.Range
+	Scheme string
+	Method string
+	Kind   DistributionKind
 }
 
-func NewDistributionPath(ref Reference, kind DistributionKind) (DistributionPath, error) {
+func NewDistributionPath(ref Reference, kind DistributionKind, scheme, method string, rng *httpx.Range) (DistributionPath, error) {
 	if err := ref.Validate(); err != nil {
 		return DistributionPath{}, err
 	}
@@ -49,12 +53,25 @@ func NewDistributionPath(ref Reference, kind DistributionKind) (DistributionPath
 	dist := DistributionPath{
 		Kind:      kind,
 		Reference: ref,
+		Scheme:    scheme,
+		Method:    method,
+		Range:     rng,
+	}
+	if err := dist.Validate(); err != nil {
+		return DistributionPath{}, err
 	}
 	return dist, nil
 }
 
-func (d DistributionPath) String() string {
-	return d.URL().String()
+// Validate returns an error if parameter combinations are incorrect.
+func (d DistributionPath) Validate() error {
+	if d.Method != http.MethodHead && d.Method != http.MethodGet {
+		return errors.New("fetch only supports HEAD and GET requests")
+	}
+	if d.Kind == DistributionKindManifest && d.Range != nil {
+		return errors.New("cannot make range requests for manifests")
+	}
+	return nil
 }
 
 // URL returns the reconstructed URL containing the path and query parameters.
@@ -64,7 +81,7 @@ func (d DistributionPath) URL() *url.URL {
 		ref = d.Tag
 	}
 	return &url.URL{
-		Scheme:   "https",
+		Scheme:   d.Scheme,
 		Host:     d.Registry,
 		Path:     fmt.Sprintf("/v2/%s/%s/%s", d.Repository, d.Kind, ref),
 		RawQuery: fmt.Sprintf("ns=%s", d.Registry),
@@ -74,9 +91,14 @@ func (d DistributionPath) URL() *url.URL {
 // ParseDistributionPath gets the parameters from a URL which conforms with the OCI distribution spec.
 // It returns a distribution path which contains all the individual parameters.
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md
-func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
-	registry := u.Query().Get("ns")
-	comps := manifestRegexTag.FindStringSubmatch(u.Path)
+func ParseDistributionPath(req *http.Request) (DistributionPath, error) {
+	scheme := "http"
+	if req.TLS != nil {
+		scheme = "https"
+	}
+
+	registry := req.URL.Query().Get("ns")
+	comps := manifestRegexTag.FindStringSubmatch(req.URL.Path)
 	if len(comps) == 3 {
 		if registry == "" {
 			return DistributionPath{}, errors.New("registry parameter needs to be set for tag references")
@@ -86,13 +108,13 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 			Repository: comps[1],
 			Tag:        comps[2],
 		}
-		dist, err := NewDistributionPath(ref, DistributionKindManifest)
+		dist, err := NewDistributionPath(ref, DistributionKindManifest, scheme, req.Method, nil)
 		if err != nil {
 			return DistributionPath{}, err
 		}
 		return dist, nil
 	}
-	comps = manifestRegexDigest.FindStringSubmatch(u.Path)
+	comps = manifestRegexDigest.FindStringSubmatch(req.URL.Path)
 	if len(comps) == 3 {
 		dgst, err := digest.Parse(comps[2])
 		if err != nil {
@@ -103,13 +125,13 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 			Repository: comps[1],
 			Digest:     dgst,
 		}
-		dist, err := NewDistributionPath(ref, DistributionKindManifest)
+		dist, err := NewDistributionPath(ref, DistributionKindManifest, scheme, req.Method, nil)
 		if err != nil {
 			return DistributionPath{}, err
 		}
 		return dist, nil
 	}
-	comps = blobsRegexDigest.FindStringSubmatch(u.Path)
+	comps = blobsRegexDigest.FindStringSubmatch(req.URL.Path)
 	if len(comps) == 3 {
 		dgst, err := digest.Parse(comps[2])
 		if err != nil {
@@ -120,7 +142,11 @@ func ParseDistributionPath(u *url.URL) (DistributionPath, error) {
 			Repository: comps[1],
 			Digest:     dgst,
 		}
-		dist, err := NewDistributionPath(ref, DistributionKindBlob)
+		rng, err := httpx.ParseRangeHeader(req.Header)
+		if err != nil {
+			return DistributionPath{}, err
+		}
+		dist, err := NewDistributionPath(ref, DistributionKindBlob, scheme, req.Method, rng)
 		if err != nil {
 			return DistributionPath{}, err
 		}
