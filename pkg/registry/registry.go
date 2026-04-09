@@ -18,6 +18,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/ptr"
 	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
@@ -252,6 +253,13 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		}
 	}()
 
+	// Range for initial request and to resume failed peer requests.
+	rng, err := httpx.ParseRangeHeader(req.Header)
+	if err != nil {
+		rw.WriteError(http.StatusBadRequest, err)
+		return
+	}
+
 	mirrorDetails := MirrorErrorDetails{
 		Attempts: 0,
 	}
@@ -268,9 +276,6 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 		return
 	}
-
-	// Resume range for when blobs fail midway through copying.
-	var resumeRng *httpx.Range
 
 	// Set timeout for non blob data requests.
 	fetchCtx := req.Context()
@@ -311,10 +316,8 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 				oci.WithFetchBasicAuth(r.username, r.password),
 			}
 			// Override range header with resume range if set.
-			if resumeRng != nil {
-				fetchOpts = append(fetchOpts, oci.WithFetchRange(*resumeRng))
-			} else if h := req.Header.Get(httpx.HeaderRange); h != "" {
-				fetchOpts = append(fetchOpts, oci.WithFetchHeader(httpx.HeaderRange, h))
+			if rng != nil {
+				fetchOpts = append(fetchOpts, oci.WithFetchRange(*rng))
 			}
 			rc, desc, err := r.ociClient.Fetch(fetchCtx, req.Method, dist, fetchOpts...)
 			if err != nil {
@@ -341,19 +344,18 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 			case oci.DistributionKindManifest:
 				rw.WriteHeader(http.StatusOK)
 			case oci.DistributionKindBlob:
-				rng, err := httpx.ParseRangeHeader(req.Header, desc.Size)
-				if err != nil {
-					return resilient.Unrecoverable(err)
-				}
-				resumeRng = rng
-
 				rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
 				if rng == nil {
 					rw.WriteHeader(http.StatusOK)
 				} else {
+					crng, err := httpx.ContentRangeFromRange(*rng, desc.Size)
+					if err != nil {
+						rw.WriteError(http.StatusBadRequest, err)
+						return resilient.Unrecoverable(err)
+					}
 					rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
-					rw.Header().Set(httpx.HeaderContentRange, httpx.ContentRangeFromRange(*rng, desc.Size).String())
-					rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(rng.Size(), 10))
+					rw.Header().Set(httpx.HeaderContentRange, crng.String())
+					rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(crng.Length(), 10))
 					rw.WriteHeader(http.StatusPartialContent)
 				}
 			}
@@ -371,12 +373,13 @@ func (r *Registry) mirrorHandler(rw httpx.ResponseWriter, req *http.Request, dis
 			case oci.DistributionKindManifest:
 				return resilient.Unrecoverable(fmt.Errorf("copying of manifest data failed: %w", err))
 			case oci.DistributionKindBlob:
-				if resumeRng == nil {
-					resumeRng = &httpx.Range{
-						End: desc.Size - 1,
+				if rng == nil {
+					rng = &httpx.Range{
+						Start: ptr.To(int64(0)),
+						End:   ptr.To(desc.Size - 1),
 					}
 				}
-				resumeRng.Start += n
+				rng.Start = ptr.To(*rng.Start + n)
 				balancer.Remove(peer)
 				return fmt.Errorf("copying of blob data failed: %w", err)
 			}
@@ -448,6 +451,12 @@ func (r *Registry) manifestHandler(rw httpx.ResponseWriter, req *http.Request, d
 func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist oci.DistributionPath) {
 	rw.SetAttrs(HandlerAttrKey, "blob")
 
+	rng, err := httpx.ParseRangeHeader(req.Header)
+	if err != nil {
+		rw.WriteError(http.StatusBadRequest, err)
+		return
+	}
+
 	desc, err := r.ociStore.Descriptor(req.Context(), dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get blob %s", dist.Digest), nil)
@@ -460,25 +469,29 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 		return
 	}
 
-	rng, err := httpx.ParseRangeHeader(req.Header, desc.Size)
-	if err != nil {
-		rw.WriteError(http.StatusBadRequest, err)
-		return
+	var crng *httpx.ContentRange
+	if rng != nil {
+		v, err := httpx.ContentRangeFromRange(*rng, desc.Size)
+		if err != nil {
+			rw.WriteError(http.StatusBadRequest, err)
+			return
+		}
+		crng = &v
 	}
 
 	rw.Header().Set(oci.HeaderDockerDigest, dist.Digest.String())
 	rw.Header().Set(oci.HeaderNamespace, dist.Registry)
 	rw.Header().Set(httpx.HeaderAcceptRanges, httpx.RangeUnit)
 	var status int
-	if rng == nil {
+	if crng == nil {
 		status = http.StatusOK
 		rw.Header().Set(httpx.HeaderContentType, desc.MediaType)
 		rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(desc.Size, 10))
 	} else {
 		status = http.StatusPartialContent
 		rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeBinary)
-		rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(rng.Size(), 10))
-		rw.Header().Set(httpx.HeaderContentRange, httpx.ContentRangeFromRange(*rng, desc.Size).String())
+		rw.Header().Set(httpx.HeaderContentLength, strconv.FormatInt(crng.Length(), 10))
+		rw.Header().Set(httpx.HeaderContentRange, crng.String())
 	}
 	if req.Method == http.MethodHead {
 		rw.WriteHeader(status)
@@ -493,13 +506,13 @@ func (r *Registry) blobHandler(rw httpx.ResponseWriter, req *http.Request, dist 
 	}
 	defer rc.Close()
 	var src io.Reader = rc
-	if rng != nil {
-		_, err := rc.Seek(rng.Start, io.SeekStart)
+	if crng != nil {
+		_, err := rc.Seek(crng.Start, io.SeekStart)
 		if err != nil {
 			rw.WriteError(http.StatusInternalServerError, err)
 			return
 		}
-		src = io.LimitReader(rc, rng.Size())
+		src = io.LimitReader(rc, crng.Length())
 	}
 	rw.WriteHeader(status)
 	_, err = io.Copy(rw, src)

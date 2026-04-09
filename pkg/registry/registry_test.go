@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/ptr"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
@@ -392,7 +393,7 @@ func TestRegistryHandler(t *testing.T) {
 			name:             "blob request with range",
 			key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
 			distributionKind: oci.DistributionKindBlob,
-			rng:              &httpx.Range{Start: 1, End: 3},
+			rng:              &httpx.Range{Start: ptr.To(int64(1)), End: ptr.To(int64(3))},
 			expectedStatus:   http.StatusPartialContent,
 			expectedBody:     []byte{0x8b, 0x8, 0x0},
 			expectedHeaders: http.Header{
@@ -433,7 +434,7 @@ func TestRegistryHandler(t *testing.T) {
 			name:             "flaky reader with range should return partial",
 			key:              "sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0",
 			distributionKind: oci.DistributionKindBlob,
-			rng:              &httpx.Range{Start: 2, End: 15},
+			rng:              &httpx.Range{Start: ptr.To(int64(2)), End: ptr.To(int64(15))},
 			expectedStatus:   http.StatusPartialContent,
 			expectedBody:     []byte("rem Ipsum Dolo"),
 			expectedHeaders: http.Header{
