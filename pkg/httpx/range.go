@@ -8,28 +8,21 @@ import (
 	"strings"
 )
 
+// Expected unit of range and content range headers.
 const RangeUnit = "bytes"
 
+// Range represents a range header.
+// Both start and end are optional to support parsing without known content size.
 type Range struct {
-	Start int64 `json:"start"`
-	End   int64 `json:"end"`
+	Start *int64 `json:"start"`
+	End   *int64 `json:"end"`
 }
 
-func (rng Range) String() string {
-	return fmt.Sprintf("%s=%d-%d", RangeUnit, rng.Start, rng.End)
-}
-
-func (rng Range) Size() int64 {
-	return rng.End - rng.Start + 1
-}
-
-func ParseRangeHeader(header http.Header, size int64) (*Range, error) {
+// ParseRangeHeader parses header according to RFC 9110.
+func ParseRangeHeader(header http.Header) (*Range, error) {
 	h := header.Get(HeaderRange)
 	if h == "" {
 		return nil, nil
-	}
-	if size <= 0 {
-		return nil, fmt.Errorf("size %d cannot be equal or less than zero", size)
 	}
 	rangeUnitPrefix := RangeUnit + "="
 	if !strings.HasPrefix(h, rangeUnitPrefix) {
@@ -44,66 +37,115 @@ func ParseRangeHeader(header http.Header, size int64) (*Range, error) {
 		return nil, errors.New("invalid range format")
 	}
 
-	// Suffix byte range
-	if parts[0] == "" {
-		suffixLen, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		if suffixLen <= 0 {
-			return nil, fmt.Errorf("invalid suffix range %d", suffixLen)
-		}
-		if suffixLen > size {
-			suffixLen = size
-		}
-		rng := Range{
-			Start: size - suffixLen,
-			End:   size - 1,
-		}
-		return &rng, nil
-	}
-
 	rng := Range{}
-	start, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	if start < 0 {
-		return nil, fmt.Errorf("invalid start %d", start)
-	}
-	rng.Start = start
-	if parts[1] == "" {
-		rng.End = size - 1
-	} else {
-		end, err := strconv.ParseInt(parts[1], 10, 64)
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		v, err := strconv.ParseInt(part, 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		if end >= size {
-			end = size - 1
+
+		switch i {
+		case 0:
+			rng.Start = &v
+		case 1:
+			rng.End = &v
 		}
-		rng.End = end
 	}
-	if rng.Start > rng.End {
-		return nil, fmt.Errorf("start %d cannot be larger than end %d", rng.Start, rng.End)
+	if err := rng.Validate(); err != nil {
+		return nil, err
 	}
 	return &rng, nil
 }
 
+// Validate checks the content of range.
+func (rng Range) Validate() error {
+	if rng.Start == nil && rng.End != nil && *rng.End <= 0 {
+		return fmt.Errorf("suffix range %d cannot be less than one", *rng.End)
+	}
+	if rng.Start != nil && *rng.Start < 0 {
+		return fmt.Errorf("start range %d cannot be less than zero", *rng.Start)
+	}
+	if rng.End != nil && *rng.End < 0 {
+		return fmt.Errorf("end range %d cannot be less than zero", *rng.End)
+	}
+	if rng.Start != nil && rng.End != nil && *rng.Start > *rng.End {
+		return fmt.Errorf("start %d cannot be larger than end %d", *rng.Start, *rng.End)
+	}
+	if rng.Start == nil && rng.End == nil {
+		return errors.New("start and end range cannot both be empty")
+	}
+	return nil
+}
+
+// String returns range content as formatted header value.
+func (rng Range) String() string {
+	switch {
+	case rng.Start == nil:
+		return fmt.Sprintf("%s=-%d", RangeUnit, *rng.End)
+	case rng.End == nil:
+		return fmt.Sprintf("%s=%d-", RangeUnit, *rng.Start)
+	default:
+		return fmt.Sprintf("%s=%d-%d", RangeUnit, *rng.Start, *rng.End)
+	}
+}
+
+// ContentRange represents a content range header.
 type ContentRange struct {
 	Start int64
 	End   int64
 	Size  int64
 }
 
-func ContentRangeFromRange(rng Range, size int64) ContentRange {
-	return ContentRange{
-		Start: rng.Start,
-		End:   rng.End,
+// ContentRangeFromRange returns a content range from a given range and content size.
+// Start and end are normalized based on the given size and verified to be within bounds.
+func ContentRangeFromRange(rng Range, size int64) (ContentRange, error) {
+	if size <= 0 {
+		return ContentRange{}, fmt.Errorf("size %d cannot be equal or less than zero", size)
+	}
+	if err := rng.Validate(); err != nil {
+		return ContentRange{}, err
+	}
+
+	// Suffix length range.
+	if rng.Start == nil {
+		suffixLen := min(*rng.End, size)
+		crng := ContentRange{
+			Start: size - suffixLen,
+			End:   size - 1,
+			Size:  size,
+		}
+		return crng, nil
+	}
+
+	// Offset with unknown size.
+	if rng.End == nil {
+		crng := ContentRange{
+			Start: *rng.Start,
+			End:   size - 1,
+			Size:  size,
+		}
+		return crng, nil
+	}
+
+	// Known start and end range.
+	crng := ContentRange{
+		Start: *rng.Start,
+		End:   min(*rng.End, size-1),
 		Size:  size,
 	}
+	return crng, nil
 }
 
+// String returns content range content as formatted header value.
 func (crng ContentRange) String() string {
 	return fmt.Sprintf("%s %d-%d/%d", RangeUnit, crng.Start, crng.End, crng.Size)
+}
+
+// Length returns the byte size of the content within the range.
+// This should not be confused with size which is the total size of the content.
+func (crng ContentRange) Length() int64 {
+	return crng.End - crng.Start + 1
 }
