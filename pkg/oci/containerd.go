@@ -391,7 +391,7 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 				return resilient.Unrecoverable(err)
 			}
 			return fmt.Errorf("manifest with digest %s still exists", img.Digest.String())
-		})
+		}, resilient.WithLastErrorOnly())
 		if err != nil {
 			return nil, fmt.Errorf("image manifest has not been deleted: %w", err)
 		}

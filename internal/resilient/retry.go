@@ -19,6 +19,12 @@ func Unrecoverable(err error) error {
 
 type DelayFunc func(attempt int, err error) time.Duration
 
+func NoDelay() DelayFunc {
+	return func(int, error) time.Duration {
+		return 0
+	}
+}
+
 func FixedDelay(delay time.Duration) DelayFunc {
 	return func(int, error) time.Duration {
 		return delay
@@ -38,7 +44,8 @@ func BackoffDelay(start, limit time.Duration) DelayFunc {
 type OnRetryFunc func(attempt int, err error)
 
 type RetryConfig struct {
-	OnRetry OnRetryFunc
+	OnRetry       OnRetryFunc
+	LastErrorOnly bool
 }
 
 type RetryOption = option.Option[RetryConfig]
@@ -46,6 +53,13 @@ type RetryOption = option.Option[RetryConfig]
 func WithOnRetry(onRetry OnRetryFunc) RetryOption {
 	return func(cfg *RetryConfig) error {
 		cfg.OnRetry = onRetry
+		return nil
+	}
+}
+
+func WithLastErrorOnly() RetryOption {
+	return func(cfg *RetryConfig) error {
+		cfg.LastErrorOnly = true
 		return nil
 	}
 }
@@ -120,5 +134,9 @@ func RetryValue[T any](ctx context.Context, attempts int, delay DelayFunc, fn fu
 			cfg.OnRetry(len(errs), err)
 		}
 	}
-	return zeroT, errs[len(errs)-1]
+
+	if cfg.LastErrorOnly {
+		return zeroT, errs[len(errs)-1]
+	}
+	return zeroT, errors.Join(errs...)
 }

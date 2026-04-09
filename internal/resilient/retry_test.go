@@ -62,7 +62,7 @@ func TestRetry(t *testing.T) {
 	err = Retry(t.Context(), 3, delay, func(ctx context.Context) error {
 		return expected
 	})
-	require.ErrorIs(t, expected, err)
+	require.EqualError(t, err, "fail\nfail\nfail")
 
 	expected = errors.New("unrecoverable")
 	i := 0
@@ -73,7 +73,7 @@ func TestRetry(t *testing.T) {
 		i += 1
 		return errors.New("retry error")
 	})
-	require.ErrorIs(t, expected, err)
+	require.EqualError(t, err, "retry error\nretry error\nretry error\nunrecoverable")
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

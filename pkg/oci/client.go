@@ -22,6 +22,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
@@ -315,10 +316,12 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 		u.Host = "registry-1.docker.io"
 	}
 
-	for range 2 {
+	var body io.ReadCloser
+	var desc ocispec.Descriptor
+	err = resilient.Retry(ctx, 2, resilient.NoDelay(), func(ctx context.Context) error {
 		req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
 		if err != nil {
-			return nil, ocispec.Descriptor{}, err
+			return resilient.Unrecoverable(err)
 		}
 		httpx.CopyHeader(req.Header, cfg.Header)
 		req.SetBasicAuth(cfg.Username, cfg.Password)
@@ -337,22 +340,22 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 		}
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			return nil, ocispec.Descriptor{}, err
+			return resilient.Unrecoverable(err)
 		}
 		if resp.StatusCode == http.StatusUnauthorized {
 			c.tokenCache.Delete(tcKey)
 			wwwAuth := resp.Header.Get(httpx.HeaderWWWAuthenticate)
 			token, err = getBearerToken(ctx, c.httpClient, dist.Repository, wwwAuth)
 			if err != nil {
-				return nil, ocispec.Descriptor{}, err
+				return resilient.Unrecoverable(err)
 			}
 			c.tokenCache.Store(tcKey, token)
-			continue
+			return errors.New("token refresh")
 		}
 		err = httpx.CheckResponseStatus(resp, http.StatusOK, http.StatusPartialContent)
 		if err != nil {
 			httpx.DrainAndClose(resp.Body)
-			return nil, ocispec.Descriptor{}, err
+			return resilient.Unrecoverable(err)
 		}
 
 		// Handle optional headers for blobs.
@@ -366,14 +369,18 @@ func (c *Client) Fetch(ctx context.Context, method string, dist DistributionPath
 			}
 		}
 
-		desc, err := DescriptorFromHeader(header)
+		desc, err = DescriptorFromHeader(header)
 		if err != nil {
 			httpx.DrainAndClose(resp.Body)
-			return nil, ocispec.Descriptor{}, err
+			return resilient.Unrecoverable(err)
 		}
-		return resp.Body, desc, nil
+		body = resp.Body
+		return nil
+	})
+	if err != nil {
+		return nil, ocispec.Descriptor{}, err
 	}
-	return nil, ocispec.Descriptor{}, errors.New("could not perform request")
+	return body, desc, nil
 }
 
 func getBearerToken(ctx context.Context, client *http.Client, repository, wwwAuth string) (string, error) {
