@@ -227,6 +227,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 					resilient.WithOnRetry(func(attempt int, err error) {
 						log.Error(err, "failed to run bootstrap", "attempts", attempt+1)
 					}),
+					resilient.WithLastErrorOnly(),
 				}
 				err := resilient.Retry(gCtx, 0, resilient.BackoffDelay(50*time.Millisecond, 10*time.Second), func(ctx context.Context) error {
 					if !r.connectivityGate.IsOpen() {
