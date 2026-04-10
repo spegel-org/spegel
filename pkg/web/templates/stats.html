@@ -35,7 +35,7 @@
         </tr>
         {{ range .Peers }}
         <tr>
-          <td>{{ .ID }}</td>
+          <td>{{ .Host }}</td>
           <td>{{ join .Addresses ", " }}</td>
         </tr>
         {{ end }}

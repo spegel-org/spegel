@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -70,7 +69,7 @@ func NewWeb(router *routing.P2PRouter, ociStore oci.Store, reg *registry.Registr
 	}
 
 	funcs := template.FuncMap{
-		"join":           strings.Join,
+		"join":           joinStrings,
 		"formatBytes":    formatBytes,
 		"formatDuration": formatDuration,
 	}
@@ -99,11 +98,7 @@ func (w *Web) Handler(log logr.Logger) http.Handler {
 }
 
 func (w *Web) indexHandler(rw httpx.ResponseWriter, req *http.Request) {
-	err := w.tmpls.ExecuteTemplate(rw, "index.html", nil)
-	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, err)
-		return
-	}
+	httpx.RenderTemplate(rw, w.tmpls.Lookup("index.html"), nil)
 }
 
 type LibP2P struct {
@@ -128,13 +123,15 @@ func (w *Web) metaDataHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 }
 
+type statsData struct {
+	LocalAddresses    []netip.Addr
+	Images            []oci.Image
+	Peers             []routing.Peer
+	MirrorLastSuccess time.Duration
+}
+
 func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
-	data := struct {
-		LocalAddresses    []netip.Addr
-		Images            []oci.Image
-		Peers             []routing.Peer
-		MirrorLastSuccess time.Duration
-	}{}
+	data := statsData{}
 
 	images, err := w.ociStore.ListImages(req.Context())
 	if err != nil {
@@ -167,11 +164,7 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 	data.Peers = peers
 
-	err = w.tmpls.ExecuteTemplate(rw, "stats.html", data)
-	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, err)
-		return
-	}
+	httpx.RenderTemplate(rw, w.tmpls.Lookup("stats.html"), data)
 }
 
 type measureResult struct {
@@ -254,9 +247,5 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	err = w.tmpls.ExecuteTemplate(rw, "measure.html", res)
-	if err != nil {
-		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
-		return
-	}
+	httpx.RenderTemplate(rw, w.tmpls.Lookup("measure.html"), res)
 }

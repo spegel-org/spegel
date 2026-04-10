@@ -19,20 +19,17 @@ func TestResponseWriter(t *testing.T) {
 	_, ok := httpRw.(io.ReaderFrom)
 	require.True(t, ok)
 
-	httpRw = httptest.NewRecorder()
-	rw := &response{
-		ResponseWriter: httpRw,
-	}
-	require.Equal(t, httpRw, rw.Unwrap())
+	rw, rec := NewRecorder()
+	//nolint: errcheck // No need to check unwrap.
+	require.Equal(t, rec, rw.(*response).Unwrap())
 	require.NoError(t, rw.Error())
 	require.Equal(t, int64(0), rw.Size())
 	require.Equal(t, http.StatusOK, rw.Status())
 
-	rw = &response{
-		ResponseWriter: httptest.NewRecorder(),
-	}
+	rw, _ = NewRecorder()
 	rw.WriteHeader(http.StatusNotFound)
-	require.True(t, rw.wroteHeader)
+	//nolint: errcheck // No need to check unwrap.
+	require.True(t, rw.(*response).wroteHeader)
 	require.Equal(t, http.StatusNotFound, rw.Status())
 	rw.WriteHeader(http.StatusBadGateway)
 	require.Equal(t, http.StatusNotFound, rw.Status())
@@ -40,9 +37,7 @@ func TestResponseWriter(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, rw.Status())
 
-	rw = &response{
-		ResponseWriter: httptest.NewRecorder(),
-	}
+	rw, _ = NewRecorder()
 	first := "hello world"
 	n, err := rw.Write([]byte(first))
 	require.Equal(t, http.StatusOK, rw.Status())
@@ -55,20 +50,18 @@ func TestResponseWriter(t *testing.T) {
 	require.Equal(t, len(second), n)
 	require.Equal(t, int64(len(first)+len(second)), rw.Size())
 
-	rw = &response{
-		ResponseWriter: httptest.NewRecorder(),
-	}
+	rw, _ = NewRecorder()
 	r := strings.NewReader("reader")
-	readFromN, err := rw.ReadFrom(r)
+	//nolint: errcheck // No need to check unwrap.
+	readFromN, err := rw.(*response).ReadFrom(r)
 	require.NoError(t, err)
 	require.Equal(t, r.Size(), readFromN)
 	require.Equal(t, r.Size(), rw.Size())
 
-	rw = &response{
-		ResponseWriter: httptest.NewRecorder(),
-	}
+	rw, _ = NewRecorder()
 	rw.SetAttrs("foo", "bar")
-	require.Equal(t, map[string]any{"foo": "bar"}, rw.attrs)
+	//nolint: errcheck // No need to check unwrap.
+	require.Equal(t, map[string]any{"foo": "bar"}, rw.(*response).attrs)
 }
 
 func TestResponseWriterError(t *testing.T) {
