@@ -346,6 +346,43 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer
 	return bal.(Balancer), nil
 }
 
+type LookupResult struct {
+	Peer     Peer
+	Duration time.Duration
+}
+
+// Measure returns a list of time results containing the time it took to find each peer.
+func (r *P2PRouter) Measure(ctx context.Context, key string) ([]LookupResult, error) {
+	c, err := createCid(key)
+	if err != nil {
+		return nil, err
+	}
+
+	addrInfoCh := r.kdht.FindProvidersAsync(ctx, c, 0)
+
+	lookupStart := time.Now()
+	results := []LookupResult{}
+	for addrInfo := range addrInfoCh {
+		d := time.Since(lookupStart)
+		ipAddrs, err := toIPAddrs(addrInfo.Addrs)
+		if err != nil {
+			return nil, err
+		}
+		res := LookupResult{
+			Peer: Peer{
+				Host:      addrInfo.ID.String(),
+				Addresses: ipAddrs,
+				Metadata: PeerMetadata{
+					RegistryPort: r.registryPort,
+				},
+			},
+			Duration: d,
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
 func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 	if len(keys) == 0 {
 		return nil

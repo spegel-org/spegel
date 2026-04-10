@@ -68,7 +68,7 @@ func TestWeb(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	measure := measureResult{
-		LookupResults: []lookupResult{{}},
+		LookupResults: []routing.LookupResult{{}},
 		PullResults:   []pullResult{{}},
 	}
 	rw, rec = httpx.NewRecorder()

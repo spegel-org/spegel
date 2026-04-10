@@ -167,24 +167,19 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	httpx.RenderTemplate(rw, w.tmpls.Lookup("stats.html"), data)
 }
 
-type measureResult struct {
-	LookupResults []lookupResult
-	PullResults   []pullResult
-	PeerDuration  time.Duration
-	PullDuration  time.Duration
-	PullSize      int64
-}
-
-type lookupResult struct {
-	Peer     routing.Peer
-	Duration time.Duration
-}
-
 type pullResult struct {
 	Identifier string
 	Type       string
 	Size       int64
 	Duration   time.Duration
+}
+
+type measureResult struct {
+	LookupResults []routing.LookupResult
+	PullResults   []pullResult
+	PeerDuration  time.Duration
+	PullDuration  time.Duration
+	PullSize      int64
 }
 
 func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
@@ -201,32 +196,13 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 
 	res := measureResult{}
-
-	// Lookup peers for the given image.
-	lookupStart := time.Now()
-	lookupCtx, lookupCancel := context.WithTimeout(req.Context(), 1*time.Second)
+	lookupCtx, lookupCancel := context.WithTimeout(req.Context(), 3*time.Second)
 	defer lookupCancel()
-	rr, err := w.router.Lookup(lookupCtx, img.Identifier(), 0)
+	lookupRes, err := w.router.Measure(lookupCtx, img.Identifier())
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
-		return
 	}
-	for {
-		peer, err := rr.Next()
-		if err != nil {
-			break
-		}
-
-		// TODO(phillebaba): This isnt a great solution as removing the peers will affect caching.
-		rr.Remove(peer)
-
-		d := time.Since(lookupStart)
-		res.PeerDuration += d
-		res.LookupResults = append(res.LookupResults, lookupResult{
-			Peer:     peer,
-			Duration: d,
-		})
-	}
+	res.LookupResults = lookupRes
 
 	if len(res.LookupResults) > 0 {
 		// Pull the image and measure performance.
