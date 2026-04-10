@@ -34,8 +34,6 @@ func HappyEyeballs[T any](ctx context.Context, ipAddrs []netip.Addr, cb HappyEye
 	raceCancels := []context.CancelFunc{}
 	for range ipAddrs {
 		raceCtx, raceCancel := context.WithCancel(ctx)
-		//nolint: gocritic // Close all on return.
-		defer raceCancel()
 		raceCtxs = append(raceCtxs, raceCtx)
 		raceCancels = append(raceCancels, raceCancel)
 	}

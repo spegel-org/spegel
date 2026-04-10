@@ -253,6 +253,14 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 		}
 	}()
 
+	// Set timeout for non blob data requests.
+	fetchCtx := ctx
+	if dist.Method == http.MethodHead || dist.Kind == oci.DistributionKindManifest {
+		var fetchCancel context.CancelFunc
+		fetchCtx, fetchCancel = context.WithTimeout(ctx, 3*time.Second)
+		defer fetchCancel()
+	}
+
 	mirrorDetails := MirrorErrorDetails{
 		Attempts: 0,
 	}
@@ -261,21 +269,11 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 		oci.DistributionKindManifest: oci.ErrCodeManifestUnknown,
 	}[dist.Kind]
 
-	lookupCtx, lookupCancel := context.WithTimeout(ctx, r.resolveTimeout)
-	defer lookupCancel()
-	balancer, err := r.router.Lookup(lookupCtx, dist.Identifier(), r.resolveRetries)
+	iter, err := r.router.Lookup(fetchCtx, dist.Identifier(), r.resolveRetries)
 	if err != nil {
 		respErr := oci.NewDistributionError(errCode, fmt.Sprintf("lookup failed for %s", dist.Identifier()), mirrorDetails)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
 		return
-	}
-
-	// Set timeout for non blob data requests.
-	fetchCtx := ctx
-	if dist.Method == http.MethodHead || dist.Kind == oci.DistributionKindManifest {
-		var reqCancel context.CancelFunc
-		fetchCtx, reqCancel = context.WithTimeout(ctx, 3*time.Second)
-		defer reqCancel()
 	}
 
 	retryOpts := []resilient.RetryOption{
@@ -283,10 +281,20 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 			log.Error(err, "retrying mirror request", "attempt", attempt)
 		}),
 	}
-	err = resilient.Retry(fetchCtx, r.resolveRetries, resilient.FixedDelay(0), func(ctx context.Context) error {
-		peer, err := balancer.Next()
-		if err != nil {
-			return resilient.Unrecoverable(err)
+	err = resilient.Retry(fetchCtx, 0, resilient.NoDelay(), func(ctx context.Context) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-iter.Exhausted():
+			return resilient.Unrecoverable(errors.New("iterator has become exhausted"))
+		case <-time.After(r.resolveTimeout):
+			return resilient.Unrecoverable(errors.New("waited too long for new peer"))
+		case <-iter.Ready():
+		}
+
+		peer, ok := iter.Acquire()
+		if !ok {
+			return errors.New("could not acquire peer")
 		}
 
 		mirrorDetails.Attempts += 1
@@ -295,17 +303,17 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 			rc   io.ReadCloser
 			desc ocispec.Descriptor
 		}
-		res, err := httpx.HappyEyeballs(fetchCtx, peer.Addresses, func(ctx context.Context, ipAddr netip.Addr) (fetchResult, error) {
+		res, err := httpx.HappyEyeballs(ctx, peer.Addresses, func(ctx context.Context, ipAddr netip.Addr) (fetchResult, error) {
 			mirror := &url.URL{
 				Scheme: dist.Scheme,
-				Host:   netip.AddrPortFrom(peer.Addresses[0], peer.Metadata.RegistryPort).String(),
+				Host:   netip.AddrPortFrom(ipAddr, peer.Metadata.RegistryPort).String(),
 			}
 			fetchOpts := []oci.FetchOption{
 				oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
 				oci.WithFetchMirror(mirror),
 				oci.WithFetchBasicAuth(r.username, r.password),
 			}
-			rc, desc, err := r.ociClient.Fetch(fetchCtx, dist, fetchOpts...)
+			rc, desc, err := r.ociClient.Fetch(ctx, dist, fetchOpts...)
 			if err != nil {
 				return fetchResult{}, err
 			}
@@ -316,15 +324,15 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 			return res, nil
 		})
 		if err != nil {
-			balancer.Remove(peer)
+			iter.Remove(peer)
 			return fmt.Errorf("request to mirror failed: %w", err)
 		}
-		desc := res.desc
-		rc := res.rc
-		defer httpx.DrainAndClose(rc)
 
+		iter.Release(peer)
+
+		defer httpx.DrainAndClose(res.rc)
 		if !rw.HeadersWritten() {
-			oci.WriteDescriptorToHeader(desc, rw.Header())
+			oci.WriteDescriptorToHeader(res.desc, rw.Header())
 
 			switch dist.Kind {
 			case oci.DistributionKindManifest:
@@ -334,7 +342,7 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 				if dist.Range == nil {
 					rw.WriteHeader(http.StatusOK)
 				} else {
-					crng, err := httpx.ContentRangeFromRange(*dist.Range, desc.Size)
+					crng, err := httpx.ContentRangeFromRange(*dist.Range, res.desc.Size)
 					if err != nil {
 						rw.WriteError(http.StatusBadRequest, err)
 						return resilient.Unrecoverable(err)
@@ -353,8 +361,10 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 		//nolint: errcheck // Ignore
 		buf := r.bufferPool.Get().(*[]byte)
 		defer r.bufferPool.Put(buf)
-		n, err := io.CopyBuffer(rw, rc, *buf)
+		n, err := io.CopyBuffer(rw, res.rc, *buf)
 		if err != nil {
+			iter.Remove(peer)
+
 			switch dist.Kind {
 			case oci.DistributionKindManifest:
 				return resilient.Unrecoverable(fmt.Errorf("copying of manifest data failed: %w", err))
@@ -363,11 +373,10 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 				if dist.Range == nil {
 					dist.Range = &httpx.Range{
 						Start: ptr.To(int64(0)),
-						End:   ptr.To(desc.Size - 1),
+						End:   ptr.To(res.desc.Size - 1),
 					}
 				}
 				dist.Range.Start = ptr.To(*dist.Range.Start + n)
-				balancer.Remove(peer)
 				return fmt.Errorf("copying of blob data failed: %w", err)
 			}
 		}

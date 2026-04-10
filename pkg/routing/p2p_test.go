@@ -80,10 +80,11 @@ func TestP2PRouter(t *testing.T) {
 	require.Equal(t, primaryRouter.host.ID(), addrInfos[0].ID)
 
 	// Lookup local key should not return self when offline.
-	bal, err := primaryRouter.Lookup(t.Context(), advertisedKey, 3)
+	iter, err := primaryRouter.Lookup(t.Context(), advertisedKey, 3)
 	require.NoError(t, err)
-	_, err = bal.Next()
-	require.ErrorIs(t, err, ErrNoNext)
+	<-iter.Exhausted()
+	_, ok := iter.Acquire()
+	require.False(t, ok)
 
 	// Create routers that all bootstrap with the primary router.
 	routers := []*P2PRouter{}
@@ -111,29 +112,35 @@ func TestP2PRouter(t *testing.T) {
 			require.True(c, ready)
 		}
 	}, 10*time.Second, time.Second)
-	require.Equal(t, 30, primaryRouter.kdht.RoutingTable().Size())
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Equal(c, 30, primaryRouter.kdht.RoutingTable().Size())
+	}, 3*time.Second, 100*time.Millisecond)
 
 	// Lookup should not return self when online.
-	bal, err = primaryRouter.Lookup(t.Context(), advertisedKey, 3)
+	iter, err = primaryRouter.Lookup(t.Context(), advertisedKey, 3)
 	require.NoError(t, err)
-	_, err = bal.Next()
-	require.ErrorIs(t, err, ErrNoNext)
+	<-iter.Exhausted()
+	_, ok = iter.Acquire()
+	require.False(t, ok)
 
 	// Advertised keys should be found.
 	for _, r := range routers {
-		bal, err = r.Lookup(t.Context(), advertisedKey, 3)
+		iter, err = r.Lookup(t.Context(), advertisedKey, 3)
 		require.NoError(t, err)
-		peer, err := bal.Next()
-		require.NoError(t, err)
+		<-iter.Ready()
+		peer, ok := iter.Acquire()
+		require.True(t, ok)
+		iter.Release(peer)
 		require.Equal(t, primaryRouter.host.ID().String(), peer.Host)
 		primaryIPAddrs, err := toIPAddrs(primaryRouter.host.Addrs())
 		require.NoError(t, err)
 		require.ElementsMatch(t, primaryIPAddrs, peer.Addresses)
 
-		bal, err = r.Lookup(t.Context(), "wont find key", 3)
+		iter, err = r.Lookup(t.Context(), "wont find key", 3)
 		require.NoError(t, err)
-		_, err = bal.Next()
-		require.ErrorIs(t, err, ErrNoNext)
+		<-iter.Exhausted()
+		_, ok = iter.Acquire()
+		require.False(t, ok)
 	}
 
 	// Advertise key from another router and lookup.
@@ -146,10 +153,12 @@ func TestP2PRouter(t *testing.T) {
 		require.Equal(c, int64(1), lastRouter.prov.Stats().Operations.Past.KeysProvided)
 	}, 5*time.Second, 1*time.Second)
 
-	bal, err = primaryRouter.Lookup(t.Context(), newKey, 3)
+	iter, err = primaryRouter.Lookup(t.Context(), newKey, 3)
 	require.NoError(t, err)
-	peer, err := bal.Next()
-	require.NoError(t, err)
+	<-iter.Ready()
+	peer, ok := iter.Acquire()
+	require.True(t, ok)
+	iter.Release(peer)
 	require.Equal(t, lastRouter.host.ID().String(), peer.Host)
 	lastIPAddrs, err := toIPAddrs(lastRouter.host.Addrs())
 	require.NoError(t, err)
@@ -192,20 +201,22 @@ func TestProvideTTL(t *testing.T) {
 
 	// Do lookup immediately which should be found.
 	for _, router := range routers[1:] {
-		bal, err := router.Lookup(t.Context(), "foo", 1)
+		iter, err := router.Lookup(t.Context(), "foo", 1)
 		require.NoError(t, err)
-		_, err = bal.Next()
-		require.NoError(t, err)
+		<-iter.Ready()
+		_, ok := iter.Acquire()
+		require.True(t, ok)
 	}
 
 	// Wait past TTL and expect content to not be found.
 	time.Sleep(10 * time.Second)
 
 	for _, router := range routers[1:] {
-		bal, err := router.Lookup(t.Context(), "foo", 1)
+		iter, err := router.Lookup(t.Context(), "foo", 1)
 		require.NoError(t, err)
-		_, err = bal.Next()
-		require.ErrorIs(t, err, ErrNoNext)
+		<-iter.Exhausted()
+		_, ok := iter.Acquire()
+		require.False(t, ok)
 	}
 
 	runCancel()
