@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 )
 
@@ -142,4 +143,13 @@ func (r *response) SetAttrs(key string, value any) {
 
 func (r *response) HeadersWritten() bool {
 	return r.wroteHeader
+}
+
+// NewRecorder returns a response writer using a recorder along with the recorder.
+func NewRecorder() (ResponseWriter, *httptest.ResponseRecorder) {
+	rec := httptest.NewRecorder()
+	rw := &response{
+		ResponseWriter: rec,
+	}
+	return rw, rec
 }

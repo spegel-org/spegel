@@ -2,9 +2,30 @@ package web
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 )
+
+func joinStrings(items any, sep string) (string, error) {
+	v := reflect.ValueOf(items)
+	if v.Kind() != reflect.Slice {
+		return "", fmt.Errorf("expected a slice, got %T", items)
+	}
+	strs := make([]string, v.Len())
+	for i := range v.Len() {
+		elem := v.Index(i).Interface()
+		switch e := elem.(type) {
+		case fmt.Stringer:
+			strs[i] = e.String()
+		case string:
+			strs[i] = e
+		default:
+			strs[i] = fmt.Sprint(e)
+		}
+	}
+	return strings.Join(strs, sep), nil
+}
 
 func formatBytes(size int64) string {
 	const unit = 1024
