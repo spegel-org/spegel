@@ -31,12 +31,12 @@ func TestMemoryRouter(t *testing.T) {
 		},
 	}
 	r.Add("foo", addPeer)
-	rr, err := r.Lookup(t.Context(), "foo", 2)
+	iter, err := r.Lookup(t.Context(), "foo", 2)
 	require.NoError(t, err)
 	peers := []Peer{}
 	for range 2 {
-		peer, err := rr.Next()
-		require.NoError(t, err)
+		peer, ok := iter.Acquire()
+		require.True(t, ok)
 		peers = append(peers, peer)
 	}
 
@@ -45,10 +45,10 @@ func TestMemoryRouter(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, peers, 2)
 
-	rr, err = r.Lookup(t.Context(), "bar", 1)
+	iter, err = r.Lookup(t.Context(), "bar", 1)
 	require.NoError(t, err)
-	_, err = rr.Next()
-	require.ErrorIs(t, err, ErrNoNext)
+	_, ok = iter.Acquire()
+	require.False(t, ok)
 	_, ok = r.Get("bar")
 	require.False(t, ok)
 }

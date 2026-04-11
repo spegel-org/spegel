@@ -33,20 +33,19 @@ func (m *MemoryRouter) Ready(ctx context.Context) (bool, error) {
 	return m.ready.Load(), nil
 }
 
-func (m *MemoryRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) {
+func (m *MemoryRouter) Lookup(ctx context.Context, key string, count int) (*Iterator, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
+	iterator := NewIterator()
 	peers, ok := m.resolver[key]
-	if !ok {
-		return &RoundRobin{}, nil
+	if ok {
+		for _, peer := range peers {
+			iterator.Add(peer)
+		}
 	}
-
-	rr := NewRoundRobin()
-	for _, peer := range peers {
-		rr.Add(peer)
-	}
-	return rr, nil
+	iterator.Close()
+	return iterator, nil
 }
 
 func (m *MemoryRouter) Advertise(ctx context.Context, keys []string) error {

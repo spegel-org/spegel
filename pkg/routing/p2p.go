@@ -44,6 +44,10 @@ import (
 	"github.com/spegel-org/spegel/pkg/metrics"
 )
 
+const (
+	lookupCacheTTL = 5 * time.Second
+)
+
 type P2PRouterConfig struct {
 	DataDir           string
 	Libp2pOpts        []libp2p.Option
@@ -88,8 +92,8 @@ type P2PRouter struct {
 	host             host.Host
 	kdht             *dht.IpfsDHT
 	prov             *provider.SweepingProvider
-	balancerGroup    *singleflight.Group
-	balancerCache    *expirable.LRU[string, *ClosableBalancer]
+	lookupGroup      *singleflight.Group
+	lookupCache      *expirable.LRU[string, *Iterator]
 	connectivityGate *channel.Gate
 	protocols        []ma.Multiaddr
 	registryPort     uint16
@@ -192,8 +196,8 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		host:             host,
 		kdht:             kdht,
 		prov:             prov,
-		balancerGroup:    &singleflight.Group{},
-		balancerCache:    expirable.NewLRU[string, *ClosableBalancer](0, nil, 5*time.Second),
+		lookupGroup:      &singleflight.Group{},
+		lookupCache:      expirable.NewLRU[string, *Iterator](0, nil, lookupCacheTTL),
 		connectivityGate: connectivityGate,
 		protocols:        protocols,
 		registryPort:     uint16(registryPort),
@@ -279,39 +283,31 @@ func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
 	return !r.connectivityGate.IsOpen(), nil
 }
 
-func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer, error) {
+func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (*Iterator, error) {
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
 	}
 
-	bal, err, _ := r.balancerGroup.Do(c.String(), func() (any, error) {
-		cb, ok := r.balancerCache.Get(c.String())
-		if !ok {
-			cb = NewClosableBalancer(NewRoundRobin())
-			r.balancerCache.Add(c.String(), cb)
-		}
-
+	res, err, _ := r.lookupGroup.Do(c.String(), func() (any, error) {
+		iter, ok := r.lookupCache.Get(c.String())
 		if ok {
-			// If not closed it means query is still running.
-			if cb.closeCtx.Err() == nil {
-				return cb, nil
-			}
-			// Don't refresh if min count is already met.
-			if count > 0 && cb.Size() >= count {
-				cb.Close()
-				return cb, nil
+			// Do not refresh if recently run or count is already met.
+			if iter.TimeSinceUpdate() < lookupCacheTTL/2 || iter.Count() >= count {
+				return iter, nil
 			}
 
-			// If we are running a refresh query we ant a new closer.
-			cb = NewClosableBalancer(cb.Balancer)
-			r.balancerCache.Add(c.String(), cb)
+			// Open iterator to run refresh.
+			iter.Open()
+		} else {
+			iter = NewIterator()
+			r.lookupCache.Add(c.String(), iter)
 		}
 
 		addrInfoCh := r.kdht.FindProvidersAsync(ctx, c, count)
 		go func() {
-			defer cb.Close()
+			defer iter.Close()
 
 			lookupTimer := prometheus.NewTimer(metrics.ResolveDurHistogram.WithLabelValues("libp2p"))
 			for addrInfo := range addrInfoCh {
@@ -334,16 +330,16 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (Balancer
 						RegistryPort: r.registryPort,
 					},
 				}
-				cb.Add(peer)
+				iter.Add(peer)
 			}
 		}()
-		return cb, nil
+		return iter, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	//nolint: errcheck // Impossible to be another type other than Balancer.
-	return bal.(Balancer), nil
+	//nolint: errcheck // Impossible to be another type.
+	return res.(*Iterator), nil
 }
 
 type LookupResult struct {
