@@ -405,11 +405,11 @@ func TestRegistryHandler(t *testing.T) {
 			},
 		},
 		{
-			name:             "flaky reader with one peers should fail",
+			name:             "flaky reader with one peer should keep retrying",
 			key:              "sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd",
 			distributionKind: oci.DistributionKindBlob,
 			expectedStatus:   http.StatusOK,
-			expectedBody:     []byte("Only a "),
+			expectedBody:     []byte("Only a single peer"),
 			expectedHeaders: http.Header{
 				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
 				httpx.HeaderContentType:   {"dummy"},

@@ -363,8 +363,6 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 		defer r.bufferPool.Put(buf)
 		n, err := io.CopyBuffer(rw, res.rc, *buf)
 		if err != nil {
-			iter.Remove(peer)
-
 			switch dist.Kind {
 			case oci.DistributionKindManifest:
 				return resilient.Unrecoverable(fmt.Errorf("copying of manifest data failed: %w", err))
