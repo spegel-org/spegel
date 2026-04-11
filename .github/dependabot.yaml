@@ -7,20 +7,31 @@ updates:
     open-pull-requests-limit: 20
     labels:
       - "changelog/ignore"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
   - package-ecosystem: "gomod"
     directories:
       - "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 20
+    labels:
+      - "changelog/dependencies"
+    ignore:
+      - dependency-name: "github.com/libp2p/go-libp2p"
+        versions: ["v6.0.23+incompatible"]
+  - package-ecosystem: "gomod"
+    directories:
       - "/test/integration/containerd"
       - "/test/integration/kubernetes"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 20
     labels:
-      - "changelog/dependencies"
+      - "changelog/ignore"
     groups:
-      k8s:
+      all-dependencies:
         patterns:
-          - "k8s.io/*"
-    ignore:
-      - dependency-name: "github.com/libp2p/go-libp2p"
-        versions: ["v6.0.23+incompatible"]
+          - "*"
