@@ -69,6 +69,9 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | spegel.mirrorResolveRetries | int | `3` | Max amount of mirrors to attempt. |
 | spegel.mirrorResolveTimeout | string | `"20ms"` | Max duration spent finding a mirror. |
 | spegel.mirroredRegistries | list | `[]` | Registries for which mirror configuration will be created. Empty means all registires will be mirrored. |
+| spegel.persistence.enabled | bool | `true` | If true Spegel will persist data on the host. |
+| spegel.persistence.hostPath | string | `"/var/lib/spegel"` | Path on host which is mounted to container. |
+| spegel.persistence.path | string | `"/var/lib/spegel"` | Path in the container where host path is mounted. |
 | spegel.prependExisting | bool | `false` | When true existing mirror configuration will be kept and Spegel will prepend it's configuration. |
 | spegel.registryFilters | list | `[]` | Regular expressions to filter out tags/registries. If empty, all registries/tags are resolved. |
 | spegel.resolveTags | bool | `true` | When true Spegel will resolve tags to digests. |
