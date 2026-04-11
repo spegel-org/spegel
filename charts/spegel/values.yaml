@@ -161,12 +161,11 @@ spegel:
   # When enabled, the peer ID remains stable across pod restarts,
   # reducing churn in the routing table.
   dataDir:
-    # -- Enable persistent storage for the P2P private key. Uses a hostPath volume
-    # to store the key on the node. The key file is created with mode 0600.
+    # -- Enable persistent storage for the P2P private key. Uses a hostPath volume to store the key on the node. The key file is created with mode 0600.
     enabled: true
     # -- Path in the container where data is stored.
     path: "/var/lib/spegel"
-    # -- Host path mounted into the pod for persistence.
+    # -- Path in host mounted to the container.
     hostPath: "/var/lib/spegel"
   # -- Registries for which mirror configuration will be created. Empty means all registires will be mirrored.
   mirroredRegistries: []
