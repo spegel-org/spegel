@@ -116,7 +116,7 @@ spec:
           - --containerd-content-path={{ . }}
           {{- end }}
           - --debug-web-enabled={{ .Values.spegel.debugWebEnabled }}
-          {{- with .Values.spegel.dataDir }}
+          {{- with .Values.spegel.persistence }}
           {{- if .enabled }}
           - --data-dir={{ .path }}
           {{- end }}
@@ -171,9 +171,9 @@ spec:
             mountPath: "/etc/secrets/basic-auth"
             readOnly: true
           {{- end }}
-          {{- if .Values.spegel.dataDir.enabled }}
+          {{- if .Values.spegel.persistence.enabled }}
           - name: spegel-data
-            mountPath: {{ .Values.spegel.dataDir.path }}
+            mountPath: {{ .Values.spegel.persistence.path }}
           {{- end }}
           - name: containerd-sock
             mountPath: {{ .Values.spegel.containerdSock }}
@@ -190,10 +190,10 @@ spec:
           secret:
             secretName: {{ . }}
         {{- end }}
-        {{- if .Values.spegel.dataDir.enabled }}
+        {{- if .Values.spegel.persistence.enabled }}
         - name: spegel-data
           hostPath:
-            path: {{ .Values.spegel.dataDir.hostPath }}
+            path: {{ .Values.spegel.persistence.hostPath }}
             type: DirectoryOrCreate
         {{- end }}
         - name: containerd-sock

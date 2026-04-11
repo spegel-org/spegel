@@ -17,7 +17,6 @@ import (
 
 	"github.com/fluxcd/cli-utils/pkg/kstatus/status"
 	"github.com/fluxcd/pkg/runtime/patch"
-
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -260,7 +259,14 @@ func TestKubernetes(t *testing.T) {
 			installSpegel(t, actionCfg, k8sClient, kindNodes, imageDigest)
 
 			t.Log("Checking peer ID persistence")
-			assertPeerIDPersistence(t, k8sClient)
+			pod := getSpegelPod(t, k8sClient)
+			peerID := getSpegelPeerID(t, k8sClient, pod.Name)
+			err = k8sClient.CoreV1().Pods(spegelNamespace).Delete(t.Context(), pod.Name, metav1.DeleteOptions{})
+			require.NoError(t, err)
+			newPod := waitForNewSpegelPod(t, k8sClient, pod.Spec.NodeName, pod.UID)
+			require.NotEmpty(t, newPod.Name)
+			newPeerID := getSpegelPeerID(t, k8sClient, newPod.Name)
+			require.Equal(t, peerID, newPeerID)
 
 			t.Logf("Pulling image %s", images[3])
 			err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", images[3]).Run()
@@ -752,21 +758,6 @@ func noSpegelRestart(t *testing.T, k8sClient kubernetes.Interface) {
 	for _, pod := range podList.Items {
 		require.Equal(t, int32(0), pod.Status.ContainerStatuses[0].RestartCount)
 	}
-}
-
-func assertPeerIDPersistence(t *testing.T, k8sClient kubernetes.Interface) {
-	t.Helper()
-
-	pod := getSpegelPod(t, k8sClient)
-	peerID := getSpegelPeerID(t, k8sClient, pod.Name)
-
-	err := k8sClient.CoreV1().Pods(spegelNamespace).Delete(t.Context(), pod.Name, metav1.DeleteOptions{})
-	require.NoError(t, err)
-
-	newPod := waitForNewSpegelPod(t, k8sClient, pod.Spec.NodeName, pod.UID)
-	require.NotEmpty(t, newPod.Name)
-	newPeerID := getSpegelPeerID(t, k8sClient, newPod.Name)
-	require.Equal(t, peerID, newPeerID)
 }
 
 func getSpegelPod(t *testing.T, k8sClient kubernetes.Interface) corev1.Pod {
