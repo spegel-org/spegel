@@ -9,19 +9,27 @@ import (
 	"net/netip"
 	"regexp"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/internal/ptr"
+	"github.com/spegel-org/spegel/internal/resilient"
+	"github.com/spegel-org/spegel/internal/testutil"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
 
 func TestRegistryOptions(t *testing.T) {
 	t.Parallel()
@@ -526,4 +534,60 @@ func (f *flakyReadSeekCloser) Read(p []byte) (int, error) {
 	}
 
 	return n, err
+}
+
+func TestFetchChannel(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		hedger := resilient.NewHedger([]float64{50, 90, 99}, time.Second)
+
+		iterator := routing.NewIterator()
+		iterator.Add(routing.Peer{Host: "foo"})
+
+		// Fetch triggers immediately and after a fixed time.
+		fetchCh, _ := fetchChannel(ctx, hedger, iterator)
+
+		start := time.Now()
+		synctest.Wait()
+		testutil.RequireChannelReceive(t, fetchCh)
+		require.Zero(t, time.Since(start))
+
+		for range 3 {
+			start = time.Now()
+			synctest.Wait()
+			time.Sleep(1 * time.Second)
+			synctest.Wait()
+			testutil.RequireChannelReceive(t, fetchCh)
+			require.Equal(t, time.Second, time.Since(start))
+		}
+
+		// Fetch skips hedges when immediate are called.
+		fetchCh, immediateCh := fetchChannel(ctx, hedger, iterator)
+		immediateCh <- true
+		immediateCh <- true
+		immediateCh <- false
+
+		for range 4 {
+			start = time.Now()
+			synctest.Wait()
+			testutil.RequireChannelReceive(t, fetchCh)
+			require.Zero(t, time.Since(start))
+		}
+
+		start = time.Now()
+		synctest.Wait()
+		time.Sleep(1 * time.Second)
+		synctest.Wait()
+		testutil.RequireChannelReceive(t, fetchCh)
+		require.Equal(t, time.Second, time.Since(start))
+
+		synctest.Wait()
+		time.Sleep(1 * time.Second)
+		synctest.Wait()
+		testutil.RequireChannelOpen(t, fetchCh)
+	})
 }
