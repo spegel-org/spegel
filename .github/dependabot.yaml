@@ -3,8 +3,8 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
-    open-pull-requests-limit: 15
+      interval: "weekly"
+    open-pull-requests-limit: 20
     labels:
       - "changelog/ignore"
   - package-ecosystem: "gomod"
@@ -13,8 +13,8 @@ updates:
       - "/test/integration/containerd"
       - "/test/integration/kubernetes"
     schedule:
-      interval: "daily"
-    open-pull-requests-limit: 15
+      interval: "weekly"
+    open-pull-requests-limit: 20
     labels:
       - "changelog/dependencies"
     groups:
