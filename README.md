@@ -1,9 +1,12 @@
-> [!NOTE]  
-> We’ve started hosting community meetings every Tuesday at 17:00 CET. Find out how to participate at https://spegel.dev/project/community/#meeting.
+<div align="center">
+    <h1>Spegel</h1>
+    <img src="https://raw.githubusercontent.com/spegel-org/website/main/static/images/logo-transparent.svg" width="150px" alt="spegel logo"/>
+    <p><strong>Spegel, mirror in Swedish, is a stateless cluster local OCI registry mirror.</strong></p>
+</div>
 
-# Spegel
+> Note: Spegel is a project with an evolving API and no guaranteed support. Assistance is provided on a best-effort basis by the developers. We focus on the home lab and individual contributor use case.
 
-Spegel, mirror in Swedish, is a stateless cluster local OCI registry mirror.
+---
 
 <p align="center">
   <img src="https://spegel.dev/images/overview.gif">
