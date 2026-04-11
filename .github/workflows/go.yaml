@@ -30,7 +30,7 @@ jobs:
       - name: Run tests
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad #v5.5.3
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 #v6.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit
@@ -48,7 +48,7 @@ jobs:
         run: INTEGRATION_TEST_STRATEGY="fast" go test -v -race -coverprofile=coverage.txt -coverpkg=github.com/spegel-org/spegel/... -covermode=atomic -count 1 ./...
         working-directory: ./test/integration/containerd
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad #v5.5.3
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 #v6.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: integration-containerd
