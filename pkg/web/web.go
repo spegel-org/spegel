@@ -115,8 +115,13 @@ func (w *Web) metaDataHandler(rw httpx.ResponseWriter, req *http.Request) {
 			ID: w.router.Host().ID().String(),
 		},
 	}
+	b, err := json.Marshal(&data)
+	if err != nil {
+		rw.WriteError(http.StatusInternalServerError, err)
+		return
+	}
 	rw.Header().Set(httpx.HeaderContentType, httpx.ContentTypeJSON)
-	err := json.NewEncoder(rw).Encode(data)
+	_, err = rw.Write(b)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
