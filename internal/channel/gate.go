@@ -2,49 +2,64 @@ package channel
 
 import "sync"
 
-// Gate implements a syncrhonization mechanism that enables opening and closing a blocking channel.
+// Gate implements a syncrhonization mechanism that enables switching state and waiting for a specific one.
 type Gate struct {
-	ch   chan any
-	mu   sync.RWMutex
-	open bool
+	waiters []chan<- any
+	state   bool
+	mu      sync.RWMutex
 }
 
 // NewGate returns a new gate that is closed.
 func NewGate() *Gate {
 	return &Gate{
-		ch:   make(chan any),
-		open: false,
+		state: false,
 	}
 }
 
-// IsOpen returns true when the gate is open.
-func (g *Gate) IsOpen() bool {
+// State returns true when the gate is open and false when closed.
+func (g *Gate) State() bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
-	return g.open
+	return g.state
 }
 
-// Set opens or closes the gate. Will return early if the same state is set.
-// When open the gate channel is clsosed, and when closed a new channel is created.
-func (g *Gate) Set(open bool) {
+// Open opens the gate and informs any waiters.
+func (g *Gate) Open() {
+	g.set(true)
+}
+
+// Close closes the gate and informs any waiters.
+func (g *Gate) Close() {
+	g.set(false)
+}
+
+func (g *Gate) set(state bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	if g.open == open {
+	if g.state == state {
 		return
 	}
-	g.open = open
+	g.state = state
 
-	if g.open {
-		close(g.ch)
-	} else {
-		g.ch = make(chan any)
+	for _, ch := range g.waiters {
+		ch <- nil
 	}
+	g.waiters = nil
 }
 
-// Wait returns a channel that is closed when the gate is opened.
-// Channel is replaced on open so the returned channel should not be reused.
-func (g *Gate) Wait() <-chan any {
-	return g.ch
+// WaitFor returns a channel that will block until the state is achieved.
+// Channel is not reusable, function should be called ones per use.
+func (g *Gate) WaitFor(state bool) <-chan any {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	ch := make(chan any, 1)
+	if g.state == state {
+		ch <- nil
+		return ch
+	}
+	g.waiters = append(g.waiters, ch)
+	return ch
 }

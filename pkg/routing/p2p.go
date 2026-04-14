@@ -165,11 +165,15 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		return nil, fmt.Errorf("could not create distributed hash table: %w", err)
 	}
 	connectivityGate := channel.NewGate()
-	connectivityGate.Set(true)
+	connectivityGate.Open()
 	providerOpts := []provider.Option{
 		provider.WithConnectivityCallbacks(
-			func() { connectivityGate.Set(false) },
-			func() { connectivityGate.Set(true) },
+			func() {
+				connectivityGate.Close()
+			},
+			func() {
+				connectivityGate.Open()
+			},
 			nil,
 		),
 		provider.WithRouter(kdht),
@@ -225,7 +229,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 			select {
 			case <-gCtx.Done():
 				return nil
-			case <-r.connectivityGate.Wait():
+			case <-r.connectivityGate.WaitFor(true):
 				start := time.Now()
 				retryOpts := []resilient.RetryOption{
 					resilient.WithOnRetry(func(attempt int, err error) {
@@ -234,14 +238,14 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 					resilient.WithLastErrorOnly(),
 				}
 				err := resilient.Retry(gCtx, 0, resilient.BackoffDelay(50*time.Millisecond, 10*time.Second), func(ctx context.Context) error {
-					if !r.connectivityGate.IsOpen() {
+					if !r.connectivityGate.State() {
 						return nil
 					}
 					err := bootstrapPeers(ctx, r.bootstrapper, r.kdht, r.protocols)
 					if err != nil {
 						return err
 					}
-					if r.connectivityGate.IsOpen() {
+					if r.connectivityGate.State() {
 						return errors.New("bootstrap completed but connectivity has not been reached")
 					}
 					return nil
@@ -280,7 +284,10 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 }
 
 func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
-	return !r.connectivityGate.IsOpen(), nil
+	if r.kdht.RoutingTable().Size() == 0 {
+		return false, nil
+	}
+	return !r.connectivityGate.State(), nil
 }
 
 func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (*Iterator, error) {
