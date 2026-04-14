@@ -2,32 +2,31 @@ package channel
 
 import (
 	"testing"
+	"testing/synctest"
+	"time"
 
+	"github.com/spegel-org/spegel/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGate(t *testing.T) {
 	t.Parallel()
 
-	g := NewGate()
+	synctest.Test(t, func(t *testing.T) {
+		gate := NewGate()
 
-	for range 3 {
-		require.False(t, g.IsOpen())
-		select {
-		case <-g.Wait():
-			require.FailNow(t, "wait should be blocking")
-		default:
-		}
-		g.Set(false)
-	}
+		// Gate should start off closed.
+		require.False(t, gate.State())
+		testutil.RequireChannelReceive(t, gate.WaitFor(false))
 
-	for range 3 {
-		g.Set(true)
-		require.True(t, g.IsOpen())
-		select {
-		case <-g.Wait():
-		default:
-			require.FailNow(t, "wait should not be blocking")
-		}
-	}
+		// Gate should block until it is opened.
+		start := time.Now()
+		go func() {
+			time.Sleep(1 * time.Second)
+			gate.Open()
+		}()
+		<-gate.WaitFor(true)
+		require.Equal(t, 1*time.Second, time.Since(start))
+		require.True(t, gate.State())
+	})
 }

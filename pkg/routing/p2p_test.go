@@ -99,22 +99,21 @@ func TestP2PRouter(t *testing.T) {
 	}
 
 	// All routers should eventually be ready as bootstrap has happened.
+	<-primaryRouter.connectivityGate.WaitFor(false)
+	ready, err = primaryRouter.Ready(t.Context())
+	require.NoError(t, err)
+	require.True(t, ready)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ready, err = primaryRouter.Ready(t.Context())
-		require.NoError(c, err)
-		require.True(c, ready)
 		require.Equal(c, int64(1), primaryRouter.prov.Stats().Operations.Past.KeysProvided)
 	}, 5*time.Second, time.Second)
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		for _, r := range routers {
-			ready, err := r.Ready(t.Context())
-			require.NoError(c, err)
-			require.True(c, ready)
-		}
-	}, 10*time.Second, time.Second)
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Equal(c, 30, primaryRouter.kdht.RoutingTable().Size())
-	}, 3*time.Second, 100*time.Millisecond)
+
+	for _, router := range routers {
+		<-router.connectivityGate.WaitFor(false)
+		ready, err := router.Ready(t.Context())
+		require.NoError(t, err)
+		require.True(t, ready)
+	}
+	require.Equal(t, 30, primaryRouter.kdht.RoutingTable().Size())
 
 	// Lookup should not return self when online.
 	iter, err = primaryRouter.Lookup(t.Context(), advertisedKey, 3)
