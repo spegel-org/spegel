@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/fluxcd/cli-utils/pkg/kstatus/status"
-	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,8 +30,9 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -43,6 +43,8 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster"
 	kindnodes "sigs.k8s.io/kind/pkg/cluster/nodes"
 	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
+
+	"github.com/spegel-org/spegel/pkg/web"
 )
 
 const (
@@ -50,8 +52,6 @@ const (
 	conformanceNamespace = "conformance"
 	pullTestNamespace    = "pull-test"
 	nodeTaintKey         = "spegel.dev/enabled"
-	// debugWebPort is the container port for metrics/debug web (GET /debug/web/metadata).
-	debugWebPort = 9090
 )
 
 func TestKubernetes(t *testing.T) {
@@ -78,7 +78,7 @@ func TestKubernetes(t *testing.T) {
 	require.NoError(t, err)
 
 	kubernetesVersions := []string{
-		"v1.35.0",
+		"v1.35.1",
 		"v1.34.3",
 		"v1.33.7",
 	}
@@ -198,6 +198,8 @@ func TestKubernetes(t *testing.T) {
 			require.NoError(t, err)
 			k8sClient, err := kubernetes.NewForConfig(k8sCfg)
 			require.NoError(t, err)
+			k8sDynClient, err := dynamic.NewForConfig(k8sCfg)
+			require.NoError(t, err)
 
 			t.Log("Loading Spegel image into nodes")
 			f, err := os.Open(imgPath)
@@ -230,9 +232,16 @@ func TestKubernetes(t *testing.T) {
 			err = actionCfg.Init(clientGetter, spegelNamespace, "secret")
 			require.NoError(t, err)
 
+			t.Cleanup(func() {
+				if !t.Failed() {
+					return
+				}
+				dumpPods(t, k8sClient, spegelNamespace, true)
+			})
+
 			t.Log("Upgrading Spegel from latest release to dev build")
-			installSpegel(t, actionCfg, k8sClient, kindNodes, "")
-			installSpegel(t, actionCfg, k8sClient, kindNodes, imageDigest)
+			installSpegel(t, actionCfg, k8sClient, k8sDynClient, kindNodes, "")
+			installSpegel(t, actionCfg, k8sClient, k8sDynClient, kindNodes, imageDigest)
 			uninstallSpegel(t, actionCfg, kindNodes)
 
 			t.Log("Pulling test images")
@@ -256,17 +265,7 @@ func TestKubernetes(t *testing.T) {
 			err = nodeutils.WriteFile(kindNodes[0], "/etc/containerd/certs.d/docker.io/hosts.toml", hostsToml)
 			require.NoError(t, err)
 
-			installSpegel(t, actionCfg, k8sClient, kindNodes, imageDigest)
-
-			t.Log("Checking peer ID persistence")
-			pod := getSpegelPod(t, k8sClient)
-			peerID := getSpegelPeerID(t, k8sClient, pod.Name)
-			err = k8sClient.CoreV1().Pods(spegelNamespace).Delete(t.Context(), pod.Name, metav1.DeleteOptions{})
-			require.NoError(t, err)
-			newPod := waitForNewSpegelPod(t, k8sClient, pod.Spec.NodeName, pod.UID)
-			require.NotEmpty(t, newPod.Name)
-			newPeerID := getSpegelPeerID(t, k8sClient, newPod.Name)
-			require.Equal(t, peerID, newPeerID)
+			installSpegel(t, actionCfg, k8sClient, k8sDynClient, kindNodes, imageDigest)
 
 			t.Logf("Pulling image %s", images[3])
 			err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", images[3]).Run()
@@ -292,6 +291,21 @@ func TestKubernetes(t *testing.T) {
 
 			t.Log("Running conformance tests")
 			runConformanceTests(t, k8sClient, kindNodes)
+
+			t.Log("Checking peer ID persistence")
+			initPodName, initPeerID := getSpegelPeerID(t, k8sClient, kindNodes[2])
+
+			err = k8sClient.CoreV1().Pods(spegelNamespace).Delete(t.Context(), initPodName, metav1.DeleteOptions{})
+			require.NoError(t, err)
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
+				_, err := k8sClient.CoreV1().Pods(spegelNamespace).Get(t.Context(), initPodName, metav1.GetOptions{})
+				require.True(c, kerrors.IsNotFound(err))
+			}, 15*time.Second, 1*time.Second)
+			gvr := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
+			waitForStatus(t, k8sDynClient, gvr, spegelNamespace, spegelNamespace, status.CurrentStatus)
+
+			_, newPeerID := getSpegelPeerID(t, k8sClient, kindNodes[2])
+			require.Equal(t, initPeerID, newPeerID)
 
 			t.Log("Remove Spegel from a node")
 			watcher, err := k8sClient.CoreV1().Pods(spegelNamespace).Watch(t.Context(), metav1.ListOptions{FieldSelector: "spec.nodeName=" + kindNodes[2].String()})
@@ -355,7 +369,7 @@ func TestKubernetes(t *testing.T) {
 			}
 
 			t.Log("Deploy pull test pods")
-			runPullTests(t, k8sClient, k8sCfg, images[1:], kindNodes)
+			runPullTests(t, k8sClient, k8sDynClient, k8sCfg, images[1:], kindNodes)
 			noSpegelRestart(t, k8sClient)
 
 			t.Log("Restarting Containerd")
@@ -368,8 +382,8 @@ func TestKubernetes(t *testing.T) {
 				pod, err := k8sClient.CoreV1().Pods(spegelNamespace).Get(t.Context(), podList.Items[0].Name, metav1.GetOptions{})
 				require.NoError(c, err)
 				require.Len(c, pod.Status.ContainerStatuses, 1)
-				require.Equal(c, int32(0), pod.Status.ContainerStatuses[0].RestartCount)
-			}, 5*time.Second, 1*time.Second)
+				require.Equal(c, int32(1), pod.Status.ContainerStatuses[0].RestartCount)
+			}, 15*time.Second, 1*time.Second)
 
 			t.Log("Scale down Spegel to single instance")
 			node, err = k8sClient.CoreV1().Nodes().Get(t.Context(), kindNodes[1].String(), metav1.GetOptions{})
@@ -388,16 +402,13 @@ func TestKubernetes(t *testing.T) {
 				}
 			}, 5*time.Second, 1*time.Second)
 
+			t.Log("Single instance is not ready but does not restart")
 			for range 5 {
 				podList, err = k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{})
 				require.NoError(t, err)
 				require.Len(t, podList.Items, 1)
-				u, err := patch.ToUnstructured(&podList.Items[0])
-				require.NoError(t, err)
-				res, err := status.Compute(u)
-				require.NoError(t, err)
-				require.NotEqual(t, status.CurrentStatus, res.Status)
-
+				gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+				waitForStatus(t, k8sDynClient, gvr, podList.Items[0].Namespace, podList.Items[0].Name, status.InProgressStatus)
 				time.Sleep(1 * time.Second)
 			}
 			noSpegelRestart(t, k8sClient)
@@ -407,7 +418,7 @@ func TestKubernetes(t *testing.T) {
 	}
 }
 
-func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kubernetes.Interface, kindNodes []kindnodes.Node, imageDigest string) {
+func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kubernetes.Interface, k8sDynClient dynamic.Interface, kindNodes []kindnodes.Node, imageDigest string) {
 	t.Helper()
 
 	chartPath, version := func() (string, string) {
@@ -432,15 +443,10 @@ func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kube
 	require.NoError(t, err)
 
 	t.Log("Deploying Spegel", version)
-	t.Cleanup(func() {
-		if !t.Failed() {
-			return
-		}
-		dumpPods(t, k8sClient, spegelNamespace, true)
-	})
 	vals := map[string]any{
 		"spegel": map[string]any{
-			"logLevel": "DEBUG",
+			"logLevel":             "DEBUG",
+			"mirrorResolveTimeout": "100ms",
 		},
 		"nodeSelector": map[string]any{
 			nodeTaintKey: "true",
@@ -471,18 +477,25 @@ func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kube
 		require.NoError(t, err)
 	}
 
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		ds, err := k8sClient.AppsV1().DaemonSets(spegelNamespace).Get(t.Context(), spegelNamespace, metav1.GetOptions{})
-		require.NoError(c, err)
-		u, err := patch.ToUnstructured(ds)
-		require.NoError(c, err)
-		res, err := status.Compute(u)
-		require.NoError(c, err)
-		require.Equal(c, status.CurrentStatus, res.Status)
-	}, 10*time.Second, 1*time.Second)
+	gvr := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
+	waitForStatus(t, k8sDynClient, gvr, spegelNamespace, spegelNamespace, status.CurrentStatus)
+
 	podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{})
 	require.NoError(t, err)
 	require.Equal(t, len(kindNodes), len(podList.Items))
+}
+
+func waitForStatus(t *testing.T, k8sDynClient dynamic.Interface, gvr schema.GroupVersionResource, namespace, name string, s status.Status) {
+	t.Helper()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		u, err := k8sDynClient.Resource(gvr).Namespace(namespace).Get(t.Context(), name, metav1.GetOptions{})
+		require.NoError(c, err)
+		require.NotEmpty(c, u.GroupVersionKind().String())
+		res, err := status.Compute(u)
+		require.NoError(c, err)
+		require.Equal(c, s, res.Status)
+	}, 30*time.Second, 500*time.Millisecond)
 }
 
 func uninstallSpegel(t *testing.T, actionCfg *action.Configuration, kindNodes []kindnodes.Node) {
@@ -504,7 +517,7 @@ func uninstallSpegel(t *testing.T, actionCfg *action.Configuration, kindNodes []
 	}
 }
 
-func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sCfg *restclient.Config, images []string, kindNodes []kindnodes.Node) {
+func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sDynClient dynamic.Interface, k8sCfg *restclient.Config, images []string, kindNodes []kindnodes.Node) {
 	succeeded := t.Run("Pull Tests", func(t *testing.T) {
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -601,28 +614,18 @@ func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sCfg *restclie
 			dumpPods(t, k8sClient, pullTestNamespace, false)
 		})
 
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			for _, readyPod := range readyPods {
-				pod, err := k8sClient.CoreV1().Pods(pullTestNamespace).Get(t.Context(), readyPod.Name, metav1.GetOptions{})
-				require.NoError(c, err)
-				u, err := patch.ToUnstructured(pod)
-				require.NoError(c, err)
-				res, err := status.Compute(u)
-				require.NoError(c, err)
-				require.Equal(c, status.CurrentStatus, res.Status)
-			}
-		}, 30*time.Second, 1*time.Second)
-		for range 5 {
+		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+		for _, readyPod := range readyPods {
+			waitForStatus(t, k8sDynClient, gvr, pullTestNamespace, readyPod.Name, status.CurrentStatus)
+		}
+		require.EventuallyWithT(t, func(collect *assert.CollectT) {
 			pod, err := k8sClient.CoreV1().Pods(pullTestNamespace).Get(t.Context(), failedPod.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			u, err := patch.ToUnstructured(pod)
-			require.NoError(t, err)
-			res, err := status.Compute(u)
-			require.NoError(t, err)
-			require.NotEqual(t, status.CurrentStatus, res.Status)
-
-			time.Sleep(1 * time.Second)
-		}
+			require.Len(t, pod.Status.ContainerStatuses, 1)
+			waitingState := pod.Status.ContainerStatuses[0].State.Waiting
+			require.NotNil(t, waitingState)
+			require.Equal(t, "ErrImagePull", waitingState.Reason)
+		}, 10*time.Second, 500*time.Millisecond)
 
 		podList, err := k8sClient.CoreV1().Pods(pullTestNamespace).List(t.Context(), metav1.ListOptions{})
 		require.NoError(t, err)
@@ -760,77 +763,35 @@ func noSpegelRestart(t *testing.T, k8sClient kubernetes.Interface) {
 	}
 }
 
-func getSpegelPod(t *testing.T, k8sClient kubernetes.Interface) corev1.Pod {
+func getSpegelPeerID(t *testing.T, k8sClient kubernetes.Interface, kindNode kindnodes.Node) (string, string) {
 	t.Helper()
 
-	podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/component=spegel",
-	})
+	podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{FieldSelector: "spec.nodeName=" + kindNode.String()})
 	require.NoError(t, err)
-	require.NotEmpty(t, podList.Items)
-	return podList.Items[0]
-}
+	require.Len(t, podList.Items, 1)
 
-func waitForNewSpegelPod(t *testing.T, k8sClient kubernetes.Interface, nodeName string, oldUID types.UID) corev1.Pod {
-	t.Helper()
+	portIdx := slices.IndexFunc(podList.Items[0].Spec.Containers[0].Ports, func(port corev1.ContainerPort) bool {
+		return port.Name == "metrics"
+	})
+	require.Positive(t, portIdx)
+	debugWebPort := podList.Items[0].Spec.Containers[0].Ports[portIdx].ContainerPort
+	podName := podList.Items[0].Name
 
-	require.NotEmpty(t, nodeName)
-	var newPod corev1.Pod
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		found := false
-		podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{
-			FieldSelector: "spec.nodeName=" + nodeName,
-			LabelSelector: "app.kubernetes.io/component=spegel",
-		})
-		require.NoError(c, err)
-		for _, pod := range podList.Items {
-			if pod.UID == oldUID {
-				continue
-			}
-			u, err := patch.ToUnstructured(&pod)
-			require.NoError(c, err)
-			res, err := status.Compute(u)
-			require.NoError(c, err)
-			if res.Status != status.CurrentStatus {
-				continue
-			}
-			newPod = pod
-			found = true
-			break
-		}
-		require.True(c, found, "new spegel pod not ready yet")
-	}, 60*time.Second, 2*time.Second)
+	b, err := k8sClient.CoreV1().RESTClient().Get().
+		Namespace(spegelNamespace).
+		Resource("pods").
+		Name(fmt.Sprintf("%s:%d", podName, debugWebPort)).
+		SubResource("proxy").
+		Suffix("debug", "web", "metadata").
+		DoRaw(t.Context())
+	require.NoError(t, err)
 
-	return newPod
-}
-
-func getSpegelPeerID(t *testing.T, k8sClient kubernetes.Interface, podName string) string {
-	t.Helper()
-
-	require.NotEmpty(t, podName)
-	var peerID string
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		b, err := k8sClient.CoreV1().RESTClient().Get().
-			Namespace(spegelNamespace).
-			Resource("pods").
-			Name(fmt.Sprintf("%s:%d", podName, debugWebPort)).
-			SubResource("proxy").
-			Suffix("debug", "web", "metadata").
-			DoRaw(t.Context())
-		require.NoError(c, err)
-
-		var meta struct {
-			LibP2P struct {
-				ID string `json:"id"`
-			} `json:"libp2p"`
-		}
-		err = json.Unmarshal(b, &meta)
-		require.NoError(c, err)
-		peerID = meta.LibP2P.ID
-		require.NotEmpty(c, peerID)
-	}, 10*time.Second, 1*time.Second)
-
-	return peerID
+	metadata := web.Metadata{}
+	err = json.Unmarshal(b, &metadata)
+	require.NoError(t, err)
+	peerID := metadata.LibP2P.ID
+	require.NotEmpty(t, peerID)
+	return podName, peerID
 }
 
 func dumpPods(t *testing.T, k8sClient kubernetes.Interface, namespace string, includeLogs bool) {
