@@ -201,6 +201,13 @@ func TestKubernetes(t *testing.T) {
 			k8sDynClient, err := dynamic.NewForConfig(k8sCfg)
 			require.NoError(t, err)
 
+			testImages := []string{
+				"ghcr.io/spegel-org/conformance:9d1b925",
+				"docker.io/library/busybox:1.37.0",
+				"ghcr.io/spegel-org/benchmark:v1-10MB-4",
+				"ghcr.io/spegel-org/benchmark:v2-10MB-4@sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b",
+			}
+
 			t.Log("Loading Spegel image into nodes")
 			f, err := os.Open(imgPath)
 			require.NoError(t, err)
@@ -244,18 +251,7 @@ func TestKubernetes(t *testing.T) {
 			installSpegel(t, actionCfg, k8sClient, k8sDynClient, kindNodes, imageDigest)
 			uninstallSpegel(t, actionCfg, kindNodes)
 
-			t.Log("Pulling test images")
-			images := []string{
-				"ghcr.io/spegel-org/conformance:9d1b925",
-				"docker.io/library/busybox:1.37.0",
-				"ghcr.io/spegel-org/benchmark:v1-10MB-4",
-				"ghcr.io/spegel-org/benchmark:v2-10MB-4@sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b",
-			}
-			for _, image := range images[:3] {
-				t.Logf("Pulling image %s", image)
-				err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", image).Run()
-				require.NoError(t, err)
-			}
+			pullImages(t, kindNodes[0], testImages[:3])
 
 			t.Log("Write existing certs.d configuration")
 			hostsToml := `server = https://docker.io
@@ -267,9 +263,7 @@ func TestKubernetes(t *testing.T) {
 
 			installSpegel(t, actionCfg, k8sClient, k8sDynClient, kindNodes, imageDigest)
 
-			t.Logf("Pulling image %s", images[3])
-			err = kindNodes[0].CommandContext(t.Context(), "crictl", "pull", images[3]).Run()
-			require.NoError(t, err)
+			pullImages(t, kindNodes[0], testImages[3:])
 
 			t.Log("Block upstream registry access")
 			for _, node := range kindNodes {
@@ -369,7 +363,7 @@ func TestKubernetes(t *testing.T) {
 			}
 
 			t.Log("Deploy pull test pods")
-			runPullTests(t, k8sClient, k8sDynClient, k8sCfg, images[1:], kindNodes)
+			runPullTests(t, k8sClient, k8sDynClient, k8sCfg, testImages[1:], kindNodes)
 			noSpegelRestart(t, k8sClient)
 
 			t.Log("Restarting Containerd")
@@ -415,6 +409,16 @@ func TestKubernetes(t *testing.T) {
 
 			uninstallSpegel(t, actionCfg, kindNodes)
 		})
+	}
+}
+
+func pullImages(t *testing.T, kindNode kindnodes.Node, images []string) {
+	t.Helper()
+
+	for _, image := range images {
+		t.Logf("Pulling image %s", image)
+		err := kindNode.CommandContext(t.Context(), "crictl", "pull", image).Run()
+		require.NoError(t, err)
 	}
 }
 
@@ -491,7 +495,7 @@ func waitForStatus(t *testing.T, k8sDynClient dynamic.Interface, gvr schema.Grou
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		u, err := k8sDynClient.Resource(gvr).Namespace(namespace).Get(t.Context(), name, metav1.GetOptions{})
 		require.NoError(c, err)
-		require.NotEmpty(c, u.GroupVersionKind().String())
+		require.NotNil(t, status.GetLegacyConditionsFn(u))
 		res, err := status.Compute(u)
 		require.NoError(c, err)
 		require.Equal(c, s, res.Status)
@@ -618,13 +622,13 @@ func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sDynClient dyn
 		for _, readyPod := range readyPods {
 			waitForStatus(t, k8sDynClient, gvr, pullTestNamespace, readyPod.Name, status.CurrentStatus)
 		}
-		require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			pod, err := k8sClient.CoreV1().Pods(pullTestNamespace).Get(t.Context(), failedPod.Name, metav1.GetOptions{})
 			require.NoError(t, err)
-			require.Len(t, pod.Status.ContainerStatuses, 1)
+			require.Len(c, pod.Status.ContainerStatuses, 1)
 			waitingState := pod.Status.ContainerStatuses[0].State.Waiting
-			require.NotNil(t, waitingState)
-			require.Equal(t, "ErrImagePull", waitingState.Reason)
+			require.NotNil(c, waitingState)
+			require.Equal(c, "ErrImagePull", waitingState.Reason)
 		}, 10*time.Second, 500*time.Millisecond)
 
 		podList, err := k8sClient.CoreV1().Pods(pullTestNamespace).List(t.Context(), metav1.ListOptions{})
