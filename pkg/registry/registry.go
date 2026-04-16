@@ -429,6 +429,7 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 				})
 				if err != nil {
 					if fetchCtx.Err() != nil {
+						iterator.Release(peer)
 						return
 					}
 
@@ -446,6 +447,7 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 				}
 
 				iterator.Release(peer)
+
 				err = r.hedger.Observe(time.Since(start))
 				if err != nil {
 					log.Error(err, "could not observe fetch duration for hedger")
@@ -462,9 +464,9 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 			}()
 		case failure := <-failureCh:
 			// Remove context to indicate fetch is not inflight.
+			log.Error(failure.err, "request to peer failed")
 			delete(fetchCtxs, failure.peer.Host)
 			delete(fetchCancels, failure.peer.Host)
-			log.Error(failure.err, "request to peer failed")
 			immediateCh <- true
 		case res := <-resCh:
 			// Remove context so successful request is not cancelled.
