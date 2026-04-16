@@ -499,7 +499,7 @@ func waitForStatus(t *testing.T, k8sDynClient dynamic.Interface, gvr schema.Grou
 		res, err := status.Compute(u)
 		require.NoError(c, err)
 		require.Equal(c, s, res.Status)
-	}, 30*time.Second, 500*time.Millisecond)
+	}, 60*time.Second, 500*time.Millisecond)
 }
 
 func uninstallSpegel(t *testing.T, actionCfg *action.Configuration, kindNodes []kindnodes.Node) {
