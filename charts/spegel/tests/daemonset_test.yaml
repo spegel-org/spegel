@@ -1,0 +1,71 @@
+suite: test daemonset
+templates:
+  - daemonset.yaml
+tests:
+  - it: should work with default values
+    asserts:
+      - isAPIVersion:
+          of: apps/v1
+      - isKind:
+          of: DaemonSet
+      - isKind:
+          of: DaemonSet
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-spegel
+      - equal:
+          path: metadata.namespace
+          value: NAMESPACE
+      - lengthEqual:
+          path: spec.template.spec.initContainers
+          count: 1
+      - lengthEqual:
+          path: spec.template.spec.containers
+          count: 1
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ghcr.io/spegel-org/spegel
+      - equal:
+          path: spec.template.spec.containers[0].name
+          value: registry
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: registry
+            containerPort: 5000
+            hostPort: 30020
+            protocol: TCP
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: containerd-sock
+            mountPath: /run/containerd/containerd.sock
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: containerd-sock
+            hostPath:
+              path: /run/containerd/containerd.sock
+              type: Socket
+      - isNotEmpty:
+          path: spec.template.spec.initContainers
+      - equal:
+          path: spec.template.spec.priorityClassName
+          value: system-node-critical
+      - equal:
+          path: spec.template.spec.nodeSelector
+          value:
+            kubernetes.io/os: linux
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 128Mi
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 128Mi
+      - isNotEmpty:
+          path: spec.template.spec.containers[0].readinessProbe
+      - isNotEmpty:
+          path: spec.template.spec.containers[0].startupProbe
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
