@@ -20,7 +20,7 @@ func BaseClient() *http.Client {
 func BaseTransport() *http.Transport {
 	return &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
+			Timeout:   200 * time.Millisecond,
 			KeepAlive: 30 * time.Second,
 		}).DialContext,
 		ForceAttemptHTTP2:     true,
