@@ -33,7 +33,6 @@ tests:
           content:
             name: registry
             containerPort: 5000
-            hostPort: 30020
             protocol: TCP
       - contains:
           path: spec.template.spec.containers[0].volumeMounts

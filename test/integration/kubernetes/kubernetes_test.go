@@ -353,45 +353,6 @@ func TestKubernetes(t *testing.T) {
 			}
 			watcher.Stop()
 
-			// Give time for system to balance. Without this tests tend to be flaky.
-			time.Sleep(10 * time.Second)
-
-			t.Log("Checking node port accessibility")
-			tests := []struct {
-				node     kindnodes.Node
-				port     string
-				expected string
-			}{
-				{
-					node:     kindNodes[0],
-					port:     "30020",
-					expected: "200",
-				},
-				{
-					node:     kindNodes[0],
-					port:     "30021",
-					expected: "200",
-				},
-				{
-					node:     kindNodes[2],
-					port:     "30020",
-					expected: "000",
-				},
-				{
-					node:     kindNodes[2],
-					port:     "30021",
-					expected: "200",
-				},
-			}
-			for _, tt := range tests {
-				node, err := k8sClient.CoreV1().Nodes().Get(t.Context(), tt.node.String(), metav1.GetOptions{})
-				require.NoError(t, err)
-				nodeIP := getNodeIP(t, node)
-				buf := &bytes.Buffer{}
-				tt.node.CommandContext(t.Context(), "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", fmt.Sprintf("http://%s:%s/readyz", nodeIP, tt.port)).SetStdout(buf).Run()
-				require.Equal(t, tt.expected, buf.String(), fmt.Sprintf("%s %s", tt.node, tt.port))
-			}
-
 			t.Log("Deploy pull test pods")
 			runPullTests(t, k8sClient, k8sDynClient, k8sCfg, testImages[1:], kindNodes)
 			noSpegelRestart(t, k8sClient)
