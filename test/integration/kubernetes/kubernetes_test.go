@@ -40,10 +40,12 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
+	"sigs.k8s.io/kind/pkg/build/nodeimage"
 	"sigs.k8s.io/kind/pkg/cluster"
 	kindnodes "sigs.k8s.io/kind/pkg/cluster/nodes"
 	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
 
+	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/web"
 )
 
@@ -78,9 +80,9 @@ func TestKubernetes(t *testing.T) {
 	require.NoError(t, err)
 
 	kubernetesVersions := []string{
-		"v1.35.1",
-		"v1.34.3",
-		"v1.33.7",
+		"v1.36.0",
+		"v1.35.3",
+		"v1.34.6",
 	}
 	proxyModes := []v1alpha4.ProxyMode{
 		v1alpha4.NFTablesProxyMode,
@@ -102,25 +104,45 @@ func TestKubernetes(t *testing.T) {
 		t.Fatal("unknown test strategy", testStrategy)
 	}
 
+	kindNodeImages := []oci.Image{}
+	for _, kubernetesVersion := range kubernetesVersions {
+		kindNodeImage, err := oci.NewImage("ghcr.io", "spegel-org/kind-node", kubernetesVersion, "")
+		require.NoError(t, err)
+		kindNodeImages = append(kindNodeImages, kindNodeImage)
+
+		_, err = mobyClient.ImageInspect(t.Context(), kindNodeImage.String())
+		if err == nil {
+			continue
+		}
+
+		t.Log("Building Kind node image", kindNodeImage)
+		err = nodeimage.Build(
+			nodeimage.WithImage(kindNodeImage.String()),
+			nodeimage.WithBuildType("release"),
+			nodeimage.WithKubeParam(kubernetesVersion),
+		)
+		require.NoError(t, err)
+	}
+
 	type kubernetesTest struct {
-		kubernetesVersion string
-		proxyMode         v1alpha4.ProxyMode
-		ipFamily          v1alpha4.ClusterIPFamily
+		kindNodeImage oci.Image
+		proxyMode     v1alpha4.ProxyMode
+		ipFamily      v1alpha4.ClusterIPFamily
 	}
 	tests := []kubernetesTest{}
-	for _, kubernetesVersion := range kubernetesVersions {
+	for _, kindNodeImage := range kindNodeImages {
 		for _, proxyMode := range proxyModes {
 			for _, ipFamily := range ipFamilies {
 				tests = append(tests, kubernetesTest{
-					kubernetesVersion: kubernetesVersion,
-					proxyMode:         proxyMode,
-					ipFamily:          ipFamily,
+					kindNodeImage: kindNodeImage,
+					proxyMode:     proxyMode,
+					ipFamily:      ipFamily,
 				})
 			}
 		}
 	}
 	for _, tt := range tests {
-		name := strings.Join([]string{tt.kubernetesVersion, string(tt.ipFamily), string(tt.proxyMode)}, "-")
+		name := strings.Join([]string{tt.kindNodeImage.Tag, string(tt.ipFamily), string(tt.proxyMode)}, "-")
 		t.Run(name, func(t *testing.T) {
 			t.Log("Creating Kind cluster")
 			kcPath := filepath.Join(t.TempDir(), "kind.kubeconfig")
@@ -166,12 +188,12 @@ func TestKubernetes(t *testing.T) {
 				},
 			}
 			createOpts := []cluster.CreateOption{
-				cluster.CreateWithNodeImage(fmt.Sprintf("docker.io/kindest/node:%s", tt.kubernetesVersion)),
+				cluster.CreateWithNodeImage(tt.kindNodeImage.String()),
 				cluster.CreateWithV1Alpha4Config(clusterCfg),
 				cluster.CreateWithKubeconfigPath(kcPath),
 			}
 			kindName := fmt.Sprintf("spegel-e2e-%s", strings.ReplaceAll(name, ".", "-"))
-			err := provider.Create(kindName, createOpts...)
+			err = provider.Create(kindName, createOpts...)
 			require.NoError(t, err)
 			t.Cleanup(func() {
 				if t.Failed() {
