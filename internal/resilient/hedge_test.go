@@ -64,3 +64,43 @@ func TestHedger(t *testing.T) {
 		})
 	}
 }
+
+func TestHedgerHighestPercentileDuration(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		percentiles  []float64
+		observations []time.Duration
+		want         time.Duration
+	}{
+		{
+			name:         "no observed values",
+			percentiles:  []float64{80, 90, 95},
+			observations: []time.Duration{},
+			want:         100 * time.Millisecond,
+		},
+		{
+			name:         "no percentiles",
+			percentiles:  []float64{},
+			observations: []time.Duration{50 * time.Millisecond, 100 * time.Millisecond, 150 * time.Millisecond},
+			want:         100 * time.Millisecond,
+		},
+		{
+			name:         "with percentiles and observed values",
+			percentiles:  []float64{80, 90, 95},
+			observations: []time.Duration{50 * time.Millisecond, 100 * time.Millisecond, 150 * time.Millisecond},
+			want:         150 * time.Millisecond,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			hedger := NewHedger(tt.percentiles, 100*time.Millisecond)
+			for _, d := range tt.observations {
+				err := hedger.Observe(d)
+				require.NoError(t, err)
+			}
+			require.InEpsilon(t, tt.want, hedger.HighestPercentileDuration(), 0.01)
+		})
+	}
+}
