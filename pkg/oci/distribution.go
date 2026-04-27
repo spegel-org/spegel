@@ -88,6 +88,15 @@ func (d DistributionPath) URL() *url.URL {
 	}
 }
 
+// Clone returns a deep copy of the distribution path.
+func (d DistributionPath) Clone() DistributionPath {
+	out := d
+	if d.Range != nil {
+		out.Range = d.Range.Clone()
+	}
+	return out
+}
+
 // ParseDistributionPath gets the parameters from a URL which conforms with the OCI distribution spec.
 // It returns a distribution path which contains all the individual parameters.
 // https://github.com/opencontainers/distribution-spec/blob/main/spec.md
