@@ -383,6 +383,8 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 		}
 	}()
 
+	var raceTimeoutCh <-chan time.Time
+
 	for {
 		// We only want to return early when there are no inflight requests.
 		var idleTimeoutCh <-chan time.Time
@@ -402,12 +404,16 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 			return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("all request retries exhausted for %s", dist.Identifier()), errDetails)
 		case <-idleTimeoutCh:
 			return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("waited too long for new peer with no inflight fetches for %s", dist.Identifier()), errDetails)
+		case <-raceTimeoutCh:
+			return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("waited too long for a response from a peer for %s", dist.Identifier()), errDetails)
 		case <-fetchCh:
 			peer, ok := iterator.Acquire()
 			if !ok {
 				immediateCh <- false
 				continue
 			}
+
+			raceTimeoutCh = time.After(max(r.hedger.HighestPercentileDuration()*2, 100*time.Millisecond))
 
 			errDetails.Attempts += 1
 
