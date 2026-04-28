@@ -1,11 +1,11 @@
 name: Bug Report
 description: Create a report to help improve Spegel
-labels: ["bug"]
+type: bug
 body:
   - type: markdown
     attributes:
       value: |
-        Thank you for taking the time to fill ot this bug report! Please read the [FAQ](https://spegel.dev/docs/faq/) and check existing issues before submitting a new issue.
+        Thank you for taking the time to fill ot this bug report! Please check previous issues and discussions before submitting a new issue.
   - type: input
     attributes:
       label: Spegel version
