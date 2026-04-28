@@ -53,6 +53,7 @@ type P2PRouterConfig struct {
 	Libp2pOpts        []libp2p.Option
 	AdvertiseTTL      time.Duration
 	MaxReprovideDelay time.Duration
+	LogBootstrapErr   bool
 }
 
 type P2PRouterOption = option.Option[P2PRouterConfig]
@@ -85,6 +86,13 @@ func WithMaxReprovideDelay(delay time.Duration) P2PRouterOption {
 	}
 }
 
+func WithLogBootstrapErr(val bool) P2PRouterOption {
+	return func(cfg *P2PRouterConfig) error {
+		cfg.LogBootstrapErr = val
+		return nil
+	}
+}
+
 var _ Router = &P2PRouter{}
 
 type P2PRouter struct {
@@ -97,12 +105,14 @@ type P2PRouter struct {
 	connectivityGate *channel.Gate
 	protocols        []ma.Multiaddr
 	registryPort     uint16
+	logBootstrapErr  bool
 }
 
 func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
 	cfg := P2PRouterConfig{
 		AdvertiseTTL:      15 * time.Minute,
 		MaxReprovideDelay: 2 * time.Minute,
+		LogBootstrapErr:   true,
 	}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
@@ -205,6 +215,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		connectivityGate: connectivityGate,
 		protocols:        protocols,
 		registryPort:     uint16(registryPort),
+		logBootstrapErr:  cfg.LogBootstrapErr,
 	}, nil
 }
 
@@ -233,7 +244,11 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 				start := time.Now()
 				retryOpts := []resilient.RetryOption{
 					resilient.WithOnRetry(func(attempt int, err error) {
-						log.Error(err, "failed to run bootstrap", "attempts", attempt+1)
+						if r.logBootstrapErr {
+							log.Error(err, "failed to run bootstrap", "attempts", attempt+1)
+						} else {
+							log.V(1).Info("failed to run bootstrap", "error", err, "attempts", attempt+1)
+						}
 					}),
 					resilient.WithLastErrorOnly(),
 				}
