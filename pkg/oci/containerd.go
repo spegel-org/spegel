@@ -43,7 +43,8 @@ const (
 )
 
 type ContainerdConfig struct {
-	ContentPath string
+	ContentPath          string
+	DisableContentEvents bool
 }
 
 type ContainerdOption = option.Option[ContainerdConfig]
@@ -55,12 +56,23 @@ func WithContentPath(path string) ContainerdOption {
 	}
 }
 
+// WithContentEventsDisabled disables reliance on ContentCreate events for
+// advertising image content. When disabled, content is always advertised
+// via ImageCreate events by walking the image manifest tree.
+func WithContentEventsDisabled() ContainerdOption {
+	return func(c *ContainerdConfig) error {
+		c.DisableContentEvents = true
+		return nil
+	}
+}
+
 var _ Store = &Containerd{}
 
 type Containerd struct {
-	client       *client.Client
-	mediaTypeIdx *lru.Cache[digest.Digest, string]
-	contentPath  string
+	client               *client.Client
+	mediaTypeIdx         *lru.Cache[digest.Digest, string]
+	contentPath          string
+	disableContentEvents bool
 }
 
 func NewContainerd(ctx context.Context, sock, namespace string, opts ...ContainerdOption) (*Containerd, error) {
@@ -79,9 +91,10 @@ func NewContainerd(ctx context.Context, sock, namespace string, opts ...Containe
 		return nil, err
 	}
 	c := &Containerd{
-		client:       client,
-		mediaTypeIdx: mediaTypeIdx,
-		contentPath:  cfg.ContentPath,
+		client:               client,
+		mediaTypeIdx:         mediaTypeIdx,
+		contentPath:          cfg.ContentPath,
+		disableContentEvents: cfg.DisableContentEvents,
 	}
 	return c, nil
 }
@@ -226,7 +239,10 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 
 	eventCh := make(chan OCIEvent)
 	subCtx, subCancel := context.WithCancel(ctx)
-	eventFilters := []string{`topic~="/images/create|/images/delete",event.name~="^.+/"`, `topic~="/content/create"`}
+	eventFilters := []string{`topic~="/images/create|/images/delete",event.name~="^.+/"`}
+	if !c.disableContentEvents {
+		eventFilters = append(eventFilters, `topic~="/content/create"`)
+	}
 	envelopeCh, cErrCh := c.client.EventService().Subscribe(subCtx, eventFilters...)
 
 	// Populate the content index.
@@ -343,6 +359,7 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 			return nil, err
 		}
 		refs := []Reference{}
+		events := []OCIEvent{}
 		handler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 			children, err := images.ChildrenHandler(c.client.ContentStore()).Handle(ctx, desc)
 			if errors.Is(err, errdefs.ErrNotFound) {
@@ -357,6 +374,7 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 				Digest:     desc.Digest,
 			}
 			refs = append(refs, ref)
+			events = append(events, OCIEvent{Type: CreateEvent, Reference: ref})
 			return children, nil
 		})
 		err = images.Walk(ctx, handler, cImg.Target)
@@ -364,7 +382,12 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 			return nil, err
 		}
 		contentIdx[img.Digest] = refs
-		return nil, nil
+		// When content events are enabled, ContentCreate handles
+		// advertising layer content. Skip advertising from ImageCreate.
+		if !c.disableContentEvents {
+			return nil, nil
+		}
+		return events, nil
 	case *eventtypes.ImageDelete:
 		img, err := ParseImage(e.GetName(), AllowTagOnly())
 		if err != nil {
