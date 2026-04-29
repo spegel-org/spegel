@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
-	"github.com/moby/go-archive"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -23,15 +22,18 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci"
 )
 
+var (
+	containerdVersions = []string{
+		"2.2.1",
+		"2.1.6",
+	}
+)
+
 func TestContainerdPull(t *testing.T) {
 	testStrategy := os.Getenv("INTEGRATION_TEST_STRATEGY")
 	require.NotEmpty(t, testStrategy)
 	t.Log("Running tests with with strategy", testStrategy)
 
-	containerdVersions := []string{
-		"2.2.1",
-		"2.1.6",
-	}
 	switch testStrategy {
 	case "all":
 		break
@@ -41,31 +43,37 @@ func TestContainerdPull(t *testing.T) {
 		t.Fatal("unknown test strategy", testStrategy)
 	}
 
-	cli, err := client.New(client.FromEnv)
+	mobyClient, err := client.New(client.FromEnv)
 	require.NoError(t, err)
-	for _, containerdVersion := range containerdVersions {
-		t.Run(containerdVersion, func(t *testing.T) {
-			t.Log("Building Containerd image")
-			containerImage := fmt.Sprintf("ghcr.io/spegel-org/containerd:%s", containerdVersion)
-			buildCtx, err := archive.TarWithOptions("./testdata/containerd-image", &archive.TarOptions{})
-			require.NoError(t, err)
-			targetarch := runtime.GOARCH
-			buildOpts := client.ImageBuildOptions{
-				PullParent: true,
-				Tags:       []string{containerImage},
-				Dockerfile: "Dockerfile",
-				BuildArgs: map[string]*string{
-					"TARGETARCH":         &targetarch,
-					"CONTAINERD_VERSION": &containerdVersion,
-				},
-			}
-			buildResp, err := cli.ImageBuild(t.Context(), buildCtx, buildOpts)
-			require.NoError(t, err)
-			_, err = cli.ImageLoad(t.Context(), buildResp.Body)
-			require.NoError(t, err)
-			err = buildResp.Body.Close()
-			assert.NoError(t, err)
+	t.Cleanup(func() {
+		mobyClient.Close()
+	})
 
+	containerdImgs := []oci.Image{}
+	pullGroup, pullCtx := errgroup.WithContext(t.Context())
+	for _, containerdVersion := range containerdVersions {
+		img, err := oci.NewImage("ghcr.io", "spegel-org/test-images/containerd", containerdVersion, "")
+		require.NoError(t, err)
+		containerdImgs = append(containerdImgs, img)
+
+		t.Log("Pulling Containerd image", img.String())
+		pullGroup.Go(func() error {
+			resp, err := mobyClient.ImagePull(pullCtx, img.String(), client.ImagePullOptions{})
+			if err != nil {
+				return err
+			}
+			err = resp.Wait(pullCtx)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	err = pullGroup.Wait()
+	require.NoError(t, err)
+
+	for _, img := range containerdImgs {
+		t.Run(img.Tag, func(t *testing.T) {
 			t.Log("Running Containerd container")
 			env := []string{
 				fmt.Sprintf("USER_ID=%d", os.Getuid()),
@@ -74,7 +82,7 @@ func TestContainerdPull(t *testing.T) {
 			runPath := t.TempDir()
 			createOpt := client.ContainerCreateOptions{
 				Config: &container.Config{
-					Image: containerImage,
+					Image: img.String(),
 					Tty:   false,
 					Env:   env,
 				},
@@ -89,12 +97,12 @@ func TestContainerdPull(t *testing.T) {
 					},
 				},
 			}
-			createResp, err := cli.ContainerCreate(t.Context(), createOpt)
+			createResp, err := mobyClient.ContainerCreate(t.Context(), createOpt)
 			require.NoError(t, err)
-			_, err = cli.ContainerStart(t.Context(), createResp.ID, client.ContainerStartOptions{})
+			_, err = mobyClient.ContainerStart(t.Context(), createResp.ID, client.ContainerStartOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				cli.ContainerStop(context.Background(), createResp.ID, client.ContainerStopOptions{})
+				mobyClient.ContainerStop(context.Background(), createResp.ID, client.ContainerStopOptions{})
 			})
 			require.EventuallyWithT(t, func(collect *assert.CollectT) {
 				require.FileExists(collect, filepath.Join(runPath, "ready"))
@@ -194,7 +202,7 @@ func TestContainerdPull(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
-	err = cli.Close()
+	err = mobyClient.Close()
 	require.NoError(t, err)
 }
 

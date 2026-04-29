@@ -19,6 +19,7 @@ import (
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/downloader"
@@ -44,7 +45,16 @@ import (
 	kindnodes "sigs.k8s.io/kind/pkg/cluster/nodes"
 	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
 
+	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/web"
+)
+
+var (
+	kubernetesVersions = []string{
+		"1.36.0",
+		"1.35.3",
+		"1.34.6",
+	}
 )
 
 const (
@@ -61,12 +71,14 @@ func TestKubernetes(t *testing.T) {
 
 	imgRef := os.Getenv("IMG_REF")
 	require.NotEmpty(t, imgRef)
-	t.Log("Using Spegel image", imgRef)
+
 	mobyClient, err := client.New(client.FromEnv)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		mobyClient.Close()
 	})
+
+	t.Log("Exporting Spegel image", imgRef)
 	saveRes, err := mobyClient.ImageSave(t.Context(), []string{imgRef})
 	require.NoError(t, err)
 	imgPath := filepath.Join(t.TempDir(), "image")
@@ -77,11 +89,6 @@ func TestKubernetes(t *testing.T) {
 	err = f.Close()
 	require.NoError(t, err)
 
-	kubernetesVersions := []string{
-		"v1.35.1",
-		"v1.34.3",
-		"v1.33.7",
-	}
 	proxyModes := []v1alpha4.ProxyMode{
 		v1alpha4.NFTablesProxyMode,
 		v1alpha4.IPTablesProxyMode,
@@ -102,25 +109,48 @@ func TestKubernetes(t *testing.T) {
 		t.Fatal("unknown test strategy", testStrategy)
 	}
 
+	kubernetesImgs := []oci.Image{}
+	pullGroup, pullCtx := errgroup.WithContext(t.Context())
+	for _, kubernetesVersion := range kubernetesVersions {
+		img, err := oci.NewImage("ghcr.io", "spegel-org/test-images/kind-node", kubernetesVersion, "")
+		require.NoError(t, err)
+		kubernetesImgs = append(kubernetesImgs, img)
+
+		t.Log("Pulling Kubernetes image", img.String())
+		pullGroup.Go(func() error {
+			resp, err := mobyClient.ImagePull(pullCtx, img.String(), client.ImagePullOptions{})
+			if err != nil {
+				return err
+			}
+			err = resp.Wait(pullCtx)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	err = pullGroup.Wait()
+	require.NoError(t, err)
+
 	type kubernetesTest struct {
-		kubernetesVersion string
-		proxyMode         v1alpha4.ProxyMode
-		ipFamily          v1alpha4.ClusterIPFamily
+		kubernetesImg oci.Image
+		proxyMode     v1alpha4.ProxyMode
+		ipFamily      v1alpha4.ClusterIPFamily
 	}
 	tests := []kubernetesTest{}
-	for _, kubernetesVersion := range kubernetesVersions {
+	for _, kubernetesImg := range kubernetesImgs {
 		for _, proxyMode := range proxyModes {
 			for _, ipFamily := range ipFamilies {
 				tests = append(tests, kubernetesTest{
-					kubernetesVersion: kubernetesVersion,
-					proxyMode:         proxyMode,
-					ipFamily:          ipFamily,
+					kubernetesImg: kubernetesImg,
+					proxyMode:     proxyMode,
+					ipFamily:      ipFamily,
 				})
 			}
 		}
 	}
 	for _, tt := range tests {
-		name := strings.Join([]string{tt.kubernetesVersion, string(tt.ipFamily), string(tt.proxyMode)}, "-")
+		name := strings.Join([]string{tt.kubernetesImg.Tag, string(tt.ipFamily), string(tt.proxyMode)}, "-")
 		t.Run(name, func(t *testing.T) {
 			t.Log("Creating Kind cluster")
 			kcPath := filepath.Join(t.TempDir(), "kind.kubeconfig")
@@ -166,7 +196,7 @@ func TestKubernetes(t *testing.T) {
 				},
 			}
 			createOpts := []cluster.CreateOption{
-				cluster.CreateWithNodeImage(fmt.Sprintf("docker.io/kindest/node:%s", tt.kubernetesVersion)),
+				cluster.CreateWithNodeImage(tt.kubernetesImg.String()),
 				cluster.CreateWithV1Alpha4Config(clusterCfg),
 				cluster.CreateWithKubeconfigPath(kcPath),
 			}
@@ -202,7 +232,7 @@ func TestKubernetes(t *testing.T) {
 			require.NoError(t, err)
 
 			testImages := []string{
-				"ghcr.io/spegel-org/conformance:9d1b925",
+				"ghcr.io/spegel-org/test-images/conformance:ed885fa",
 				"docker.io/library/busybox:1.37.0",
 				"ghcr.io/spegel-org/benchmark:v1-10MB-4",
 				"ghcr.io/spegel-org/benchmark:v2-10MB-4@sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b",
@@ -699,7 +729,7 @@ func runConformanceTests(t *testing.T, k8sClient kubernetes.Interface, kindNodes
 						Containers: []corev1.Container{
 							{
 								Name:  "conformance",
-								Image: "ghcr.io/spegel-org/conformance:9d1b925",
+								Image: "ghcr.io/spegel-org/test-images/conformance:ed885fa",
 								Env: []corev1.EnvVar{
 									{
 										Name:  "OCI_TEST_PULL",
