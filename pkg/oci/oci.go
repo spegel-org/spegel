@@ -9,6 +9,7 @@ import (
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
 

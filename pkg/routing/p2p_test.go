@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/go-logr/logr"
 	tlog "github.com/go-logr/logr/testing"
 	"github.com/libp2p/go-libp2p"
@@ -14,7 +16,6 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spegel-org/spegel/internal/option"
 )
