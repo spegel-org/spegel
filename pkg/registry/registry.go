@@ -266,18 +266,6 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 		return
 	}
 
-	// Make copy to not modify distribution range.
-	if dist.Range != nil {
-		rng := &httpx.Range{}
-		if dist.Range.Start != nil {
-			rng.Start = ptr.To(*dist.Range.Start)
-		}
-		if dist.Range.End != nil {
-			rng.End = ptr.To(*dist.Range.End)
-		}
-		dist.Range = rng
-	}
-
 	// Retry requests until success or timeout.
 	for {
 		done := func() bool {
@@ -326,6 +314,7 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 					log.Error(err, "copying of manifest data failed")
 					return true
 				case oci.DistributionKindBlob:
+					dist = dist.Clone()
 					if dist.Range == nil {
 						dist.Range = &httpx.Range{
 							Start: ptr.To(int64(0)),

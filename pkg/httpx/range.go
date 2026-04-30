@@ -92,6 +92,26 @@ func (rng Range) String() string {
 	}
 }
 
+// Clone returns a deep copy of the range.
+func (rng *Range) Clone() *Range {
+	if rng == nil {
+		return nil
+	}
+	var start, end *int64
+	if rng.Start != nil {
+		v := *rng.Start
+		start = &v
+	}
+	if rng.End != nil {
+		v := *rng.End
+		end = &v
+	}
+	return &Range{
+		Start: start,
+		End:   end,
+	}
+}
+
 // ContentRange represents a content range header.
 type ContentRange struct {
 	Start int64

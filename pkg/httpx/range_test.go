@@ -216,3 +216,66 @@ func TestContentRange(t *testing.T) {
 	_, err = ContentRangeFromRange(Range{Start: nil, End: nil}, 100)
 	require.EqualError(t, err, "start and end range cannot both be empty")
 }
+
+func TestRangeClone(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		rng  *Range
+		want *Range
+		name string
+	}{
+		{
+			name: "nil range",
+			rng:  nil,
+			want: nil,
+		},
+		{
+			name: "empty range",
+			rng:  &Range{},
+			want: &Range{},
+		},
+		{
+			name: "range with start and end",
+			rng: &Range{
+				Start: ptr.To(int64(0)),
+				End:   ptr.To(int64(100)),
+			},
+			want: &Range{
+				Start: ptr.To(int64(0)),
+				End:   ptr.To(int64(100)),
+			},
+		},
+		{
+			name: "range with only start",
+			rng: &Range{
+				Start: ptr.To(int64(50)),
+				End:   nil,
+			},
+			want: &Range{
+				Start: ptr.To(int64(50)),
+				End:   nil,
+			},
+		},
+		{
+			name: "range with only end",
+			rng: &Range{
+				Start: nil,
+				End:   ptr.To(int64(50)),
+			},
+			want: &Range{
+				Start: nil,
+				End:   ptr.To(int64(50)),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rng := tt.rng.Clone()
+			if tt.rng != nil {
+				require.NotSame(t, tt.rng, rng)
+			}
+			require.Equal(t, tt.want, rng)
+		})
+	}
+}
