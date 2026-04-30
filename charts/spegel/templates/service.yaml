@@ -27,17 +27,13 @@ metadata:
   namespace: {{ include "spegel.namespace" . }}
   labels:
     {{- include "spegel.labels" . | nindent 4 }}
-  {{- if or (and (not .Values.service.registry.usePreferSameNodeTrafficDistribution) .Values.service.registry.topologyAwareHintsEnabled) .Values.service.registry.annotations }}
+  {{- with .Values.service.registry.annotations }}
   annotations:
-    {{- if and (not .Values.service.registry.usePreferSameNodeTrafficDistribution) .Values.service.registry.topologyAwareHintsEnabled }}
-    service.kubernetes.io/topology-mode: "auto"
-    {{- end }}
-    {{- with .Values.service.registry.annotations }}
     {{- toYaml . | nindent 4 }}
-    {{- end }}
   {{- end }}
 spec:
   type: NodePort
+  trafficDistribution: PreferSameNode
   selector:
     app.kubernetes.io/component: spegel
     {{- include "spegel.selectorLabels" . | nindent 4 }}
@@ -47,9 +43,6 @@ spec:
       targetPort: registry
       nodePort: {{ .Values.service.registry.nodePort }}
       protocol: TCP
-  {{- if .Values.service.registry.usePreferSameNodeTrafficDistribution }}
-  trafficDistribution: PreferSameNode
-  {{- end }}
 ---
 apiVersion: v1
 kind: Service
