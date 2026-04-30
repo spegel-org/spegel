@@ -1,11 +1,13 @@
 package oci
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"slices"
+	"strings"
 )
 
 var (
@@ -72,6 +74,104 @@ func FilterForMirroredRegistries(mirroredRegistries []string) (*RegistryWhitelis
 		registryHosts = append(registryHosts, ru.Host)
 	}
 	return &RegistryWhitelistFilter{Whitelist: registryHosts}, nil
+}
+
+// MirrorTarget represents a single mirror endpoint that Spegel should write
+// into containerd's hosts.toml. It can be expressed either as a plain URL
+// string or as a struct with additional options such as OverridePath, which
+// is required when the mirror URL contains a path prefix (for example AWS
+// ECR pull-through cache, where the upstream URL is shaped as
+// <account>.dkr.ecr.<region>.amazonaws.com/v2/<cache-prefix>).
+type MirrorTarget struct {
+	URL          string `json:"url" yaml:"url"`
+	OverridePath bool   `json:"overridePath" yaml:"overridePath"`
+}
+
+// UnmarshalJSON allows MirrorTarget to be decoded either from a plain JSON
+// string (backwards compatible) or from a JSON object with a url field.
+func (m *MirrorTarget) UnmarshalJSON(b []byte) error {
+	trimmed := strings.TrimSpace(string(b))
+	if len(trimmed) > 0 && trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		m.URL = s
+		m.OverridePath = false
+		return nil
+	}
+	type raw MirrorTarget
+	var r raw
+	if err := json.Unmarshal(b, &r); err != nil {
+		return err
+	}
+	*m = MirrorTarget(r)
+	return nil
+}
+
+// parseMirrorTarget parses a single mirror target entry. The entry can be a
+// plain URL or a JSON object of the form {"url":"...","overridePath":true}.
+// This allows Helm charts to configure the new struct form without changing
+// the underlying CLI flag type.
+func parseMirrorTarget(s string) (MirrorTarget, error) {
+	trimmed := strings.TrimSpace(s)
+	if strings.HasPrefix(trimmed, "{") {
+		var mt MirrorTarget
+		if err := json.Unmarshal([]byte(trimmed), &mt); err != nil {
+			return MirrorTarget{}, fmt.Errorf("invalid mirror target JSON: %w", err)
+		}
+		if mt.URL == "" {
+			return MirrorTarget{}, errors.New("invalid mirror target: url is required")
+		}
+		return mt, nil
+	}
+	return MirrorTarget{URL: trimmed}, nil
+}
+
+// parseMirrorTargets parses the raw mirror target entries supplied through
+// the --mirror-targets flag, validating each URL. Mirror targets are not
+// allowed to contain a path unless OverridePath is set, in which case the
+// path is forwarded as-is to containerd through hosts.toml.
+func parseMirrorTargets(entries []string) ([]parsedMirrorTarget, error) {
+	out := []parsedMirrorTarget{}
+	for _, e := range entries {
+		mt, err := parseMirrorTarget(e)
+		if err != nil {
+			return nil, err
+		}
+		u, err := url.Parse(mt.URL)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateMirrorTargetURL(u, mt.OverridePath); err != nil {
+			return nil, err
+		}
+		out = append(out, parsedMirrorTarget{URL: *u, OverridePath: mt.OverridePath})
+	}
+	return out, nil
+}
+
+// parsedMirrorTarget is the internal representation handed to templateHosts.
+type parsedMirrorTarget struct {
+	URL          url.URL
+	OverridePath bool
+}
+
+func validateMirrorTargetURL(u *url.URL, overridePath bool) error {
+	errs := []error{}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		errs = append(errs, fmt.Errorf("invalid registry url scheme must be http or https: %s", u.String()))
+	}
+	if u.Path != "" && !overridePath {
+		errs = append(errs, fmt.Errorf("invalid registry url path has to be empty: %s", u.String()))
+	}
+	if len(u.Query()) != 0 {
+		errs = append(errs, fmt.Errorf("invalid registry url query has to be empty: %s", u.String()))
+	}
+	if u.User != nil {
+		errs = append(errs, fmt.Errorf("invalid registry url user has to be empty: %s", u.String()))
+	}
+	return errors.Join(errs...)
 }
 
 func parseRegistries(registries []string, allowWildcard bool) ([]url.URL, error) {

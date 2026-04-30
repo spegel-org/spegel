@@ -443,7 +443,7 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 	if err != nil {
 		return err
 	}
-	parsedMirrorTargets, err := parseRegistries(mirrorTargets, false)
+	parsedMirrorTargets, err := parseMirrorTargets(mirrorTargets)
 	if err != nil {
 		return err
 	}
@@ -629,7 +629,7 @@ func clearConfig(configPath string) error {
 	return nil
 }
 
-func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, capabilities []string, username, password string) (string, error) {
+func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []parsedMirrorTarget, capabilities []string, username, password string) (string, error) {
 	server := parsedMirrorRegistry.String()
 	if parsedMirrorRegistry.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
@@ -645,25 +645,37 @@ func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, 
 		authorization = "Basic " + authorization
 	}
 
+	type templateMirrorTarget struct {
+		URL          string
+		OverridePath bool
+	}
+	tmts := make([]templateMirrorTarget, 0, len(parsedMirrorTargets))
+	for _, mt := range parsedMirrorTargets {
+		tmts = append(tmts, templateMirrorTarget{URL: mt.URL.String(), OverridePath: mt.OverridePath})
+	}
+
 	hc := struct {
 		Authorization string
 		Server        string
 		Capabilities  string
-		MirrorTargets []url.URL
+		MirrorTargets []templateMirrorTarget
 	}{
 		Server:        server,
 		Capabilities:  fmt.Sprintf("['%s']", strings.Join(capabilities, "', '")),
-		MirrorTargets: parsedMirrorTargets,
+		MirrorTargets: tmts,
 		Authorization: authorization,
 	}
 	tmpl, err := template.New("").Parse(`{{- with .Server }}server = '{{ . }}'{{ end }}
 {{- $authorization := .Authorization }}
 {{ range .MirrorTargets }}
-[host.'{{ .String }}']
+[host.'{{ .URL }}']
 capabilities = {{ $.Capabilities }}
 dial_timeout = '200ms'
+{{- if .OverridePath }}
+override_path = true
+{{- end }}
 {{- if $authorization }}
-[host.'{{ .String }}'.header]
+[host.'{{ .URL }}'.header]
 Authorization = '{{ $authorization }}'
 {{- end }}
 {{ end }}`)

@@ -386,6 +386,28 @@ dial_timeout = '200ms'`,
 			},
 		},
 		{
+			name:               "mirror target with override path",
+			resolveTags:        true,
+			mirroredRegistries: []string{"https://docker.io"},
+			mirrorTargets: []string{
+				"http://127.0.0.1:5000",
+				`{"url":"https://123456789012.dkr.ecr.eu-west-1.amazonaws.com/v2/docker-hub","overridePath":true}`,
+			},
+			prependExisting: false,
+			expectedFiles: map[string]string{
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
+
+[host.'https://123456789012.dkr.ecr.eu-west-1.amazonaws.com/v2/docker-hub']
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
+override_path = true`,
+			},
+		},
+		{
 			name:               "with basic authentication",
 			resolveTags:        true,
 			mirroredRegistries: []string{"http://foo.bar:5000"},
