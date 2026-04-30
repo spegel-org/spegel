@@ -162,8 +162,15 @@ spegel:
   mirroredRegistries: []
     # - https://docker.io
     # - https://ghcr.io
-  # -- Additional target mirror registries other than Spegel.
+  # -- Additional target mirror registries other than Spegel. Each entry is
+  # either a plain URL string, or an object with a url field and optional
+  # overridePath flag. overridePath maps to containerd's hosts.toml
+  # `override_path = true` and is required when the mirror URL contains a
+  # path prefix, for example AWS ECR pull-through cache.
   additionalMirrorTargets: []
+  #   - https://my-mirror.example.com
+  #   - url: https://123456789012.dkr.ecr.eu-west-1.amazonaws.com/v2/docker-hub
+  #     overridePath: true
   # -- Max amount of mirrors to attempt.
   mirrorResolveRetries: 3
   # -- Max duration spent finding a mirror.
