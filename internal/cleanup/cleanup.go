@@ -8,8 +8,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/go-logr/logr"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/go-logr/logr"
 
 	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/pkg/httpx"

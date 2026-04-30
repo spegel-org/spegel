@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCleanupFail(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"math/rand/v2"
 	"net/netip"
 	"regexp"
 	"slices"
@@ -11,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"math/rand/v2"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/go-logr/logr"
 	tlog "github.com/go-logr/logr/testing"
@@ -19,7 +20,6 @@ import (
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"

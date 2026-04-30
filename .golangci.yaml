@@ -86,24 +86,20 @@ linters:
         - error
         - empty
         - stdlib
-        - github.com/libp2p/go-libp2p/core/crypto.PrivKey
   exclusions:
-    generated: lax
     presets:
-      - comments
-      - common-false-positives
-      - legacy
       - std-error-handling
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
 formatters:
   enable:
-    - goimports
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - prefix(golang.org/x)
+        - default
+        - prefix(github.com/spegel-org)
+        - localmodule
+      no-inline-comments: true
+      no-prefix-comments: true
+      custom-order: true

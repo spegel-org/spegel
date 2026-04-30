@@ -5,8 +5,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/spegel-org/spegel/internal/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spegel-org/spegel/internal/testutil"
 )
 
 func TestGate(t *testing.T) {
