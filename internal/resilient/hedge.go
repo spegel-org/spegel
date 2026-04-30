@@ -26,6 +26,22 @@ func NewHedger(percentiles []float64, initial time.Duration) *Hedger {
 	}
 }
 
+// durationAtPercentile returns the duration at the given percentile, or the the initial duration if no data is available.
+func (h *Hedger) durationAtPercentile(percentile float64) time.Duration {
+	h.mx.RLock()
+	value := h.hist.ValueAtPercentile(percentile)
+	h.mx.RUnlock()
+	if value == 0 {
+		return h.initial
+	}
+	return time.Duration(value) * time.Millisecond
+}
+
+// HighestPercentileDuration returns the duration for the highest percentile.
+func (h *Hedger) HighestPercentileDuration() time.Duration {
+	return h.durationAtPercentile(h.percentiles[len(h.percentiles)-1])
+}
+
 // Size returns the amount of times a hedge channel will be triggered.
 func (h *Hedger) Size() int {
 	return len(h.percentiles)
@@ -44,12 +60,7 @@ func (h *Hedger) Channel(ctx context.Context) <-chan any {
 	go func() {
 		start := time.Now()
 		for _, percentile := range h.percentiles {
-			h.mx.RLock()
-			hedgeDuration := time.Duration(h.hist.ValueAtPercentile(percentile)) * time.Millisecond
-			h.mx.RUnlock()
-			if hedgeDuration == 0 {
-				hedgeDuration = h.initial
-			}
+			hedgeDuration := h.durationAtPercentile(percentile)
 
 			d := max(hedgeDuration-time.Since(start), 0)
 			select {
