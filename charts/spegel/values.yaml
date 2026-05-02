@@ -140,6 +140,10 @@ grafanaDashboard:
     # -- Selected labels for Grafana instance.
     matchLabels: {}
       # dashboards: grafana
+    # -- Datasource references for the GrafanaDashboard CR.
+    datasources: []
+      # - inputName: "DS_PROMETHEUS"
+      #   datasourceName: "Prometheus"
 
 # -- Priority class name to use for the pod.
 priorityClassName: system-node-critical

@@ -42,6 +42,10 @@ spec:
     {{- else }}
       {{- fail "grafanaDashboard.grafanaOperator.matchLabels must be specified when grafanaDashboard.grafanaOperator.enabled is true" }}
     {{- end }}
+  {{- with .Values.grafanaDashboard.grafanaOperator.datasources }}
+  datasources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   json: |-
 {{ .Files.Get "monitoring/grafana-dashboard.json" | indent 4 }}
 {{- else -}}
