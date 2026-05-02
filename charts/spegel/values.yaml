@@ -142,8 +142,8 @@ grafanaDashboard:
       # dashboards: grafana
     # -- Datasource references for the GrafanaDashboard CR.
     datasources: []
-      # - inputName: "DS_PROMETHEUS"
-      #   datasourceName: "Prometheus"
+      # - inputName: DS_PROMETHEUS
+      #   datasourceName: prometheus
 
 # -- Priority class name to use for the pod.
 priorityClassName: system-node-critical
