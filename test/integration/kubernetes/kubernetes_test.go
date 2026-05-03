@@ -308,7 +308,7 @@ func TestKubernetes(t *testing.T) {
 			backupHostBuffer := bytes.NewBuffer(nil)
 			err = kindNodes[0].CommandContext(t.Context(), "cat", "/etc/containerd/certs.d/_backup/docker.io/hosts.toml").SetStdout(backupHostBuffer).Run()
 			require.NoError(t, err)
-			require.Equal(t, hostsToml, backupHostBuffer.String())
+			require.EqualT(t, hostsToml, backupHostBuffer.String())
 			err = kindNodes[0].CommandContext(t.Context(), "rm", "-rf", "/etc/containerd/certs.d/_backup").Run()
 			require.NoError(t, err)
 			err = kindNodes[0].CommandContext(t.Context(), "mkdir", "/etc/containerd/certs.d/_backup").Run()
@@ -324,13 +324,13 @@ func TestKubernetes(t *testing.T) {
 			require.NoError(t, err)
 			require.EventuallyWith(t, func(c *assert.CollectT) {
 				_, err := k8sClient.CoreV1().Pods(spegelNamespace).Get(t.Context(), initPodName, metav1.GetOptions{})
-				require.True(c, kerrors.IsNotFound(err))
+				require.TrueT(c, kerrors.IsNotFound(err))
 			}, 15*time.Second, 1*time.Second)
 			gvr := schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"}
 			waitForStatus(t, k8sDynClient, gvr, spegelNamespace, spegelNamespace, status.CurrentStatus)
 
 			_, newPeerID := getSpegelPeerID(t, k8sClient, kindNodes[2])
-			require.Equal(t, initPeerID, newPeerID)
+			require.EqualT(t, initPeerID, newPeerID)
 
 			t.Log("Remove Spegel from a node")
 			watcher, err := k8sClient.CoreV1().Pods(spegelNamespace).Watch(t.Context(), metav1.ListOptions{FieldSelector: "spec.nodeName=" + kindNodes[2].String()})
@@ -349,7 +349,7 @@ func TestKubernetes(t *testing.T) {
 					continue
 				}
 				// Ensure Spegel exist cleanly.
-				require.Equal(t, int32(0), pod.Status.ContainerStatuses[0].State.Terminated.ExitCode)
+				require.EqualT(t, int32(0), pod.Status.ContainerStatuses[0].State.Terminated.ExitCode)
 				break
 			}
 			watcher.Stop()
@@ -368,7 +368,7 @@ func TestKubernetes(t *testing.T) {
 				pod, err := k8sClient.CoreV1().Pods(spegelNamespace).Get(t.Context(), podList.Items[0].Name, metav1.GetOptions{})
 				require.NoError(c, err)
 				require.Len(c, pod.Status.ContainerStatuses, 1)
-				require.Equal(c, int32(1), pod.Status.ContainerStatuses[0].RestartCount)
+				require.EqualT(c, int32(1), pod.Status.ContainerStatuses[0].RestartCount)
 			}, 15*time.Second, 1*time.Second)
 
 			t.Log("Scale down Spegel to single instance")
@@ -384,7 +384,7 @@ func TestKubernetes(t *testing.T) {
 			require.EventuallyWith(t, func(c *assert.CollectT) {
 				for _, pod := range podList.Items {
 					_, err := k8sClient.CoreV1().Pods(spegelNamespace).Get(t.Context(), pod.Name, metav1.GetOptions{})
-					require.True(c, kerrors.IsNotFound(err))
+					require.TrueT(c, kerrors.IsNotFound(err))
 				}
 			}, 5*time.Second, 1*time.Second)
 
@@ -478,7 +478,7 @@ func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kube
 
 	podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{})
 	require.NoError(t, err)
-	require.Equal(t, len(kindNodes), len(podList.Items))
+	require.EqualT(t, len(kindNodes), len(podList.Items))
 }
 
 func waitForStatus(t *testing.T, k8sDynClient dynamic.Interface, gvr schema.GroupVersionResource, namespace, name string, s status.Status) {
@@ -490,7 +490,7 @@ func waitForStatus(t *testing.T, k8sDynClient dynamic.Interface, gvr schema.Grou
 		require.NotNil(t, status.GetLegacyConditionsFn(u))
 		res, err := status.Compute(u)
 		require.NoError(c, err)
-		require.Equal(c, s, res.Status)
+		require.EqualT(c, s, res.Status)
 	}, 60*time.Second, 500*time.Millisecond)
 }
 
@@ -620,13 +620,13 @@ func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sDynClient dyn
 			require.Len(c, pod.Status.ContainerStatuses, 1)
 			waitingState := pod.Status.ContainerStatuses[0].State.Waiting
 			require.NotNil(c, waitingState)
-			require.Equal(c, "ErrImagePull", waitingState.Reason)
+			require.EqualT(c, "ErrImagePull", waitingState.Reason)
 		}, 10*time.Second, 500*time.Millisecond)
 
 		podList, err := k8sClient.CoreV1().Pods(pullTestNamespace).List(t.Context(), metav1.ListOptions{})
 		require.NoError(t, err)
 		for _, pod := range podList.Items {
-			require.NotEqual(t, kindNodes[0].String(), pod.Spec.NodeName)
+			require.NotEqualT(t, kindNodes[0].String(), pod.Spec.NodeName)
 		}
 
 		// Check OCI volume content.
@@ -657,9 +657,9 @@ func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sDynClient dyn
 			"random_file_7526869637736667835.txt",
 			"random_file_8163815451001128425.txt",
 		}
-		require.ElementsMatch(t, expected, files)
+		require.ElementsMatchT(t, expected, files)
 	})
-	require.True(t, succeeded, "pull test failed")
+	require.TrueT(t, succeeded, "pull test failed")
 }
 
 func runConformanceTests(t *testing.T, k8sClient kubernetes.Interface, kindNodes []kindnodes.Node) {
@@ -741,11 +741,11 @@ func runConformanceTests(t *testing.T, k8sClient kubernetes.Interface, kindNodes
 		require.EventuallyWith(t, func(c *assert.CollectT) {
 			job, err := k8sClient.BatchV1().Jobs(conformanceNamespace).Get(t.Context(), job.Name, metav1.GetOptions{})
 			require.NoError(c, err)
-			require.Equal(c, int32(0), job.Status.Failed)
-			require.Equal(c, int32(1), job.Status.Succeeded)
+			require.EqualT(c, int32(0), job.Status.Failed)
+			require.EqualT(c, int32(1), job.Status.Succeeded)
 		}, 15*time.Second, 1*time.Second)
 	})
-	require.True(t, succeeded, "conformance test failed")
+	require.TrueT(t, succeeded, "conformance test failed")
 }
 
 func noSpegelRestart(t *testing.T, k8sClient kubernetes.Interface) {
@@ -755,7 +755,7 @@ func noSpegelRestart(t *testing.T, k8sClient kubernetes.Interface) {
 	require.NoError(t, err)
 	require.NotEmpty(t, podList.Items)
 	for _, pod := range podList.Items {
-		require.Equal(t, int32(0), pod.Status.ContainerStatuses[0].RestartCount)
+		require.EqualT(t, int32(0), pod.Status.ContainerStatuses[0].RestartCount)
 	}
 }
 
@@ -769,7 +769,7 @@ func getSpegelPeerID(t *testing.T, k8sClient kubernetes.Interface, kindNode kind
 	portIdx := slices.IndexFunc(podList.Items[0].Spec.Containers[0].Ports, func(port corev1.ContainerPort) bool {
 		return port.Name == "metrics"
 	})
-	require.Positive(t, portIdx)
+	require.PositiveT(t, portIdx)
 	debugWebPort := podList.Items[0].Spec.Containers[0].Ports[portIdx].ContainerPort
 	podName := podList.Items[0].Name
 

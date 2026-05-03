@@ -56,13 +56,13 @@ func TestFingerprintMediaType(t *testing.T) {
 			defer f.Close()
 			mt, err := FingerprintMediaType(f)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedMediaType, mt)
+			require.EqualT(t, tt.expectedMediaType, mt)
 		})
 	}
 
 	mt, err := FingerprintMediaType(strings.NewReader("{}"))
 	require.NoError(t, err)
-	require.Equal(t, ocispec.MediaTypeEmptyJSON, mt)
+	require.EqualT(t, ocispec.MediaTypeEmptyJSON, mt)
 
 	_, err = FingerprintMediaType(strings.NewReader(" "))
 	require.ErrorIs(t, err, io.EOF)
@@ -110,7 +110,7 @@ func TestIsManifestMediatype(t *testing.T) {
 			t.Parallel()
 
 			ok := IsManifestsMediatype(tt.mt)
-			require.Equal(t, tt.expected, ok)
+			require.EqualT(t, tt.expected, ok)
 		})
 	}
 }

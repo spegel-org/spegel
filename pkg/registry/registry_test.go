@@ -51,12 +51,12 @@ func TestRegistryOptions(t *testing.T) {
 	cfg := RegistryConfig{}
 	err = option.Apply(&cfg, opts...)
 	require.NoError(t, err)
-	require.Equal(t, 5, cfg.ResolveRetries)
-	require.Equal(t, filters, cfg.Filters)
-	require.Equal(t, 10*time.Minute, cfg.ResolveTimeout)
+	require.EqualT(t, 5, cfg.ResolveRetries)
+	require.SliceEqualT(t, filters, cfg.Filters)
+	require.EqualT(t, 10*time.Minute, cfg.ResolveTimeout)
 	require.Equal(t, ociClient, cfg.OCIClient)
-	require.Equal(t, "foo", cfg.Username)
-	require.Equal(t, "bar", cfg.Password)
+	require.EqualT(t, "foo", cfg.Username)
+	require.EqualT(t, "bar", cfg.Password)
 }
 
 func TestProbeHandlers(t *testing.T) {
@@ -77,21 +77,21 @@ func TestProbeHandlers(t *testing.T) {
 	rw := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/readyz", nil)
 	handler.ServeHTTP(rw, req)
-	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
+	require.EqualT(t, http.StatusOK, rw.Result().StatusCode)
 	rw = httptest.NewRecorder()
 	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/livez", nil)
 	handler.ServeHTTP(rw, req)
-	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
+	require.EqualT(t, http.StatusOK, rw.Result().StatusCode)
 
 	router.SetReadiness(false)
 	rw = httptest.NewRecorder()
 	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/readyz", nil)
 	handler.ServeHTTP(rw, req)
-	require.Equal(t, http.StatusInternalServerError, rw.Result().StatusCode)
+	require.EqualT(t, http.StatusInternalServerError, rw.Result().StatusCode)
 	rw = httptest.NewRecorder()
 	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/livez", nil)
 	handler.ServeHTTP(rw, req)
-	require.Equal(t, http.StatusOK, rw.Result().StatusCode)
+	require.EqualT(t, http.StatusOK, rw.Result().StatusCode)
 }
 
 func TestBasicAuth(t *testing.T) {
@@ -164,7 +164,7 @@ func TestBasicAuth(t *testing.T) {
 			handler := reg.Handler(logr.Discard())
 			handler.ServeHTTP(rw, req)
 
-			require.Equal(t, tt.expected, rw.Result().StatusCode)
+			require.EqualT(t, tt.expected, rw.Result().StatusCode)
 		})
 	}
 }
@@ -471,11 +471,11 @@ func TestRegistryHandler(t *testing.T) {
 				defer httpx.DrainAndClose(resp.Body)
 				b, err := io.ReadAll(resp.Body)
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedStatus, resp.StatusCode)
+				require.EqualT(t, tt.expectedStatus, resp.StatusCode)
 
 				switch method {
 				case http.MethodGet:
-					require.Equal(t, tt.expectedBody, b)
+					require.SliceEqualT(t, tt.expectedBody, b)
 				case http.MethodHead:
 					require.Empty(t, b)
 				default:
@@ -562,7 +562,7 @@ func TestFetchChannel(t *testing.T) {
 			time.Sleep(1 * time.Second)
 			synctest.Wait()
 			testutil.RequireChannelReceive(t, fetchCh)
-			require.Equal(t, time.Second, time.Since(start))
+			require.EqualT(t, time.Second, time.Since(start))
 		}
 
 		// Fetch skips hedges when immediate are called.
@@ -583,7 +583,7 @@ func TestFetchChannel(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		synctest.Wait()
 		testutil.RequireChannelReceive(t, fetchCh)
-		require.Equal(t, time.Second, time.Since(start))
+		require.EqualT(t, time.Second, time.Since(start))
 
 		synctest.Wait()
 		time.Sleep(1 * time.Second)

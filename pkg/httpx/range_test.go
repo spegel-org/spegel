@@ -72,7 +72,7 @@ func TestRange(t *testing.T) {
 			r, err := ParseRangeHeader(header)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedRange, *r)
-			require.Equal(t, tt.expectedString, r.String())
+			require.EqualT(t, tt.expectedString, r.String())
 		})
 	}
 
@@ -205,8 +205,8 @@ func TestContentRange(t *testing.T) {
 			require.NoError(t, err)
 			crng, err := ContentRangeFromRange(*rng, tt.size)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedString, crng.String())
-			require.Equal(t, tt.expectedLength, crng.Length())
+			require.EqualT(t, tt.expectedString, crng.String())
+			require.EqualT(t, tt.expectedLength, crng.Length())
 		})
 	}
 
@@ -273,7 +273,7 @@ func TestRangeClone(t *testing.T) {
 			t.Parallel()
 			rng := tt.rng.Clone()
 			if tt.rng != nil {
-				require.NotSame(t, tt.rng, rng)
+				require.NotSameT(t, tt.rng, rng)
 			}
 			require.Equal(t, tt.want, rng)
 		})

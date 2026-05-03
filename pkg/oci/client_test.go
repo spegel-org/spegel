@@ -98,8 +98,8 @@ func TestClient(t *testing.T) {
 	require.NoError(t, err)
 	_, desc, err := ociClient.Fetch(t.Context(), dist, WithFetchMirror(mirror))
 	require.NoError(t, err)
-	require.Equal(t, dist.Digest, desc.Digest)
-	require.Equal(t, httpx.ContentTypeBinary, desc.MediaType)
+	require.EqualT(t, dist.Digest, desc.Digest)
+	require.EqualT(t, httpx.ContentTypeBinary, desc.MediaType)
 }
 
 func TestDescriptorHeader(t *testing.T) {
@@ -112,9 +112,9 @@ func TestDescriptorHeader(t *testing.T) {
 		Digest:    digest.Digest("sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9"),
 	}
 	WriteDescriptorToHeader(desc, header)
-	require.Equal(t, "foo", header.Get(httpx.HeaderContentType))
-	require.Equal(t, "909", header.Get(httpx.HeaderContentLength))
-	require.Equal(t, "sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9", header.Get(HeaderDockerDigest))
+	require.EqualT(t, "foo", header.Get(httpx.HeaderContentType))
+	require.EqualT(t, "909", header.Get(httpx.HeaderContentLength))
+	require.EqualT(t, "sha256:b6d6089ca6c395fd563c2084f5dd7bc56a2f5e6a81413558c5be0083287a77e9", header.Get(HeaderDockerDigest))
 	headerDesc, err := DescriptorFromHeader(header)
 	require.NoError(t, err)
 	require.Equal(t, desc, headerDesc)

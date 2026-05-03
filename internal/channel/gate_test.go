@@ -17,7 +17,7 @@ func TestGate(t *testing.T) {
 		gate := NewGate()
 
 		// Gate should start off closed.
-		require.False(t, gate.State())
+		require.FalseT(t, gate.State())
 		testutil.RequireChannelReceive(t, gate.WaitFor(false))
 
 		// Gate should block until it is opened.
@@ -27,7 +27,7 @@ func TestGate(t *testing.T) {
 			gate.Open()
 		}()
 		<-gate.WaitFor(true)
-		require.Equal(t, 1*time.Second, time.Since(start))
-		require.True(t, gate.State())
+		require.EqualT(t, 1*time.Second, time.Since(start))
+		require.TrueT(t, gate.State())
 	})
 }

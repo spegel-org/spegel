@@ -73,5 +73,5 @@ func TestHappyEyeballs(t *testing.T) {
 		return string(b), nil
 	})
 	require.NoError(t, err)
-	require.Equal(t, "Hello World", res)
+	require.EqualT(t, "Hello World", res)
 }

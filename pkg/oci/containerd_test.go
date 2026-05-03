@@ -23,7 +23,7 @@ func TestBackupConfig(t *testing.T) {
 	require.NoError(t, err)
 	ok, err := dirExists(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
-	require.True(t, ok)
+	require.TrueT(t, ok)
 	files, err := os.ReadDir(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
 	require.Empty(t, files)
@@ -35,7 +35,7 @@ func TestBackupConfig(t *testing.T) {
 	require.NoError(t, err)
 	ok, err = dirExists(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
-	require.True(t, ok)
+	require.TrueT(t, ok)
 	files, err = os.ReadDir(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
 	require.Len(t, files, 1)
@@ -89,7 +89,7 @@ func TestContentLabelsToReferences(t *testing.T) {
 
 			refs, err := contentLabelsToReferences(tt.labels, dgst)
 			require.NoError(t, err)
-			require.ElementsMatch(t, tt.expected, refs)
+			require.ElementsMatchT(t, tt.expected, refs)
 		})
 	}
 
@@ -430,7 +430,7 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 			require.NoError(t, err)
 			ok, err := dirExists(filepath.Join(registryConfigPath, "_backup"))
 			require.NoError(t, err)
-			require.True(t, ok)
+			require.TrueT(t, ok)
 			seenExpectedFiles := maps.Clone(tt.expectedFiles)
 			err = filepath.Walk(registryConfigPath, func(path string, fi iofs.FileInfo, _ error) error {
 				if fi.IsDir() {
@@ -439,11 +439,11 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 				relPath, err := filepath.Rel(registryConfigPath, path)
 				require.NoError(t, err)
 				expectedContent, ok := tt.expectedFiles[relPath]
-				require.True(t, ok, relPath)
+				require.TrueT(t, ok, relPath)
 				delete(seenExpectedFiles, relPath)
 				b, err := os.ReadFile(path)
 				require.NoError(t, err)
-				require.Equal(t, expectedContent, string(b))
+				require.EqualT(t, expectedContent, string(b))
 				return nil
 			})
 			require.NoError(t, err)
@@ -535,7 +535,7 @@ x-custom-2 = ['foo']
 [host.'https://non-compliant-mirror.registry/v2/upstream']
 capabilities = ['pull']
 override_path = true`
-	require.Equal(t, expected, eh)
+	require.EqualT(t, expected, eh)
 }
 
 func TestCleanupMirrorConfiguration(t *testing.T) {
@@ -557,6 +557,6 @@ func TestCleanupMirrorConfiguration(t *testing.T) {
 		files, err := os.ReadDir(configPath)
 		require.NoError(t, err)
 		require.Len(t, files, 1)
-		require.Equal(t, "data.txt", files[0].Name())
+		require.EqualT(t, "data.txt", files[0].Name())
 	}
 }

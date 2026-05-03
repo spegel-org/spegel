@@ -16,7 +16,7 @@ func TestDelayFunc(t *testing.T) {
 
 	expected := 13 * time.Millisecond
 	d := FixedDelay(expected)(10, nil)
-	require.Equal(t, expected, d)
+	require.EqualT(t, expected, d)
 
 	delay := BackoffDelay(10*time.Millisecond, 140*time.Millisecond)
 	expectedDurations := []time.Duration{
@@ -28,7 +28,7 @@ func TestDelayFunc(t *testing.T) {
 	}
 	for i := range 5 {
 		d := delay(i+1, fmt.Errorf("%d", i))
-		require.Equal(t, expectedDurations[i], d)
+		require.EqualT(t, expectedDurations[i], d)
 	}
 }
 
@@ -96,7 +96,7 @@ func TestRetry(t *testing.T) {
 		return errors.New("retry error")
 	}, retryOpts...)
 	require.NoError(t, err)
-	require.Equal(t, retries-1, count)
+	require.EqualT(t, retries-1, count)
 
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel = context.WithTimeout(t.Context(), 1*time.Second)

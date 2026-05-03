@@ -41,5 +41,5 @@ func TestMerge(t *testing.T) {
 	<-waitCtx.Done()
 
 	expected := []int{1, 2, 3, 4, 5, 6}
-	require.ElementsMatch(t, expected, results)
+	require.ElementsMatchT(t, expected, results)
 }

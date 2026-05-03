@@ -50,7 +50,7 @@ func TestMatchesFilter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			require.Equal(t, tt.expected, MatchesFilter(tt.ref, tt.filters))
+			require.EqualT(t, tt.expected, MatchesFilter(tt.ref, tt.filters))
 		})
 	}
 }
@@ -85,7 +85,7 @@ func TestFilterForMirroredRegistries(t *testing.T) {
 	filter, err := FilterForMirroredRegistries(registries)
 	require.NoError(t, err)
 	expected := []string{"docker.io", "quay.io", "localhost:5000"}
-	require.Equal(t, expected, filter.Whitelist)
+	require.SliceEqualT(t, expected, filter.Whitelist)
 
 	ref := Reference{
 		Registry:   "localhost:6000",
@@ -93,7 +93,7 @@ func TestFilterForMirroredRegistries(t *testing.T) {
 		Tag:        "bar",
 	}
 	matches := MatchesFilter(ref, []Filter{filter})
-	require.True(t, matches)
+	require.TrueT(t, matches)
 
 	ref = Reference{
 		Registry:   "localhost:5000",
@@ -101,7 +101,7 @@ func TestFilterForMirroredRegistries(t *testing.T) {
 		Tag:        "bar",
 	}
 	matches = MatchesFilter(ref, []Filter{filter})
-	require.False(t, matches)
+	require.FalseT(t, matches)
 
 	ref = Reference{
 		Registry:   "docker.io",
@@ -109,7 +109,7 @@ func TestFilterForMirroredRegistries(t *testing.T) {
 		Tag:        "bar",
 	}
 	matches = MatchesFilter(ref, []Filter{filter})
-	require.False(t, matches)
+	require.FalseT(t, matches)
 }
 
 func TestParseRegistries(t *testing.T) {
@@ -123,7 +123,7 @@ func TestParseRegistries(t *testing.T) {
 		strs = append(strs, ru.String())
 	}
 	expected := []string{"https://docker.io", "//_default", "http://localhost:9090"}
-	require.Equal(t, expected, strs)
+	require.SliceEqualT(t, expected, strs)
 
 	//nolint: govet // Prioritize readability in tests.
 	fail := []struct {

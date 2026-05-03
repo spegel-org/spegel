@@ -19,9 +19,9 @@ func TestBaseClient(t *testing.T) {
 	t.Parallel()
 
 	c := BaseClient()
-	require.Equal(t, 10*time.Second, c.Timeout)
+	require.EqualT(t, 10*time.Second, c.Timeout)
 	_, ok := c.Transport.(*http.Transport)
-	require.True(t, ok)
+	require.TrueT(t, ok)
 }
 
 func TestBaseTransport(t *testing.T) {

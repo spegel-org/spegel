@@ -91,7 +91,7 @@ func TestDNSBootstrap(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, addrInfos, 1)
 	require.Len(t, addrInfos[0].Addrs, 1)
-	require.Equal(t, "{: [/ip4/10.1.2.3]}", addrInfos[0].String())
+	require.EqualT(t, "{: [/ip4/10.1.2.3]}", addrInfos[0].String())
 
 	cancel()
 	err = g.Wait()
@@ -128,8 +128,8 @@ func TestHTTPBootstrap(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, addrInfos, 1)
 	require.Len(t, addrInfos[0].Addrs, 1)
-	require.Equal(t, parentAddrInfo.ID, addrInfos[0].ID)
-	require.Equal(t, "{12D3KooWAsvvigG9jqjMNWMmqXph6BvszxTus6Fg6k5UZda2iKDB: [/ip4/127.0.0.1/tcp/4001]}", addrInfos[0].String())
+	require.EqualT(t, parentAddrInfo.ID, addrInfos[0].ID)
+	require.EqualT(t, "{12D3KooWAsvvigG9jqjMNWMmqXph6BvszxTus6Fg6k5UZda2iKDB: [/ip4/127.0.0.1/tcp/4001]}", addrInfos[0].String())
 
 	cancel()
 	err = g.Wait()

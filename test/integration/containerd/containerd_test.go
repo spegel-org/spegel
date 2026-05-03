@@ -119,7 +119,7 @@ func TestContainerdPull(t *testing.T) {
 			containerdStore, err := oci.NewContainerd(t.Context(), socketPath, "k8s.io")
 			require.NoError(t, err)
 			name := containerdStore.Name()
-			require.Equal(t, "containerd", name)
+			require.EqualT(t, "containerd", name)
 			eventCh, err := containerdStore.Subscribe(t.Context())
 			require.NoError(t, err)
 
@@ -167,10 +167,10 @@ func TestContainerdPull(t *testing.T) {
 				require.Len(t, imgs, 1)
 				tagName, ok := imgs[0].TagName()
 				if ok {
-					require.Equal(t, benchmarkImg.String(), tagName)
+					require.EqualT(t, benchmarkImg.String(), tagName)
 					dgst, err := containerdStore.Resolve(t.Context(), tagName)
 					require.NoError(t, err)
-					require.Equal(t, imgs[0].Digest, dgst)
+					require.EqualT(t, imgs[0].Digest, dgst)
 				}
 
 				descs := []ocispec.Descriptor{}
@@ -215,5 +215,5 @@ func ensureEvents(t *testing.T, ch <-chan oci.OCIEvent, expected []oci.OCIEvent)
 		event := <-ch
 		received = append(received, event)
 	}
-	require.ElementsMatch(t, expected, received)
+	require.ElementsMatchT(t, expected, received)
 }

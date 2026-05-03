@@ -14,11 +14,11 @@ func TestMemoryRouter(t *testing.T) {
 
 	isReady, err := r.Ready(t.Context())
 	require.NoError(t, err)
-	require.True(t, isReady)
+	require.TrueT(t, isReady)
 	r.SetReadiness(false)
 	isReady, err = r.Ready(t.Context())
 	require.NoError(t, err)
-	require.False(t, isReady)
+	require.FalseT(t, isReady)
 	r.SetReadiness(true)
 
 	err = r.Advertise(t.Context(), []string{"foo"})
@@ -36,19 +36,19 @@ func TestMemoryRouter(t *testing.T) {
 	peers := []Peer{}
 	for range 2 {
 		peer, ok := iter.Acquire()
-		require.True(t, ok)
+		require.TrueT(t, ok)
 		peers = append(peers, peer)
 	}
 
 	require.Len(t, peers, 2)
 	peers, ok := r.Get("foo")
-	require.True(t, ok)
+	require.TrueT(t, ok)
 	require.Len(t, peers, 2)
 
 	iter, err = r.Lookup(t.Context(), "bar", 1)
 	require.NoError(t, err)
 	_, ok = iter.Acquire()
-	require.False(t, ok)
+	require.FalseT(t, ok)
 	_, ok = r.Get("bar")
-	require.False(t, ok)
+	require.FalseT(t, ok)
 }

@@ -17,51 +17,51 @@ func TestResponseWriter(t *testing.T) {
 
 	var httpRw http.ResponseWriter = &response{}
 	_, ok := httpRw.(io.ReaderFrom)
-	require.True(t, ok)
+	require.TrueT(t, ok)
 
 	rw, rec := NewRecorder()
 	//nolint: errcheck // No need to check unwrap.
 	require.Equal(t, rec, rw.(*response).Unwrap())
 	require.NoError(t, rw.Error())
-	require.Equal(t, int64(0), rw.Size())
-	require.Equal(t, http.StatusOK, rw.Status())
+	require.EqualT(t, int64(0), rw.Size())
+	require.EqualT(t, http.StatusOK, rw.Status())
 
 	rw, _ = NewRecorder()
 	rw.WriteHeader(http.StatusNotFound)
 	//nolint: errcheck // No need to check unwrap.
-	require.True(t, rw.(*response).wroteHeader)
-	require.Equal(t, http.StatusNotFound, rw.Status())
+	require.TrueT(t, rw.(*response).wroteHeader)
+	require.EqualT(t, http.StatusNotFound, rw.Status())
 	rw.WriteHeader(http.StatusBadGateway)
-	require.Equal(t, http.StatusNotFound, rw.Status())
+	require.EqualT(t, http.StatusNotFound, rw.Status())
 	_, err := rw.Write([]byte("foo"))
 	require.NoError(t, err)
-	require.Equal(t, http.StatusNotFound, rw.Status())
+	require.EqualT(t, http.StatusNotFound, rw.Status())
 
 	rw, _ = NewRecorder()
 	first := "hello world"
 	n, err := rw.Write([]byte(first))
-	require.Equal(t, http.StatusOK, rw.Status())
+	require.EqualT(t, http.StatusOK, rw.Status())
 	require.NoError(t, err)
-	require.Equal(t, len(first), n)
-	require.Equal(t, int64(len(first)), rw.Size())
+	require.EqualT(t, len(first), n)
+	require.EqualT(t, int64(len(first)), rw.Size())
 	second := "foo bar"
 	n, err = rw.Write([]byte(second))
 	require.NoError(t, err)
-	require.Equal(t, len(second), n)
-	require.Equal(t, int64(len(first)+len(second)), rw.Size())
+	require.EqualT(t, len(second), n)
+	require.EqualT(t, int64(len(first)+len(second)), rw.Size())
 
 	rw, _ = NewRecorder()
 	r := strings.NewReader("reader")
 	//nolint: errcheck // No need to check unwrap.
 	readFromN, err := rw.(*response).ReadFrom(r)
 	require.NoError(t, err)
-	require.Equal(t, r.Size(), readFromN)
-	require.Equal(t, r.Size(), rw.Size())
+	require.EqualT(t, r.Size(), readFromN)
+	require.EqualT(t, r.Size(), rw.Size())
 
 	rw, _ = NewRecorder()
 	rw.SetAttrs("foo", "bar")
 	//nolint: errcheck // No need to check unwrap.
-	require.Equal(t, map[string]any{"foo": "bar"}, rw.(*response).attrs)
+	require.MapEqualT(t, map[string]any{"foo": "bar"}, rw.(*response).attrs)
 }
 
 func TestResponseWriterError(t *testing.T) {
@@ -100,10 +100,10 @@ func TestResponseWriterError(t *testing.T) {
 				}
 				rw.WriteError(http.StatusInternalServerError, tt.err)
 				require.Equal(t, tt.err, rw.Error())
-				require.Equal(t, http.StatusInternalServerError, rw.Status())
+				require.EqualT(t, http.StatusInternalServerError, rw.Status())
 				require.Equal(t, tt.expectedHeaders, rec.Header())
 				if method != http.MethodHead {
-					require.Equal(t, tt.expectedBody, rec.Body.String())
+					require.EqualT(t, tt.expectedBody, rec.Body.String())
 				}
 			})
 		}
