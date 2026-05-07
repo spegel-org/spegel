@@ -82,19 +82,19 @@ func TestParseImageStrict(t *testing.T) {
 						continue
 					}
 					require.NoError(t, err)
-					require.Equal(t, registry, img.Registry)
-					require.Equal(t, tt.expectedRepository, img.Repository)
-					require.Equal(t, tt.expectedTag, img.Tag)
-					require.Equal(t, tt.expectedDigest, img.Digest)
+					require.EqualT(t, registry, img.Registry)
+					require.EqualT(t, tt.expectedRepository, img.Repository)
+					require.EqualT(t, tt.expectedTag, img.Tag)
+					require.EqualT(t, tt.expectedDigest, img.Digest)
 					tagName, ok := img.TagName()
 					if tt.expectedTag == "" {
-						require.False(t, ok)
+						require.FalseT(t, ok)
 						require.Empty(t, tagName)
 					} else {
-						require.True(t, ok)
-						require.Equal(t, registry+"/"+tt.expectedRepository+":"+tt.expectedTag, tagName)
+						require.TrueT(t, ok)
+						require.EqualT(t, registry+"/"+tt.expectedRepository+":"+tt.expectedTag, tagName)
 					}
-					require.Equal(t, fmt.Sprintf("%s/%s", registry, tt.expectedString), img.String())
+					require.EqualT(t, fmt.Sprintf("%s/%s", registry, tt.expectedString), img.String())
 				}
 			})
 		}
@@ -249,7 +249,7 @@ func TestParseImageDefaults(t *testing.T) {
 
 			img, err := ParseImage(tt.input, AllowDefaults(), AllowTagOnly())
 			require.NoError(t, err)
-			require.Equal(t, tt.expected, img.String())
+			require.EqualT(t, tt.expected, img.String())
 		})
 	}
 }

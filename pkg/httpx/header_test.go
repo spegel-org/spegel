@@ -16,5 +16,5 @@ func TestCopyHeader(t *testing.T) {
 	dst := http.Header{}
 	CopyHeader(dst, src)
 
-	require.Equal(t, []string{"2", "1"}, dst.Values("foo"))
+	require.SliceEqualT(t, []string{"2", "1"}, dst.Values("foo"))
 }

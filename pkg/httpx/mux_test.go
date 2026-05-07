@@ -34,7 +34,7 @@ func TestServeMux(t *testing.T) {
 	}
 
 	expectedHandlersCalled := []string{"prefix", "exact", "prefix"}
-	require.Equal(t, expectedHandlersCalled, handlersCalled)
+	require.SliceEqualT(t, expectedHandlersCalled, handlersCalled)
 
 	expectedMetrics := `
 # HELP http_requests_inflight The number of inflight requests being handled at the same time.
@@ -118,7 +118,7 @@ func TestGetClientIP(t *testing.T) {
 			t.Parallel()
 
 			ip := GetClientIP(tt.request)
-			require.Equal(t, tt.expected, ip)
+			require.EqualT(t, tt.expected, ip)
 		})
 	}
 }
@@ -153,7 +153,7 @@ func TestMetricsFriendlyPath(t *testing.T) {
 				t.Parallel()
 
 				metricsPath := metricsFriendlyPath(method + tt.pattern)
-				require.Equal(t, tt.expected, metricsPath)
+				require.EqualT(t, tt.expected, metricsPath)
 			})
 		}
 	}

@@ -34,7 +34,7 @@ func TestP2PRouterOptions(t *testing.T) {
 	err := option.Apply(&cfg, opts...)
 	require.NoError(t, err)
 	require.Equal(t, libp2pOpts, cfg.Libp2pOpts)
-	require.Equal(t, "foobar", cfg.DataDir)
+	require.EqualT(t, "foobar", cfg.DataDir)
 }
 
 func TestP2PRouter(t *testing.T) {
@@ -59,7 +59,7 @@ func TestP2PRouter(t *testing.T) {
 	})
 	ready, err := primaryRouter.Ready(t.Context())
 	require.NoError(t, err)
-	require.False(t, ready)
+	require.FalseT(t, ready)
 
 	// Advertise and Withdraw nil keys should not error.
 	err = primaryRouter.Advertise(t.Context(), nil)
@@ -78,14 +78,14 @@ func TestP2PRouter(t *testing.T) {
 	addrInfos, err := primaryRouter.kdht.FindProviders(t.Context(), c)
 	require.NoError(t, err)
 	require.Len(t, addrInfos, 1)
-	require.Equal(t, primaryRouter.host.ID(), addrInfos[0].ID)
+	require.EqualT(t, primaryRouter.host.ID(), addrInfos[0].ID)
 
 	// Lookup local key should not return self when offline.
 	iter, err := primaryRouter.Lookup(t.Context(), advertisedKey, 3)
 	require.NoError(t, err)
 	<-iter.Exhausted()
 	_, ok := iter.Acquire()
-	require.False(t, ok)
+	require.FalseT(t, ok)
 
 	// Create routers that all bootstrap with the primary router.
 	routers := []*P2PRouter{}
@@ -103,25 +103,25 @@ func TestP2PRouter(t *testing.T) {
 	<-primaryRouter.connectivityGate.WaitFor(false)
 	ready, err = primaryRouter.Ready(t.Context())
 	require.NoError(t, err)
-	require.True(t, ready)
+	require.TrueT(t, ready)
 	require.EventuallyWith(t, func(c *assert.CollectT) {
-		require.Equal(c, int64(1), primaryRouter.prov.Stats().Operations.Past.KeysProvided)
+		require.EqualT(c, int64(1), primaryRouter.prov.Stats().Operations.Past.KeysProvided)
 	}, 5*time.Second, time.Second)
 
 	for _, router := range routers {
 		<-router.connectivityGate.WaitFor(false)
 		ready, err := router.Ready(t.Context())
 		require.NoError(t, err)
-		require.True(t, ready)
+		require.TrueT(t, ready)
 	}
-	require.Equal(t, 30, primaryRouter.kdht.RoutingTable().Size())
+	require.EqualT(t, 30, primaryRouter.kdht.RoutingTable().Size())
 
 	// Lookup should not return self when online.
 	iter, err = primaryRouter.Lookup(t.Context(), advertisedKey, 3)
 	require.NoError(t, err)
 	<-iter.Exhausted()
 	_, ok = iter.Acquire()
-	require.False(t, ok)
+	require.FalseT(t, ok)
 
 	// Advertised keys should be found.
 	for _, r := range routers {
@@ -129,9 +129,9 @@ func TestP2PRouter(t *testing.T) {
 		require.NoError(t, err)
 		<-iter.Ready()
 		peer, ok := iter.Acquire()
-		require.True(t, ok)
+		require.TrueT(t, ok)
 		iter.Release(peer)
-		require.Equal(t, primaryRouter.host.ID().String(), peer.Host)
+		require.EqualT(t, primaryRouter.host.ID().String(), peer.Host)
 		primaryIPAddrs, err := toIPAddrs(primaryRouter.host.Addrs())
 		require.NoError(t, err)
 		require.ElementsMatch(t, primaryIPAddrs, peer.Addresses)
@@ -140,7 +140,7 @@ func TestP2PRouter(t *testing.T) {
 		require.NoError(t, err)
 		<-iter.Exhausted()
 		_, ok = iter.Acquire()
-		require.False(t, ok)
+		require.FalseT(t, ok)
 	}
 
 	// Advertise key from another router and lookup.
@@ -150,16 +150,16 @@ func TestP2PRouter(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EventuallyWith(t, func(c *assert.CollectT) {
-		require.Equal(c, int64(1), lastRouter.prov.Stats().Operations.Past.KeysProvided)
+		require.EqualT(c, int64(1), lastRouter.prov.Stats().Operations.Past.KeysProvided)
 	}, 5*time.Second, 1*time.Second)
 
 	iter, err = primaryRouter.Lookup(t.Context(), newKey, 3)
 	require.NoError(t, err)
 	<-iter.Ready()
 	peer, ok := iter.Acquire()
-	require.True(t, ok)
+	require.TrueT(t, ok)
 	iter.Release(peer)
-	require.Equal(t, lastRouter.host.ID().String(), peer.Host)
+	require.EqualT(t, lastRouter.host.ID().String(), peer.Host)
 	lastIPAddrs, err := toIPAddrs(lastRouter.host.Addrs())
 	require.NoError(t, err)
 	require.ElementsMatch(t, lastIPAddrs, peer.Addresses)
@@ -194,7 +194,7 @@ func TestProvideTTL(t *testing.T) {
 	err := routers[0].Advertise(t.Context(), []string{"foo"})
 	require.NoError(t, err)
 	require.EventuallyWith(t, func(c *assert.CollectT) {
-		require.Equal(c, int64(1), routers[0].prov.Stats().Operations.Past.KeysProvided)
+		require.EqualT(c, int64(1), routers[0].prov.Stats().Operations.Past.KeysProvided)
 	}, 5*time.Second, time.Second)
 	err = routers[0].Withdraw(t.Context(), []string{"foo"})
 	require.NoError(t, err)
@@ -205,7 +205,7 @@ func TestProvideTTL(t *testing.T) {
 		require.NoError(t, err)
 		<-iter.Ready()
 		_, ok := iter.Acquire()
-		require.True(t, ok)
+		require.TrueT(t, ok)
 	}
 
 	// Wait past TTL and expect content to not be found.
@@ -216,7 +216,7 @@ func TestProvideTTL(t *testing.T) {
 		require.NoError(t, err)
 		<-iter.Exhausted()
 		_, ok := iter.Acquire()
-		require.False(t, ok)
+		require.FalseT(t, ok)
 	}
 
 	runCancel()
@@ -266,7 +266,7 @@ func TestListenMultiaddrs(t *testing.T) {
 			listenAddrs, err := listenMultiaddrs(tt.addr)
 			require.NoError(t, err)
 			for i, e := range tt.expectedListenAddrs {
-				require.Equal(t, e.String(), listenAddrs[i].String())
+				require.EqualT(t, e.String(), listenAddrs[i].String())
 			}
 		})
 	}
@@ -277,7 +277,7 @@ func TestCreateCid(t *testing.T) {
 
 	c, err := createCid("foobar")
 	require.NoError(t, err)
-	require.Equal(t, "bafkreigdvoh7cnza5cwzar65hfdgwpejotszfqx2ha6uuolaofgk54ge6i", c.String())
+	require.EqualT(t, "bafkreigdvoh7cnza5cwzar65hfdgwpejotszfqx2ha6uuolaofgk54ge6i", c.String())
 }
 
 func TestAddrsEqual(t *testing.T) {
@@ -331,7 +331,7 @@ func TestAddrsEqual(t *testing.T) {
 			t.Parallel()
 
 			matches := addrsEqual(tt.a, tt.b)
-			require.Equal(t, tt.expected, matches)
+			require.EqualT(t, tt.expected, matches)
 		})
 	}
 }
@@ -350,8 +350,8 @@ func TestLoadOrCreatePrivateKey(t *testing.T) {
 	require.NoError(t, err)
 	ok, err := secondPrivKey.GetPublic().Verify(data, sig)
 	require.NoError(t, err)
-	require.True(t, ok)
-	require.True(t, firstPrivKey.Equals(secondPrivKey))
+	require.TrueT(t, ok)
+	require.TrueT(t, firstPrivKey.Equals(secondPrivKey))
 }
 
 func TestListPeers(t *testing.T) {

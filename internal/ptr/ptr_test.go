@@ -11,6 +11,6 @@ func TestTo(t *testing.T) {
 
 	v := "hello world"
 	p := To(v)
-	require.Equal(t, v, *p)
+	require.EqualT(t, v, *p)
 	require.Equal(t, &v, p)
 }

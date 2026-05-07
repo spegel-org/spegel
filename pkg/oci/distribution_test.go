@@ -89,14 +89,14 @@ func TestParseDistributionPath(t *testing.T) {
 			require.NoError(t, err)
 			dist, err := ParseDistributionPath(req)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedName, dist.Repository)
-			require.Equal(t, tt.expectedDgst, dist.Digest)
-			require.Equal(t, tt.expectedTag, dist.Tag)
-			require.Equal(t, tt.expectedRef, dist.Identifier())
-			require.Equal(t, tt.expectedKind, dist.Kind)
-			require.Equal(t, tt.registry, dist.Registry)
-			require.Equal(t, tt.path, dist.URL().Path)
-			require.Equal(t, tt.registry, dist.URL().Query().Get("ns"))
+			require.EqualT(t, tt.expectedName, dist.Repository)
+			require.EqualT(t, tt.expectedDgst, dist.Digest)
+			require.EqualT(t, tt.expectedTag, dist.Tag)
+			require.EqualT(t, tt.expectedRef, dist.Identifier())
+			require.EqualT(t, tt.expectedKind, dist.Kind)
+			require.EqualT(t, tt.registry, dist.Registry)
+			require.EqualT(t, tt.path, dist.URL().Path)
+			require.EqualT(t, tt.registry, dist.URL().Query().Get("ns"))
 		})
 	}
 }
@@ -215,7 +215,7 @@ func TestDistributionPathClone(t *testing.T) {
 			dist := tt.dist.Clone()
 			require.Equal(t, tt.want, dist)
 			if tt.dist.Range != nil {
-				require.NotSame(t, tt.want.Range, dist.Range)
+				require.NotSameT(t, tt.want.Range, dist.Range)
 			}
 		})
 	}

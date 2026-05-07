@@ -33,19 +33,19 @@ func TestWeb(t *testing.T) {
 	rw, rec := httpx.NewRecorder()
 	w.indexHandler(rw, nil)
 	resp := rec.Result()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.EqualT(t, http.StatusOK, resp.StatusCode)
 
 	rw, rec = httpx.NewRecorder()
 	w.metaDataHandler(rw, nil)
 	resp = rec.Result()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Equal(t, httpx.ContentTypeJSON, resp.Header.Get(httpx.HeaderContentType))
+	require.EqualT(t, http.StatusOK, resp.StatusCode)
+	require.EqualT(t, httpx.ContentTypeJSON, resp.Header.Get(httpx.HeaderContentType))
 
 	rw, rec = httpx.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	w.statsHandler(rw, req)
 	resp = rec.Result()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.EqualT(t, http.StatusOK, resp.StatusCode)
 
 	stats := statsData{
 		LocalAddresses:    []netip.Addr{{}},
@@ -56,7 +56,7 @@ func TestWeb(t *testing.T) {
 	rw, rec = httpx.NewRecorder()
 	httpx.RenderTemplate(rw, w.tmpls.Lookup("stats.html"), stats)
 	resp = rec.Result()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.EqualT(t, http.StatusOK, resp.StatusCode)
 
 	rw, rec = httpx.NewRecorder()
 	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
@@ -65,7 +65,7 @@ func TestWeb(t *testing.T) {
 	req.URL.RawQuery = query.Encode()
 	w.measureHandler(rw, req)
 	resp = rec.Result()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.EqualT(t, http.StatusOK, resp.StatusCode)
 
 	measure := measureResult{
 		LookupResults: []routing.LookupResult{{}},
@@ -74,5 +74,5 @@ func TestWeb(t *testing.T) {
 	rw, rec = httpx.NewRecorder()
 	httpx.RenderTemplate(rw, w.tmpls.Lookup("measure.html"), measure)
 	resp = rec.Result()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.EqualT(t, http.StatusOK, resp.StatusCode)
 }

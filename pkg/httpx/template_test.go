@@ -19,7 +19,7 @@ func TestRenderTemplate(t *testing.T) {
 	rw, rec := NewRecorder()
 	RenderTemplate(rw, tmpl, nil)
 	resp := rec.Result()
-	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	require.EqualT(t, http.StatusInternalServerError, resp.StatusCode)
 
 	data := struct {
 		Test string
@@ -29,10 +29,10 @@ func TestRenderTemplate(t *testing.T) {
 	rw, rec = NewRecorder()
 	RenderTemplate(rw, tmpl, data)
 	resp = rec.Result()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Equal(t, ContentTypeHTML, rw.Header().Get(HeaderContentType))
-	require.Equal(t, strconv.FormatInt(int64(len(data.Test)), 10), rw.Header().Get(HeaderContentLength))
+	require.EqualT(t, http.StatusOK, resp.StatusCode)
+	require.EqualT(t, ContentTypeHTML, rw.Header().Get(HeaderContentType))
+	require.EqualT(t, strconv.FormatInt(int64(len(data.Test)), 10), rw.Header().Get(HeaderContentLength))
 	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Equal(t, data.Test, string(b))
+	require.EqualT(t, data.Test, string(b))
 }

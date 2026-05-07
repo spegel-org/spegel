@@ -42,5 +42,5 @@ func TestApply(t *testing.T) {
 
 	err = Apply(&cfg, withData("foo bar"))
 	require.NoError(t, err)
-	require.Equal(t, "foo bar", cfg.Data)
+	require.EqualT(t, "foo bar", cfg.Data)
 }

@@ -44,7 +44,7 @@ func TestHedger(t *testing.T) {
 			t.Parallel()
 
 			hedger := NewHedger([]float64{80, 90, 95}, 100*time.Millisecond)
-			require.Equal(t, 3, hedger.Size())
+			require.EqualT(t, 3, hedger.Size())
 			for _, d := range tt.observations {
 				err := hedger.Observe(d)
 				require.NoError(t, err)
@@ -56,10 +56,10 @@ func TestHedger(t *testing.T) {
 				durations := []time.Duration{}
 				for range 3 {
 					_, ok := <-ch
-					require.True(t, ok)
+					require.TrueT(t, ok)
 					durations = append(durations, time.Since(start))
 				}
-				require.Equal(t, tt.expected, durations)
+				require.SliceEqualT(t, tt.expected, durations)
 			})
 		})
 	}
