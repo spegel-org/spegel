@@ -1,5 +1,5 @@
 name: Bug Report
-description: Create a report to help improve Spegel
+description: Create a bug report to help improve Spegel
 type: bug
 body:
   - type: markdown
@@ -9,7 +9,7 @@ body:
   - type: input
     attributes:
       label: Spegel version
-      placeholder: eg. v0.0.16
+      placeholder: eg. v0.7.0
     validations:
       required: true
   - type: input
@@ -17,22 +17,29 @@ body:
       label: Kubernetes distribution
       placeholder: eg. AKS, EKS, K3S, Kubeadm...
     validations:
-      required: true
+      required: false
   - type: input
     attributes:
       label: Kubernetes version
-      placeholder: eg. v1.29.0
+      placeholder: eg. v1.36.0
     validations:
-      required: true
+      required: false
   - type: input
     attributes:
       label: CNI
       placeholder: eg. Calico, Cilium, Azure CNI...
     validations:
-      required: true
+      required: false
   - type: textarea
     attributes:
       label: Describe the bug
       description: A clear description of what the bug is.
     validations:
       required: true
+  - type: checkboxes
+    attributes:
+      label: Community Rules
+      description: The [Code of Conduct](github.com/spegel-org/.github/blob/main/CODE_OF_CONDUCT.md) and [AI Policy](../../AI_POLICY.md) helps create a healthy community. We require that everyone agrees to it.
+      options:
+        - label: I agree to follow Spegels community rules and that all my communication is written by a human.
+          required: true
