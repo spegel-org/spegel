@@ -8,7 +8,7 @@ updates:
     labels:
       - "changelog/ignore"
     groups:
-      all-dependencies:
+      github-actions:
         patterns:
           - "*"
   - package-ecosystem: "gomod"
@@ -32,6 +32,6 @@ updates:
     labels:
       - "changelog/ignore"
     groups:
-      all-dependencies:
+      gomod-integration:
         patterns:
           - "*"
