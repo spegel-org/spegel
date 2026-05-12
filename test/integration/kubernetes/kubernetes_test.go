@@ -212,6 +212,13 @@ func TestKubernetes(t *testing.T) {
 				require.NoError(t, err)
 			})
 
+			k8sCfg, err := clientcmd.BuildConfigFromFlags("", kcPath)
+			require.NoError(t, err)
+			k8sClient, err := kubernetes.NewForConfig(k8sCfg)
+			require.NoError(t, err)
+			k8sDynClient, err := dynamic.NewForConfig(k8sCfg)
+			require.NoError(t, err)
+
 			kindNodes, err := provider.ListNodes(kindName)
 			require.NoError(t, err)
 			controlPlaneNodeName := kindName + "-control-plane"
@@ -224,13 +231,17 @@ func TestKubernetes(t *testing.T) {
 				}
 				return 0
 			})
-
-			k8sCfg, err := clientcmd.BuildConfigFromFlags("", kcPath)
-			require.NoError(t, err)
-			k8sClient, err := kubernetes.NewForConfig(k8sCfg)
-			require.NoError(t, err)
-			k8sDynClient, err := dynamic.NewForConfig(k8sCfg)
-			require.NoError(t, err)
+			require.EventuallyWith(t, func(c *assert.CollectT) {
+				for _, kindNode := range kindNodes {
+					node, err := k8sClient.CoreV1().Nodes().Get(t.Context(), kindNode.String(), metav1.GetOptions{})
+					require.NoError(c, err)
+					idx := slices.IndexFunc(node.Status.Conditions, func(cond corev1.NodeCondition) bool {
+						return cond.Type == corev1.NodeReady
+					})
+					require.GreaterT(c, idx, -1)
+					require.EqualT(c, corev1.ConditionTrue, node.Status.Conditions[idx].Status)
+				}
+			}, 30*time.Second, 1*time.Second)
 
 			testImages := []string{
 				"ghcr.io/spegel-org/test-images/conformance:ed885fa",
