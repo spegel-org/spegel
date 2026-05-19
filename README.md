@@ -27,14 +27,6 @@ Spegel is for you if you are looking to do any of the following.
 
 Read the [getting started](https://spegel.dev/docs/getting-started/) guide to deploy Spegel.
 
-## Contributing
-
-Read [contribution guidelines](./CONTRIBUTING.md) for instructions on how to build and test Spegel.
-
 ## Acknowledgements
 
 Spegel was initially developed at [Xenit AB](https://xenit.se/).
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
