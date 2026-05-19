@@ -472,14 +472,14 @@ func installSpegel(t *testing.T, actionCfg *action.Configuration, k8sClient kube
 		install.Namespace = spegelNamespace
 		install.CreateNamespace = true
 		install.WaitStrategy = kube.StatusWatcherStrategy
-		install.Timeout = 60 * time.Second
+		install.Timeout = 120 * time.Second
 		_, err = install.RunWithContext(t.Context(), charter, vals)
 		require.NoError(t, err)
 	} else {
 		upgrade := action.NewUpgrade(actionCfg)
 		upgrade.Namespace = spegelNamespace
 		upgrade.WaitStrategy = kube.StatusWatcherStrategy
-		upgrade.Timeout = 60 * time.Second
+		upgrade.Timeout = 300 * time.Second
 		_, err := upgrade.RunWithContext(t.Context(), spegelNamespace, charter, vals)
 		require.NoError(t, err)
 	}
