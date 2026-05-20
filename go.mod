@@ -8,7 +8,7 @@ require (
 	cuelabs.dev/go/oci/ociregistry v0.0.0-20250530080122-d0efc28a5723
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0
 	github.com/alexflint/go-arg v1.6.1
-	github.com/containerd/containerd/api v1.10.0
+	github.com/containerd/containerd/api v1.11.1
 	github.com/containerd/containerd/v2 v2.2.3
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v1.0.0-rc.4
