@@ -104,7 +104,9 @@ func TestP2PRouter(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ready)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Equal(c, int64(1), primaryRouter.prov.Stats().Operations.Past.KeysProvided)
+		stats, err := primaryRouter.prov.Stats(t.Context())
+		require.NoError(c, err)
+		require.Equal(c, int64(1), stats.Operations.Past.KeysProvided)
 	}, 5*time.Second, time.Second)
 
 	for _, router := range routers {
@@ -149,7 +151,9 @@ func TestP2PRouter(t *testing.T) {
 	require.NoError(t, err)
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Equal(c, int64(1), lastRouter.prov.Stats().Operations.Past.KeysProvided)
+		stats, err := lastRouter.prov.Stats(t.Context())
+		require.NoError(c, err)
+		require.Equal(c, int64(1), stats.Operations.Past.KeysProvided)
 	}, 5*time.Second, 1*time.Second)
 
 	iter, err = primaryRouter.Lookup(t.Context(), newKey, 3)
@@ -193,7 +197,9 @@ func TestProvideTTL(t *testing.T) {
 	err := routers[0].Advertise(t.Context(), []string{"foo"})
 	require.NoError(t, err)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Equal(c, int64(1), routers[0].prov.Stats().Operations.Past.KeysProvided)
+		stats, err := routers[0].prov.Stats(t.Context())
+		require.NoError(c, err)
+		require.Equal(c, int64(1), stats.Operations.Past.KeysProvided)
 	}, 5*time.Second, time.Second)
 	err = routers[0].Withdraw(t.Context(), []string{"foo"})
 	require.NoError(t, err)
