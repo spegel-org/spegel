@@ -30,7 +30,9 @@ jobs:
         uses: korthout/backport-action@66065406958f46e82238fd59546f5a99e69e22aa # v4.5.2
         with:
           github_token: ${{ steps.bot.outputs.token }}
+          conflict_resolution: draft_commit_conflicts
           label_pattern: '^backport:([^ ]+)$'
+          copy_labels_pattern: '^changelog\/\S+'
           pull_title: '[${target_branch}] ${pull_title}'
           pull_description: |-
-            Automated backport to `${target_branch}`, triggered by a label in #${pull_number}.on:
+            Automated backport to `${target_branch}`, triggered by a label in #${pull_number}.
