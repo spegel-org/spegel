@@ -66,6 +66,8 @@ type RegistryCmd struct {
 	RegistryFilters       []*regexp.Regexp `arg:"--registry-filters,env:REGISTRY_FILTERS" help:"Regular expressions to filter out tags/registries, if slice is empty all registries/tags are resolved."`
 	MirrorResolveTimeout  time.Duration    `arg:"--mirror-resolve-timeout,env:MIRROR_RESOLVE_TIMEOUT" default:"20ms" help:"Max duration spent finding a mirror."`
 	MirrorResolveRetries  int              `arg:"--mirror-resolve-retries,env:MIRROR_RESOLVE_RETRIES" default:"3" help:"Max amount of mirrors to attempt."`
+	RouterAdvertiseTTL    time.Duration    `arg:"--router-advertise-ttl,env:ROUTER_ADVERTISE_TTL" default:"15m" help:"TTL for provider records advertised to the DHT. Controls how long peers are discoverable after a node stops re-advertising (e.g. on termination)."`
+	RouterMaxReprovideDelay time.Duration  `arg:"--router-max-reprovide-delay,env:ROUTER_MAX_REPROVIDE_DELAY" default:"2m" help:"Max random delay added to the re-provide interval to avoid thundering herd. Provider record validity is set to advertise-ttl plus twice this value."`
 	DebugWebEnabled       bool             `arg:"--debug-web-enabled,env:DEBUG_WEB_ENABLED" default:"true" help:"When true enables debug web page."`
 }
 
@@ -224,6 +226,8 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	routerOpts := []routing.P2PRouterOption{
 		routing.WithDataDir(args.DataDir),
+		routing.WithAdvertiseTTL(args.RouterAdvertiseTTL),
+		routing.WithMaxReprovideDelay(args.RouterMaxReprovideDelay),
 	}
 	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort, routerOpts...)
 	if err != nil {
