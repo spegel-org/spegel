@@ -19,7 +19,6 @@ import (
 
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/v2/client"
-	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/events"
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/containerd/v2/pkg/labels"
@@ -128,23 +127,6 @@ func (c *Containerd) ListImages(ctx context.Context) ([]Image, error) {
 	return imgs, nil
 }
 
-func (c *Containerd) ListContent(ctx context.Context) ([][]Reference, error) {
-	contents := [][]Reference{}
-	err := c.client.ContentStore().Walk(ctx, func(i content.Info) error {
-		refs, err := contentLabelsToReferences(i.Labels, i.Digest)
-		if err != nil {
-			logr.FromContextOrDiscard(ctx).Error(err, "skipping content that cant be converted to reference")
-			return nil
-		}
-		contents = append(contents, refs)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return contents, nil
-}
-
 func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
 	cImg, err := c.client.ImageService().Get(ctx, ref)
 	if err != nil {
@@ -221,7 +203,7 @@ func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekC
 	}, nil
 }
 
-func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
+func (c *Containerd) Subscribe(ctx context.Context) (map[Image][]digest.Digest, <-chan OCIEvent, error) {
 	log := logr.FromContextOrDiscard(ctx)
 
 	eventCh := make(chan OCIEvent)
@@ -230,11 +212,12 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 	envelopeCh, cErrCh := c.client.EventService().Subscribe(subCtx, eventFilters...)
 
 	// Populate the content index.
+	initial := map[Image][]digest.Digest{}
 	contentIdx := map[digest.Digest][]Reference{}
 	cImgs, err := c.client.ImageService().List(ctx, listImageFilter)
 	if err != nil {
 		subCancel()
-		return nil, err
+		return nil, nil, err
 	}
 	for _, cImg := range cImgs {
 		img, err := ParseImage(cImg.Name, WithDigest(cImg.Target.Digest))
@@ -265,6 +248,12 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 			continue
 		}
 		contentIdx[cImg.Target.Digest] = refs
+
+		dgsts := []digest.Digest{}
+		for _, ref := range refs {
+			dgsts = append(dgsts, ref.Digest)
+		}
+		initial[img] = dgsts
 	}
 
 	go func() {
@@ -295,7 +284,7 @@ func (c *Containerd) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
 			log.Error(err, "received containerd event error")
 		}
 	}()
-	return eventCh, nil
+	return initial, eventCh, nil
 }
 
 func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, contentIdx map[digest.Digest][]Reference) ([]OCIEvent, error) {

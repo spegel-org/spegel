@@ -33,49 +33,33 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 		return err
 	}
 
-	// Start subscribing to not miss events.
-	eventCh, err := ociStore.Subscribe(ctx)
+	initial, eventCh, err := ociStore.Subscribe(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Initial advertisement of all content.
 	keys := []string{}
-	imgs, err := ociStore.ListImages(ctx)
-	if err != nil {
-		return err
-	}
-	for _, img := range imgs {
-		if oci.MatchesFilter(img.Reference, cfg.Filters) {
-			continue
-		}
-		tagName, ok := img.TagName()
-		if ok {
-			keys = append(keys, tagName)
-			metrics.AdvertisedImageTags.WithLabelValues(img.Registry).Inc()
+	for img, dgsts := range initial {
+		if !oci.MatchesFilter(img.Reference, cfg.Filters) {
+			tagName, ok := img.TagName()
+			if ok {
+				metrics.AdvertisedImageTags.WithLabelValues(img.Registry).Inc()
+				keys = append(keys, tagName)
+			}
 		}
 		metrics.AdvertisedImageDigests.WithLabelValues(img.Registry).Inc()
-	}
-	contents, err := ociStore.ListContent(ctx)
-	if err != nil {
-		return err
-	}
-	for _, refs := range contents {
-		// TODO(phillebaba): Apply filtering on parent image tag.
-		if allReferencesMatchFilter(refs, cfg.Filters) {
-			continue
+		for _, dgst := range dgsts {
+			metrics.AdvertisedContentDigests.WithLabelValues(img.Registry).Inc()
+			keys = append(keys, dgst.String())
 		}
-		for _, ref := range refs {
-			metrics.AdvertisedContentDigests.WithLabelValues(ref.Registry).Inc()
-		}
-		keys = append(keys, refs[0].Digest.String())
 	}
 	err = router.Advertise(ctx, keys)
 	if err != nil {
 		return err
 	}
 
-	// Watch for OCI events.
+	// Advertise as new events are received.
 	logr.FromContextOrDiscard(ctx).Info("waiting for store events")
 	for {
 		select {
@@ -125,13 +109,4 @@ func handleEvent(ctx context.Context, router routing.Router, event oci.OCIEvent,
 	default:
 		return fmt.Errorf("unhandled event type %s", event.Type)
 	}
-}
-
-func allReferencesMatchFilter(refs []oci.Reference, filters []oci.Filter) bool {
-	for _, ref := range refs {
-		if !oci.MatchesFilter(ref, filters) {
-			return false
-		}
-	}
-	return true
 }
