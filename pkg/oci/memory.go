@@ -17,15 +17,15 @@ var _ Store = &Memory{}
 type Memory struct {
 	descs  map[digest.Digest]ocispec.Descriptor
 	blobs  map[digest.Digest][]byte
-	tags   map[string]digest.Digest
-	images []Image
+	tags   map[string]Image
+	images map[Image][]digest.Digest
 	mx     sync.RWMutex
 }
 
 func NewMemory() *Memory {
 	return &Memory{
-		images: []Image{},
-		tags:   map[string]digest.Digest{},
+		images: map[Image][]digest.Digest{},
+		tags:   map[string]Image{},
 		descs:  map[digest.Digest]ocispec.Descriptor{},
 		blobs:  map[digest.Digest][]byte{},
 	}
@@ -35,37 +35,33 @@ func (m *Memory) Name() string {
 	return "memory"
 }
 
-func (m *Memory) Subscribe(ctx context.Context) (<-chan OCIEvent, error) {
-	return nil, nil
+func (m *Memory) Subscribe(ctx context.Context) (map[Image][]digest.Digest, <-chan OCIEvent, error) {
+	m.mx.RLock()
+	defer m.mx.RUnlock()
+
+	return m.images, nil, nil
 }
 
 func (m *Memory) ListImages(ctx context.Context) ([]Image, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
-	return m.images, nil
-}
-
-func (m *Memory) ListContent(ctx context.Context) ([][]Reference, error) {
-	m.mx.RLock()
-	defer m.mx.RUnlock()
-
-	contents := [][]Reference{}
-	for k := range m.blobs {
-		contents = append(contents, []Reference{{Digest: k}})
+	imgs := []Image{}
+	for img := range m.images {
+		imgs = append(imgs, img)
 	}
-	return contents, nil
+	return imgs, nil
 }
 
 func (m *Memory) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
 
-	dgst, ok := m.tags[ref]
+	img, ok := m.tags[ref]
 	if !ok {
 		return "", fmt.Errorf("could not resolve tag %s to a digest", ref)
 	}
-	return dgst, nil
+	return img.Digest, nil
 }
 
 func (m *Memory) Descriptor(ctx context.Context, dgst digest.Digest) (ocispec.Descriptor, error) {
@@ -101,18 +97,14 @@ func (m *Memory) AddImage(img Image) {
 	m.mx.Lock()
 	defer m.mx.Unlock()
 
-	m.images = append(m.images, img)
 	tagName, ok := img.TagName()
-	if !ok {
-		return
+	if ok {
+		m.tags[tagName] = img
 	}
-	m.tags[tagName] = img.Digest
+	m.images[img] = nil
 }
 
-func (m *Memory) Write(desc ocispec.Descriptor, b []byte) error {
-	m.mx.Lock()
-	defer m.mx.Unlock()
-
+func (m *Memory) Write(img *Image, desc ocispec.Descriptor, b []byte) error {
 	if desc.Size == 0 {
 		desc.Size = int64(len(b))
 	}
@@ -128,6 +120,15 @@ func (m *Memory) Write(desc ocispec.Descriptor, b []byte) error {
 	computedDgst := desc.Digest.Algorithm().FromBytes(b)
 	if desc.Digest != computedDgst {
 		return fmt.Errorf("computed digest %s does not match given digest %s", computedDgst, desc.Digest)
+	}
+
+	m.mx.Lock()
+	defer m.mx.Unlock()
+
+	if img != nil {
+		dgsts := m.images[*img]
+		dgsts = append(dgsts, desc.Digest)
+		m.images[*img] = dgsts
 	}
 
 	m.descs[desc.Digest] = desc

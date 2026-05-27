@@ -120,8 +120,9 @@ func TestContainerdPull(t *testing.T) {
 			require.NoError(t, err)
 			name := containerdStore.Name()
 			require.EqualT(t, "containerd", name)
-			eventCh, err := containerdStore.Subscribe(t.Context())
+			initial, eventCh, err := containerdStore.Subscribe(t.Context())
 			require.NoError(t, err)
+			require.Empty(t, initial)
 
 			imgs := []string{
 				"ghcr.io/spegel-org/benchmark:v2-10MB-4",
@@ -172,23 +173,6 @@ func TestContainerdPull(t *testing.T) {
 					require.NoError(t, err)
 					require.EqualT(t, imgs[0].Digest, dgst)
 				}
-
-				descs := []ocispec.Descriptor{}
-				contents, err := containerdStore.ListContent(t.Context())
-				require.NoError(t, err)
-				for _, refs := range contents {
-					for _, ref := range refs {
-						rc, err := containerdStore.Open(t.Context(), ref.Digest)
-						require.NoError(t, err)
-						err = rc.Close()
-						require.NoError(t, err)
-
-						desc, err := containerdStore.Descriptor(t.Context(), ref.Digest)
-						require.NoError(t, err)
-						descs = append(descs, desc)
-					}
-				}
-				require.ElementsMatch(t, expectedDescs, descs)
 
 				t.Log("Deleting image with CRI", benchmarkImg.String())
 				_, err = imageClient.RemoveImage(t.Context(), &runtimeapi.RemoveImageRequest{Image: &runtimeapi.ImageSpec{Image: benchmarkImg.String()}})

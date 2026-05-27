@@ -42,9 +42,6 @@ type Store interface {
 	// ListImages returns a list of all local images.
 	ListImages(ctx context.Context) ([]Image, error)
 
-	// ListContent returns a list of references for all the content.
-	ListContent(ctx context.Context) ([][]Reference, error)
-
 	// Resolve returns the digest for the tagged image name reference.
 	// The ref is expected to be in the format `registry/name:tag`.
 	Resolve(ctx context.Context, ref string) (digest.Digest, error)
@@ -55,8 +52,9 @@ type Store interface {
 	// Open returns the streamable content for the given digest.
 	Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
 
-	// Subscribe will notify for any image events ocuring in the store backend.
-	Subscribe(ctx context.Context) (<-chan OCIEvent, error)
+	// Subscribe returns an initial state of content  and a channel informing of any changes.
+	// The digest for the top level image layer should be included in the digest slice.
+	Subscribe(ctx context.Context) (map[Image][]digest.Digest, <-chan OCIEvent, error)
 }
 
 // FingerprintMediaType attempts to determine the media type based on the json structure.
