@@ -322,9 +322,41 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		if err != nil {
 			return nil, err
 		}
-		// Just advertise the image if it is a tag reference.
+		// For tag references, walk the image to also advertise its manifest and content digests.
+		// This ensures that a GET /manifests/:digest succeeds on peer nodes even when the
+		// ContentCreate events fail to carry distribution source labels in time.
 		if img.Digest == "" {
-			return []OCIEvent{{Type: CreateEvent, Reference: img.Reference}}, nil
+			cImg, err := c.client.ImageService().Get(ctx, img.String())
+			if err != nil {
+				// Image not yet committed to image service; advertise tag only as fallback.
+				return []OCIEvent{{Type: CreateEvent, Reference: img.Reference}}, nil
+			}
+			refs := []Reference{}
+			walkHandler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+				children, err := images.ChildrenHandler(c.client.ContentStore()).Handle(ctx, desc)
+				if errors.Is(err, errdefs.ErrNotFound) {
+					return nil, nil
+				}
+				if err != nil {
+					return nil, err
+				}
+				refs = append(refs, Reference{
+					Registry:   img.Registry,
+					Repository: img.Repository,
+					Digest:     desc.Digest,
+				})
+				return children, nil
+			})
+			if err := images.Walk(ctx, walkHandler, cImg.Target); err != nil {
+				// Walk failure is non-fatal; advertise tag only as fallback.
+				return []OCIEvent{{Type: CreateEvent, Reference: img.Reference}}, nil
+			}
+			contentIdx[cImg.Target.Digest] = refs
+			events := []OCIEvent{{Type: CreateEvent, Reference: img.Reference}}
+			for _, ref := range refs {
+				events = append(events, OCIEvent{Type: CreateEvent, Reference: ref})
+			}
+			return events, nil
 		}
 		// Walk the image to index its content.
 		cImg, err := c.client.ImageService().Get(ctx, img.String())
