@@ -83,8 +83,14 @@ type Statistics struct {
 	MirrorLastSuccess atomic.Int64
 }
 
+type peerCacheEntry struct {
+	expiresAt time.Time
+	peer      routing.Peer
+}
+
 type Registry struct {
 	bufferPool     *sync.Pool
+	peerCache      sync.Map
 	hedger         *resilient.Hedger
 	ociStore       oci.Store
 	ociClient      *oci.Client
@@ -249,6 +255,12 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 			r.stats.MirrorLastSuccess.Store(time.Now().Unix())
 		} else {
 			metrics.MirrorRequestsTotal.WithLabelValues(dist.Registry, "miss").Inc()
+			// Evict the cached peer on failure so a stale entry is not retried
+			// on subsequent requests. The cache is repopulated on the next
+			// successful mirror fetch (e.g. a HEAD by tag).
+			if dist.Kind == oci.DistributionKindManifest && dist.Digest != "" {
+				r.peerCache.Delete(dist.Digest.String())
+			}
 		}
 	}()
 
@@ -266,6 +278,17 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 		return
 	}
 
+	// For manifest GET by digest, seed the iterator with a recently seen peer.
+	// This handles the case where a HEAD by tag succeeds but the subsequent GET
+	// by digest fails because the manifest digest has not yet propagated in the DHT.
+	if dist.Kind == oci.DistributionKindManifest && dist.Digest != "" {
+		if v, ok := r.peerCache.Load(dist.Digest.String()); ok {
+			if entry, ok := v.(peerCacheEntry); ok && time.Now().Before(entry.expiresAt) {
+				iter.Add(entry.peer)
+			}
+		}
+	}
+
 	// Retry requests until success or timeout.
 	for {
 		done := func() bool {
@@ -275,6 +298,14 @@ func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath,
 				return true
 			}
 			defer httpx.DrainAndClose(res.rc)
+
+			// Cache the peer for manifest fetches to assist subsequent GET by digest lookups.
+			if dist.Kind == oci.DistributionKindManifest && res.desc.Digest != "" {
+				r.peerCache.Store(res.desc.Digest.String(), peerCacheEntry{
+					peer:      res.peer,
+					expiresAt: time.Now().Add(30 * time.Second),
+				})
+			}
 
 			if !rw.HeadersWritten() {
 				oci.WriteDescriptorToHeader(res.desc, rw.Header())
