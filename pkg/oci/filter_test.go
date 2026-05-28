@@ -155,6 +155,83 @@ func TestParseRegistries(t *testing.T) {
 	}
 }
 
+func TestParseMirrorTargets(t *testing.T) {
+	t.Parallel()
+
+	t.Run("plain URL", func(t *testing.T) {
+		t.Parallel()
+		mts, err := parseMirrorTargets([]string{"http://127.0.0.1:5000"})
+		require.NoError(t, err)
+		require.Len(t, mts, 1)
+		require.Equal(t, "http://127.0.0.1:5000", mts[0].URL.String())
+		require.False(t, mts[0].OverridePath)
+	})
+
+	t.Run("JSON object enables override path", func(t *testing.T) {
+		t.Parallel()
+		entry := `{"url":"https://123.dkr.ecr.eu-west-1.amazonaws.com/v2/docker-hub","overridePath":true}`
+		mts, err := parseMirrorTargets([]string{entry})
+		require.NoError(t, err)
+		require.Len(t, mts, 1)
+		require.Equal(t, "https://123.dkr.ecr.eu-west-1.amazonaws.com/v2/docker-hub", mts[0].URL.String())
+		require.True(t, mts[0].OverridePath)
+	})
+
+	t.Run("path requires override path", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseMirrorTargets([]string{"https://example.com/v2/cache"})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid registry url path has to be empty")
+	})
+
+	t.Run("mixed plain and struct", func(t *testing.T) {
+		t.Parallel()
+		mts, err := parseMirrorTargets([]string{
+			"http://127.0.0.1:5000",
+			`{"url":"https://example.com/v2/foo","overridePath":true}`,
+		})
+		require.NoError(t, err)
+		require.Len(t, mts, 2)
+		require.False(t, mts[0].OverridePath)
+		require.True(t, mts[1].OverridePath)
+	})
+
+	t.Run("invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseMirrorTargets([]string{`{"url":}`})
+		require.Error(t, err)
+	})
+
+	t.Run("missing url in struct", func(t *testing.T) {
+		t.Parallel()
+		_, err := parseMirrorTargets([]string{`{"overridePath":true}`})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "url is required")
+	})
+}
+
+func TestMirrorTargetUnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	t.Run("string form", func(t *testing.T) {
+		t.Parallel()
+		var mt MirrorTarget
+		err := mt.UnmarshalJSON([]byte(`"https://example.com"`))
+		require.NoError(t, err)
+		require.Equal(t, "https://example.com", mt.URL)
+		require.False(t, mt.OverridePath)
+	})
+
+	t.Run("object form", func(t *testing.T) {
+		t.Parallel()
+		var mt MirrorTarget
+		err := mt.UnmarshalJSON([]byte(`{"url":"https://example.com/v2/cache","overridePath":true}`))
+		require.NoError(t, err)
+		require.Equal(t, "https://example.com/v2/cache", mt.URL)
+		require.True(t, mt.OverridePath)
+	})
+}
+
 func TestValidateRegistryURL(t *testing.T) {
 	t.Parallel()
 

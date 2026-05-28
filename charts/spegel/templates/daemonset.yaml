@@ -63,7 +63,11 @@ spec:
           - http://$(NODE_IP):{{ .Values.service.registry.nodePort }}
           {{- with .Values.spegel.additionalMirrorTargets }}
           {{- range . }}
+          {{- if kindIs "string" . }}
           - {{ . | quote }}
+          {{- else }}
+          - {{ toJson . | quote }}
+          {{- end }}
           {{- end }}
           {{- end }}
           - --resolve-tags={{ .Values.spegel.resolveTags }}
