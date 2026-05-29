@@ -25,8 +25,8 @@ import (
 
 var (
 	containerdVersions = []string{
-		"2.2.1",
-		"2.1.6",
+		"2.3.1",
+		"2.2.4",
 	}
 )
 
