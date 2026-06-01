@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -180,6 +181,24 @@ func TestRegistryHandler(t *testing.T) {
 		},
 	}
 
+	silentPeers := []routing.Peer{}
+	for i := range 2 {
+		silentListener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			silentListener.Close()
+		})
+		addrPort := netip.MustParseAddrPort(silentListener.Addr().String())
+		silentPeer := routing.Peer{
+			Host:      fmt.Sprintf("slient-%d", i),
+			Addresses: []netip.Addr{addrPort.Addr()},
+			Metadata: routing.PeerMetadata{
+				RegistryPort: addrPort.Port(),
+			},
+		}
+		silentPeers = append(silentPeers, silentPeer)
+	}
+
 	badPeers := []routing.Peer{}
 	for i := range 2 {
 		badReg, err := NewRegistry(oci.NewMemory(), routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
@@ -254,6 +273,8 @@ func TestRegistryHandler(t *testing.T) {
 	resolver := map[string][]routing.Peer{
 		// No working peers.
 		"sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6": {badPeers[0], unreachablePeer, badPeers[1]},
+		// No responding peers.
+		"sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8": {silentPeers[0], silentPeers[1]},
 		// First peer.
 		"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67": {goodPeer, badPeers[0], badPeers[1]},
 		// Second peer.
@@ -291,6 +312,17 @@ func TestRegistryHandler(t *testing.T) {
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
 				httpx.HeaderContentLength: {"168"},
+			},
+		},
+		{
+			name:             "request should timeout when no peers responds",
+			key:              "sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8",
+			distributionKind: oci.DistributionKindBlob,
+			expectedStatus:   http.StatusNotFound,
+			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":2},"message":"waited too long for a response from a peer for sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8"}]}`),
+			expectedHeaders: http.Header{
+				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
+				httpx.HeaderContentLength: {"191"},
 			},
 		},
 		{
@@ -459,9 +491,12 @@ func TestRegistryHandler(t *testing.T) {
 			t.Run(fmt.Sprintf("%s-%s", method, tt.name), func(t *testing.T) {
 				t.Parallel()
 
+				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+				defer cancel()
+
 				target := fmt.Sprintf("http://example.com/v2/foo/bar/%s/%s?ns=docker.io", tt.distributionKind, tt.key)
 				rw := httptest.NewRecorder()
-				req := httptest.NewRequestWithContext(t.Context(), method, target, nil)
+				req := httptest.NewRequestWithContext(ctx, method, target, nil)
 				if tt.rng != nil {
 					req.Header.Set(httpx.HeaderRange, tt.rng.String())
 				}
