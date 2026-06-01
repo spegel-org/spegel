@@ -51,6 +51,8 @@ service:
     nodePort: 30020
     # -- Annotations to add to the registry service
     annotations: {}
+    # -- Enable internalTrafficPolicy: Local. This is only for 1.33 clusters compatibility instead of PreferSameNode.
+    internalTrafficLocal: false
 
   router:
     # -- Port to expose the router via the service.
