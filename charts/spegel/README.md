@@ -45,6 +45,7 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | service.metrics.annotations | object | `{}` | Annotations to add to the metrics service |
 | service.metrics.port | int | `9090` | Port to expose the metrics via the service. |
 | service.registry.annotations | object | `{}` | Annotations to add to the registry service |
+| service.registry.internalTrafficLocal | bool | `false` | Enable internalTrafficPolicy: Local. This is only for 1.33 clusters compatibility instead of PreferSameNode. |
 | service.registry.nodeIp | string | `""` | Override the NODE_ID environment variable. It defaults to the field status.hostIP |
 | service.registry.nodePort | int | `30020` | Node port to expose the registry via the service. |
 | service.registry.port | int | `5000` | Port to expose the registry via the service. |
