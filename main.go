@@ -47,15 +47,15 @@ type ConfigurationCmd struct {
 }
 
 type BootstrapConfig struct {
-	BootstrapKind           string   `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
-	DNSBootstrapDomain      string   `arg:"--dns-bootstrap-domain,env:DNS_BOOTSTRAP_DOMAIN" help:"Domain to use when bootstrapping using DNS."`
-	HTTPBootstrapAddr       string   `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap."`
-	HTTPBootstrapPeer       string   `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Peer to HTTP bootstrap with."`
-	ExternalBootstrapURL    url.URL  `arg:"--external-bootstrap-url,env:EXTERNAL_BOOTSTRAP_URL" help:"External bootstrap URL."`
-	ExternalBootstrapCA     *string  `arg:"--external-bootstrap-ca,env:EXTERNAL_BOOTSTRAP_CA" help:"Path to external bootstrap CA."`
-	ExternalBootstrapTLSCrt *string  `arg:"--external-bootstrap-tls-crt,env:EXTERNAL_BOOTSTRAP_TLS_CRT" help:"Path to external bootstrap client TLS certificate."`
-	ExternalBootstrapTLSKey *string  `arg:"--external-bootstrap-tls-key,env:EXTERNAL_BOOTSTRAP_TLS_KEY" help:"Path to external bootstrap client TLS key."`
-	StaticBootstrapPeers    []string `arg:"--static-bootstrap-peers,env:STATIC_BOOTSTRAP_PEERS" help:"Static list of peers to bootstrap with."`
+	BootstrapKind        string   `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
+	DNSBootstrapDomain   string   `arg:"--dns-bootstrap-domain,env:DNS_BOOTSTRAP_DOMAIN" help:"Domain to use when bootstrapping using DNS."`
+	HTTPBootstrapAddr    string   `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap at /id. Leave it empty to disable serving."`
+	HTTPBootstrapPeer    url.URL  `arg:"--http-bootstrap-peer,env:HTTP_BOOTSTRAP_PEER" help:"Base URL of a peer to HTTP bootstrap with; /id is appended. Mutually exclusive with --http-bootstrap-url."`
+	HTTPBootstrapURL     url.URL  `arg:"--http-bootstrap-url,env:HTTP_BOOTSTRAP_URL" help:"Full URL of an HTTP bootstrap endpoint. Mutually exclusive with --http-bootstrap-peer."`
+	HTTPBootstrapCA      *string  `arg:"--http-bootstrap-ca,env:HTTP_BOOTSTRAP_CA" help:"Path to CA used to verify the HTTP bootstrap endpoint's TLS certificate."`
+	HTTPBootstrapTLSCrt  *string  `arg:"--http-bootstrap-tls-crt,env:HTTP_BOOTSTRAP_TLS_CRT" help:"Path to client TLS certificate used to authenticate to the HTTP bootstrap endpoint."`
+	HTTPBootstrapTLSKey  *string  `arg:"--http-bootstrap-tls-key,env:HTTP_BOOTSTRAP_TLS_KEY" help:"Path to client TLS key used to authenticate to the HTTP bootstrap endpoint."`
+	StaticBootstrapPeers []string `arg:"--static-bootstrap-peers,env:STATIC_BOOTSTRAP_PEERS" help:"Static list of peers to bootstrap with."`
 }
 
 type RegistryCmd struct {
@@ -355,15 +355,13 @@ func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //noli
 	case "dns":
 		return routing.NewDNSBootstrapper(cfg.DNSBootstrapDomain), nil
 	case "http":
-		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer), nil
-	case "static":
-		return routing.NewStaticBootstrapperFromStrings(cfg.StaticBootstrapPeers)
-	case "external":
-		tlsCA, tlsCert, tlsKey, err := loadExternalBootstrapperCerts(cfg.ExternalBootstrapCA, cfg.ExternalBootstrapTLSCrt, cfg.ExternalBootstrapTLSKey)
+		tlsCA, tlsCert, tlsKey, err := loadHTTPBootstrapperCerts(cfg.HTTPBootstrapCA, cfg.HTTPBootstrapTLSCrt, cfg.HTTPBootstrapTLSKey)
 		if err != nil {
 			return nil, err
 		}
-		return routing.NewExternalBootstrapper(cfg.ExternalBootstrapURL, tlsCA, tlsCert, tlsKey)
+		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapPeer, cfg.HTTPBootstrapURL, tlsCA, tlsCert, tlsKey)
+	case "static":
+		return routing.NewStaticBootstrapperFromStrings(cfg.StaticBootstrapPeers)
 	default:
 		return nil, fmt.Errorf("unknown bootstrap kind %s", cfg.BootstrapKind)
 	}
@@ -382,7 +380,7 @@ func loadBasicAuth() (string, string, error) {
 	return string(username), string(password), nil
 }
 
-func loadExternalBootstrapperCerts(tlsCAFile, tlsCertFile, tlsKeyFile *string) (tlsCA, tlsCert, tlsKey []byte, err error) {
+func loadHTTPBootstrapperCerts(tlsCAFile, tlsCertFile, tlsKeyFile *string) (tlsCA, tlsCert, tlsKey []byte, err error) {
 	if tlsCAFile != nil {
 		if tlsCA, err = os.ReadFile(filepath.Clean(*tlsCAFile)); err != nil {
 			err = fmt.Errorf("failed to read '%s' CA file: %w", filepath.Clean(*tlsCAFile), err)

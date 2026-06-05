@@ -7,8 +7,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -125,7 +125,10 @@ func TestHTTPBootstrap(t *testing.T) {
 		ID:    id,
 		Addrs: []ma.Multiaddr{parentAddr},
 	}
-	parentBs := NewHTTPBootstrapper(ln.Addr().String(), "")
+	peerURL, err := url.Parse("http://" + ln.Addr().String())
+	require.NoError(t, err)
+	parentBs, err := NewHTTPBootstrapper(ln.Addr().String(), *peerURL, url.URL{}, nil, nil, nil)
+	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
@@ -134,7 +137,8 @@ func TestHTTPBootstrap(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	childBs := NewHTTPBootstrapper(":", "http://"+ln.Addr().String())
+	childBs, err := NewHTTPBootstrapper("", *peerURL, url.URL{}, nil, nil, nil)
+	require.NoError(t, err)
 	addrInfos, err := childBs.Get(t.Context())
 	require.NoError(t, err)
 	require.Len(t, addrInfos, 1)
@@ -147,7 +151,7 @@ func TestHTTPBootstrap(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestExternalBootstrap(t *testing.T) {
+func TestHTTPBootstrapEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -194,8 +198,14 @@ func TestExternalBootstrap(t *testing.T) {
 	clientBytes, err := x509.CreateCertificate(rand.Reader, clientCert, caCert, &clientPrivateKey.PublicKey, caPrivateKey)
 	require.NoError(t, err)
 
+	addr, err := ma.NewMultiaddr("/ip4/10.1.2.3")
+	require.NoError(t, err)
+	body, err := json.Marshal([]peer.AddrInfo{{Addrs: []ma.Multiaddr{addr}}})
+	require.NoError(t, err)
+
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, `["10.1.2.3"]`)
+		//nolint:errcheck // ignore
+		w.Write(body)
 	}))
 	tlsCrt, err := tls.X509KeyPair(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srvBytes}),
 		pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(srvPrivateKey)}))
@@ -208,7 +218,8 @@ func TestExternalBootstrap(t *testing.T) {
 
 	srvUrl, err := url.Parse(srv.URL)
 	require.NoError(t, err)
-	bs, err := NewExternalBootstrapper(*srvUrl, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caBytes}),
+	bs, err := NewHTTPBootstrapper("", url.URL{}, *srvUrl,
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caBytes}),
 		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: clientBytes}),
 		pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(clientPrivateKey)}))
 	require.NoError(t, err)
@@ -226,4 +237,64 @@ func TestExternalBootstrap(t *testing.T) {
 	cancel()
 	err = g.Wait()
 	require.NoError(t, err)
+}
+
+func TestNewHTTPBootstrapperValidation(t *testing.T) {
+	t.Parallel()
+
+	someURL, err := url.Parse("http://10.1.2.3:1234")
+	require.NoError(t, err)
+	tests := []struct {
+		name    string
+		errMsg  string
+		peer    url.URL
+		url     url.URL
+		tlsCA   []byte
+		tlsCert []byte
+		tlsKey  []byte
+	}{
+		{
+			name:   "neither peer nor url set",
+			errMsg: "either peer or url must be set",
+		},
+		{
+			name:   "both peer and url set",
+			errMsg: "peer and url are mutually exclusive",
+			peer:   *someURL,
+			url:    *someURL,
+		},
+		{
+			name:   "malformed CA",
+			errMsg: "failed to parse CA certificate",
+			peer:   *someURL,
+			tlsCA:  []byte("not a pem"),
+		},
+		{
+			name:    "client cert without key",
+			errMsg:  "both client TLS certificate and client TLS key must be provided",
+			peer:    *someURL,
+			tlsCert: []byte("cert"),
+		},
+		{
+			name:   "client key without cert",
+			errMsg: "both client TLS certificate and client TLS key must be provided",
+			peer:   *someURL,
+			tlsKey: []byte("key"),
+		},
+		{
+			name:    "malformed client cert",
+			errMsg:  "failed to parse client certificate",
+			peer:    *someURL,
+			tlsCert: []byte("not a pem"),
+			tlsKey:  []byte("not a pem"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			bs, err := NewHTTPBootstrapper("", tt.peer, tt.url, tt.tlsCA, tt.tlsCert, tt.tlsKey)
+			require.ErrorContains(t, err, tt.errMsg)
+			require.Nil(t, bs)
+		})
+	}
 }
