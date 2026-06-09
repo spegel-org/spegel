@@ -30,7 +30,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/sec"
-	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -119,11 +118,6 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		return nil, err
 	}
 	hostOpts := []libp2p.Option{
-		libp2p.ChainOptions(
-			libp2p.NoTransports,
-			libp2p.Transport(quic.NewTransport),
-			libp2p.Transport(tcp.NewTCPTransport),
-		),
 		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.DisableIdentifyAddressDiscovery(),
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
@@ -137,6 +131,10 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 			}
 			return filtered
 		}),
+		libp2p.ChainOptions(
+			libp2p.NoTransports,
+			libp2p.Transport(tcp.NewTCPTransport),
+		),
 	}
 	if cfg.DataDir != "" {
 		peerKey, err := loadOrCreatePrivateKey(ctx, cfg.DataDir)

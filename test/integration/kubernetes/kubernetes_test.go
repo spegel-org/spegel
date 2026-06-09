@@ -248,6 +248,7 @@ func TestKubernetes(t *testing.T) {
 
 			t.Log("Upgrading Spegel from latest release to dev build")
 			installSpegel(t, actionCfg, k8sClient, k8sDynClient, kindNodes, "")
+			time.Sleep(3 * time.Second)
 			installSpegel(t, actionCfg, k8sClient, k8sDynClient, kindNodes, imageDigest)
 			uninstallSpegel(t, actionCfg, kindNodes)
 
