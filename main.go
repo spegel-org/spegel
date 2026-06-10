@@ -25,6 +25,7 @@ import (
 
 	"github.com/spegel-org/spegel/internal/cleanup"
 	"github.com/spegel-org/spegel/internal/version"
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
@@ -161,6 +162,7 @@ func versionCommand(_ context.Context, args *VersionCmd) error {
 }
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
+	args.MirrorTargets[0] = httpx.EncapsulateIPv6Host(args.MirrorTargets[0])
 	username, password, err := loadBasicAuth()
 	if err != nil {
 		return err
