@@ -10,7 +10,7 @@ require (
 	github.com/containerd/containerd/v2 v2.3.1
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v1.0.0-rc.4
-	github.com/containerd/typeurl/v2 v2.2.3
+	github.com/containerd/typeurl/v2 v2.3.0
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ipfs/go-cid v0.6.1
@@ -60,7 +60,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/testify/v2 v2.5.1
 	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/uuid v1.6.0 // indirect
