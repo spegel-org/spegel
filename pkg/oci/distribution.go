@@ -41,7 +41,16 @@ type DistributionPath struct {
 }
 
 func NewDistributionPath(ref Reference, kind DistributionKind, scheme, method string, rng *httpx.Range) (DistributionPath, error) {
-	if err := ref.Validate(); err != nil {
+	// Digest references are self identifying, making the registry optional. Some mirror
+	// clients, like the stargz snapshotter, request digests without a registry namespace.
+	if ref.Registry == "" && ref.Digest != "" {
+		if ref.Repository == "" {
+			return DistributionPath{}, errors.New("reference needs to contain a repository")
+		}
+		if err := ref.Digest.Validate(); err != nil {
+			return DistributionPath{}, err
+		}
+	} else if err := ref.Validate(); err != nil {
 		return DistributionPath{}, err
 	}
 	if ref.Tag != "" && ref.Digest != "" {
