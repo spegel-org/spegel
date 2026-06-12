@@ -16,64 +16,127 @@ func TestParseDistributionPath(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		registry     string
-		path         string
-		expectedName string
-		expectedDgst digest.Digest
-		expectedTag  string
-		expectedRef  string
-		expectedKind DistributionKind
+		name             string
+		registry         string
+		namespaceHeader  string
+		path             string
+		expectedName     string
+		expectedDgst     digest.Digest
+		expectedTag      string
+		expectedRef      string
+		expectedKind     DistributionKind
+		expectedRegistry string
 	}{
 		{
-			name:         "manifest tag",
-			registry:     "example.com",
-			path:         "/v2/foo/bar/manifests/hello-world",
-			expectedName: "foo/bar",
-			expectedDgst: "",
-			expectedTag:  "hello-world",
-			expectedRef:  "example.com/foo/bar:hello-world",
-			expectedKind: DistributionKindManifest,
+			name:             "manifest tag",
+			registry:         "example.com",
+			path:             "/v2/foo/bar/manifests/hello-world",
+			expectedName:     "foo/bar",
+			expectedDgst:     "",
+			expectedTag:      "hello-world",
+			expectedRef:      "example.com/foo/bar:hello-world",
+			expectedKind:     DistributionKindManifest,
+			expectedRegistry: "example.com",
 		},
 		{
-			name:         "manifest digest",
-			registry:     "docker.io",
-			path:         "/v2/library/nginx/manifests/sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
-			expectedName: "library/nginx",
-			expectedDgst: digest.Digest("sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39"),
-			expectedTag:  "",
-			expectedRef:  "sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
-			expectedKind: DistributionKindManifest,
+			name:             "manifest digest",
+			registry:         "docker.io",
+			path:             "/v2/library/nginx/manifests/sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
+			expectedName:     "library/nginx",
+			expectedDgst:     digest.Digest("sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39"),
+			expectedTag:      "",
+			expectedRef:      "sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
+			expectedKind:     DistributionKindManifest,
+			expectedRegistry: "docker.io",
 		},
 		{
-			name:         "blob digest",
-			registry:     "docker.io",
-			path:         "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
-			expectedName: "library/nginx",
-			expectedDgst: digest.Digest("sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369"),
-			expectedTag:  "",
-			expectedRef:  "sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
-			expectedKind: DistributionKindBlob,
+			name:             "blob digest",
+			registry:         "docker.io",
+			path:             "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedName:     "library/nginx",
+			expectedDgst:     digest.Digest("sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369"),
+			expectedTag:      "",
+			expectedRef:      "sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedKind:     DistributionKindBlob,
+			expectedRegistry: "docker.io",
 		},
 		{
-			name:         "manifest with consecutive dashes",
-			registry:     "example.com",
-			path:         "/v2/hello-static-empty--0ix3q/manifests/latest",
-			expectedName: "hello-static-empty--0ix3q",
-			expectedDgst: "",
-			expectedTag:  "latest",
-			expectedRef:  "example.com/hello-static-empty--0ix3q:latest",
-			expectedKind: DistributionKindManifest,
+			name:             "manifest tag with namespace header",
+			namespaceHeader:  "example.com",
+			path:             "/v2/foo/bar/manifests/hello-world",
+			expectedName:     "foo/bar",
+			expectedDgst:     "",
+			expectedTag:      "hello-world",
+			expectedRef:      "example.com/foo/bar:hello-world",
+			expectedKind:     DistributionKindManifest,
+			expectedRegistry: "example.com",
 		},
 		{
-			name:         "manifest with consecutive dashes and underscores",
-			registry:     "example.com",
-			path:         "/v2/test/foo__bar------test_baz/manifests/latest",
-			expectedName: "test/foo__bar------test_baz",
-			expectedDgst: "",
-			expectedTag:  "latest",
-			expectedRef:  "example.com/test/foo__bar------test_baz:latest",
-			expectedKind: DistributionKindManifest,
+			name:             "blob digest with namespace header",
+			namespaceHeader:  "docker.io",
+			path:             "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedName:     "library/nginx",
+			expectedDgst:     digest.Digest("sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369"),
+			expectedTag:      "",
+			expectedRef:      "sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedKind:     DistributionKindBlob,
+			expectedRegistry: "docker.io",
+		},
+		{
+			name:             "namespace query parameter takes precedence over header",
+			registry:         "docker.io",
+			namespaceHeader:  "example.com",
+			path:             "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedName:     "library/nginx",
+			expectedDgst:     digest.Digest("sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369"),
+			expectedTag:      "",
+			expectedRef:      "sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedKind:     DistributionKindBlob,
+			expectedRegistry: "docker.io",
+		},
+		{
+			name:             "manifest digest with wildcard namespace",
+			namespaceHeader:  "*",
+			path:             "/v2/library/nginx/manifests/sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
+			expectedName:     "library/nginx",
+			expectedDgst:     digest.Digest("sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39"),
+			expectedTag:      "",
+			expectedRef:      "sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
+			expectedKind:     DistributionKindManifest,
+			expectedRegistry: "",
+		},
+		{
+			name:             "blob digest with wildcard namespace",
+			namespaceHeader:  "*",
+			path:             "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedName:     "library/nginx",
+			expectedDgst:     digest.Digest("sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369"),
+			expectedTag:      "",
+			expectedRef:      "sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			expectedKind:     DistributionKindBlob,
+			expectedRegistry: "",
+		},
+		{
+			name:             "manifest with consecutive dashes",
+			registry:         "example.com",
+			path:             "/v2/hello-static-empty--0ix3q/manifests/latest",
+			expectedName:     "hello-static-empty--0ix3q",
+			expectedDgst:     "",
+			expectedTag:      "latest",
+			expectedRef:      "example.com/hello-static-empty--0ix3q:latest",
+			expectedKind:     DistributionKindManifest,
+			expectedRegistry: "example.com",
+		},
+		{
+			name:             "manifest with consecutive dashes and underscores",
+			registry:         "example.com",
+			path:             "/v2/test/foo__bar------test_baz/manifests/latest",
+			expectedName:     "test/foo__bar------test_baz",
+			expectedDgst:     "",
+			expectedTag:      "latest",
+			expectedRef:      "example.com/test/foo__bar------test_baz:latest",
+			expectedKind:     DistributionKindManifest,
+			expectedRegistry: "example.com",
 		},
 	}
 	for _, tt := range tests {
@@ -86,6 +149,9 @@ func TestParseDistributionPath(t *testing.T) {
 			}
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, u.String(), nil)
 			require.NoError(t, err)
+			if tt.namespaceHeader != "" {
+				req.Header.Set(HeaderNamespace, tt.namespaceHeader)
+			}
 			dist, err := ParseDistributionPath(req)
 			require.NoError(t, err)
 			require.EqualT(t, tt.expectedName, dist.Repository)
@@ -93,9 +159,9 @@ func TestParseDistributionPath(t *testing.T) {
 			require.EqualT(t, tt.expectedTag, dist.Tag)
 			require.EqualT(t, tt.expectedRef, dist.Identifier())
 			require.EqualT(t, tt.expectedKind, dist.Kind)
-			require.EqualT(t, tt.registry, dist.Registry)
+			require.EqualT(t, tt.expectedRegistry, dist.Registry)
 			require.EqualT(t, tt.path, dist.URL().Path)
-			require.EqualT(t, tt.registry, dist.URL().Query().Get("ns"))
+			require.EqualT(t, tt.expectedRegistry, dist.URL().Query().Get("ns"))
 		})
 	}
 }
@@ -104,9 +170,10 @@ func TestParseDistributionPathErrors(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		url           *url.URL
-		expectedError string
+		name            string
+		namespaceHeader string
+		url             *url.URL
+		expectedError   string
 	}{
 		{
 			name: "invalid path",
@@ -140,6 +207,28 @@ func TestParseDistributionPathErrors(t *testing.T) {
 			expectedError: "registry parameter needs to be set for tag references",
 		},
 		{
+			name:            "manifest tag with wildcard namespace",
+			namespaceHeader: "*",
+			url: &url.URL{
+				Path: "/v2/spegel-org/spegel/manifests/v0.0.1",
+			},
+			expectedError: "registry parameter needs to be set for tag references",
+		},
+		{
+			name: "manifest digest with missing registry",
+			url: &url.URL{
+				Path: "/v2/library/nginx/manifests/sha256:0a404ca8e119d061cdb2dceee824c914cdc69b31bc7b5956ef5a520436a80d39",
+			},
+			expectedError: "registry needs to be set with the ns query parameter or the OCI-Namespace header",
+		},
+		{
+			name: "blob digest with missing registry",
+			url: &url.URL{
+				Path: "/v2/library/nginx/blobs/sha256:295c7be079025306c4f1d65997fcf7adb411c88f139ad1d34b537164aa060369",
+			},
+			expectedError: "registry needs to be set with the ns query parameter or the OCI-Namespace header",
+		},
+		{
 			name: "manifest with invalid digest",
 			url: &url.URL{
 				Path: "/v2/spegel-org/spegel/manifests/sha253:foobar",
@@ -160,6 +249,9 @@ func TestParseDistributionPathErrors(t *testing.T) {
 
 			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tt.url.String(), nil)
 			require.NoError(t, err)
+			if tt.namespaceHeader != "" {
+				req.Header.Set(HeaderNamespace, tt.namespaceHeader)
+			}
 			_, err = ParseDistributionPath(req)
 			require.EqualError(t, err, tt.expectedError)
 		})

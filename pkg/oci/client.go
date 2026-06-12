@@ -301,6 +301,12 @@ func (c *Client) Fetch(ctx context.Context, dist DistributionPath, opts ...Fetch
 			return resilient.Unrecoverable(err)
 		}
 		httpx.CopyHeader(req.Header, cfg.Header)
+		// Requests without a registry have to state that any namespace is expected,
+		// as the mirror would otherwise not be able to tell them apart from requests
+		// which are missing the namespace by mistake.
+		if dist.Registry == "" {
+			req.Header.Set(HeaderNamespace, wildcardNamespace)
+		}
 		req.Header.Set(httpx.HeaderUserAgent, "spegel")
 		req.Header.Add(httpx.HeaderAccept, ocispec.MediaTypeImageManifest)
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2Manifest)

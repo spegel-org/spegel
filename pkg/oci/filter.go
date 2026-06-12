@@ -8,8 +8,11 @@ import (
 	"slices"
 )
 
+// wildcardNamespace is the registry namespace used by clients which mirror any registry.
+const wildcardNamespace = "*"
+
 var (
-	WildcardRegistries  = []string{"_default", "*"}
+	WildcardRegistries  = []string{"_default", wildcardNamespace}
 	WildcardRegistryURL = url.URL{Host: WildcardRegistries[0]}
 )
 

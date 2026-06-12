@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 
 	"github.com/opencontainers/go-digest"
 
@@ -21,6 +22,8 @@ var (
 	manifestRegexTag    = regexp.MustCompile(`/v2/` + repoRegexStr + `/manifests/` + tagRegexStr + `$`)
 	manifestRegexDigest = regexp.MustCompile(`/v2/` + repoRegexStr + `/manifests/(.*)`)
 	blobsRegexDigest    = regexp.MustCompile(`/v2/` + repoRegexStr + `/blobs/(.*)`)
+
+	errMissingNamespace = fmt.Errorf("registry needs to be set with the ns query parameter or the %s header", HeaderNamespace)
 )
 
 // DistributionKind represents the kind of content.
@@ -41,7 +44,15 @@ type DistributionPath struct {
 }
 
 func NewDistributionPath(ref Reference, kind DistributionKind, scheme, method string, rng *httpx.Range) (DistributionPath, error) {
-	if err := ref.Validate(); err != nil {
+	// Digest references are self identifying, making the registry optional.
+	if ref.Registry == "" && ref.Digest != "" {
+		if ref.Repository == "" {
+			return DistributionPath{}, errors.New("reference needs to contain a repository")
+		}
+		if err := ref.Digest.Validate(); err != nil {
+			return DistributionPath{}, err
+		}
+	} else if err := ref.Validate(); err != nil {
 		return DistributionPath{}, err
 	}
 	if ref.Tag != "" && ref.Digest != "" {
@@ -80,12 +91,15 @@ func (d DistributionPath) URL() *url.URL {
 	if ref == "" {
 		ref = d.Tag
 	}
-	return &url.URL{
-		Scheme:   d.Scheme,
-		Host:     d.Registry,
-		Path:     fmt.Sprintf("/v2/%s/%s/%s", d.Repository, d.Kind, ref),
-		RawQuery: fmt.Sprintf("ns=%s", d.Registry),
+	u := &url.URL{
+		Scheme: d.Scheme,
+		Host:   d.Registry,
+		Path:   fmt.Sprintf("/v2/%s/%s/%s", d.Repository, d.Kind, ref),
 	}
+	if d.Registry != "" {
+		u.RawQuery = fmt.Sprintf("ns=%s", d.Registry)
+	}
+	return u
 }
 
 // Clone returns a deep copy of the distribution path.
@@ -106,7 +120,7 @@ func ParseDistributionPath(req *http.Request) (DistributionPath, error) {
 		scheme = "https"
 	}
 
-	registry := req.URL.Query().Get("ns")
+	registry, anyRegistry := requestNamespace(req)
 	comps := manifestRegexTag.FindStringSubmatch(req.URL.Path)
 	if len(comps) == 3 {
 		if registry == "" {
@@ -129,6 +143,9 @@ func ParseDistributionPath(req *http.Request) (DistributionPath, error) {
 		if err != nil {
 			return DistributionPath{}, err
 		}
+		if registry == "" && !anyRegistry {
+			return DistributionPath{}, errMissingNamespace
+		}
 		ref := Reference{
 			Registry:   registry,
 			Repository: comps[1],
@@ -146,6 +163,9 @@ func ParseDistributionPath(req *http.Request) (DistributionPath, error) {
 		if err != nil {
 			return DistributionPath{}, err
 		}
+		if registry == "" && !anyRegistry {
+			return DistributionPath{}, errMissingNamespace
+		}
 		ref := Reference{
 			Registry:   registry,
 			Repository: comps[1],
@@ -162,6 +182,22 @@ func ParseDistributionPath(req *http.Request) (DistributionPath, error) {
 		return dist, nil
 	}
 	return DistributionPath{}, errors.New("distribution path could not be parsed")
+}
+
+// requestNamespace returns the registry a request is for. Mirror clients which do not
+// implement the namespace query parameter, like the stargz snapshotter, can set the
+// namespace with a header instead. A wildcard namespace means that the client mirrors
+// any registry, which can only be served for self identifying digest references.
+func requestNamespace(req *http.Request) (string, bool) {
+	registry := req.URL.Query().Get("ns")
+	if registry != "" {
+		return registry, false
+	}
+	registry = req.Header.Get(HeaderNamespace)
+	if slices.Contains(WildcardRegistries, registry) {
+		return "", true
+	}
+	return registry, false
 }
 
 var _ httpx.ResponseError = &DistributionError{}

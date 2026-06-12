@@ -288,13 +288,14 @@ func TestRegistryHandler(t *testing.T) {
 
 	//nolint: govet // Prioritize readability in tests.
 	tests := []struct {
-		name             string
-		key              string
-		distributionKind oci.DistributionKind
-		rng              *httpx.Range
-		expectedStatus   int
-		expectedHeaders  http.Header
-		expectedBody     []byte
+		name              string
+		key               string
+		distributionKind  oci.DistributionKind
+		rng               *httpx.Range
+		wildcardNamespace bool
+		expectedStatus    int
+		expectedHeaders   http.Header
+		expectedBody      []byte
 	}{
 		{
 			name:             "request should timeout when no peers exists",
@@ -335,6 +336,20 @@ func TestRegistryHandler(t *testing.T) {
 			distributionKind: oci.DistributionKindBlob,
 			expectedStatus:   http.StatusOK,
 			expectedBody:     []byte("first peer"),
+			expectedHeaders: http.Header{
+				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+				httpx.HeaderContentType:   {"dummy"},
+				httpx.HeaderContentLength: {"10"},
+				oci.HeaderDockerDigest:    {"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67"},
+			},
+		},
+		{
+			name:              "request with a wildcard namespace should be mirrored",
+			key:               "sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67",
+			distributionKind:  oci.DistributionKindBlob,
+			wildcardNamespace: true,
+			expectedStatus:    http.StatusOK,
+			expectedBody:      []byte("first peer"),
 			expectedHeaders: http.Header{
 				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
 				httpx.HeaderContentType:   {"dummy"},
@@ -488,8 +503,14 @@ func TestRegistryHandler(t *testing.T) {
 				defer cancel()
 
 				target := fmt.Sprintf("http://example.com/v2/foo/bar/%s/%s?ns=docker.io", tt.distributionKind, tt.key)
+				if tt.wildcardNamespace {
+					target = fmt.Sprintf("http://example.com/v2/foo/bar/%s/%s", tt.distributionKind, tt.key)
+				}
 				rw := httptest.NewRecorder()
 				req := httptest.NewRequestWithContext(ctx, method, target, nil)
+				if tt.wildcardNamespace {
+					req.Header.Set(oci.HeaderNamespace, "*")
+				}
 				if tt.rng != nil {
 					req.Header.Set(httpx.HeaderRange, tt.rng.String())
 				}
