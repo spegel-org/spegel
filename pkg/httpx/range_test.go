@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/go-openapi/testify/v2/require"
-
-	"github.com/spegel-org/spegel/internal/ptr"
 )
 
 func TestRange(t *testing.T) {
@@ -24,31 +22,31 @@ func TestRange(t *testing.T) {
 		{
 			value: "bytes=0-0",
 			expectedRange: Range{
-				Start: ptr.To(int64(0)),
-				End:   ptr.To(int64(0)),
+				Start: new(int64(0)),
+				End:   new(int64(0)),
 			},
 			expectedString: "bytes=0-0",
 		},
 		{
 			value: "bytes=0-499",
 			expectedRange: Range{
-				Start: ptr.To(int64(0)),
-				End:   ptr.To(int64(499)),
+				Start: new(int64(0)),
+				End:   new(int64(499)),
 			},
 			expectedString: "bytes=0-499",
 		},
 		{
 			value: "bytes=500-999",
 			expectedRange: Range{
-				Start: ptr.To(int64(500)),
-				End:   ptr.To(int64(999)),
+				Start: new(int64(500)),
+				End:   new(int64(999)),
 			},
 			expectedString: "bytes=500-999",
 		},
 		{
 			value: "bytes=500-",
 			expectedRange: Range{
-				Start: ptr.To(int64(500)),
+				Start: new(int64(500)),
 				End:   nil,
 			},
 			expectedString: "bytes=500-",
@@ -57,7 +55,7 @@ func TestRange(t *testing.T) {
 			value: "bytes=-200",
 			expectedRange: Range{
 				Start: nil,
-				End:   ptr.To(int64(200)),
+				End:   new(int64(200)),
 			},
 			expectedString: "bytes=-200",
 		},
@@ -117,9 +115,9 @@ func TestRange(t *testing.T) {
 		})
 	}
 
-	err = Range{Start: ptr.To(int64(-1)), End: ptr.To(int64(0))}.Validate()
+	err = Range{Start: new(int64(-1)), End: new(int64(0))}.Validate()
 	require.EqualError(t, err, "start range -1 cannot be less than zero")
-	err = Range{Start: ptr.To(int64(0)), End: ptr.To(int64(-1))}.Validate()
+	err = Range{Start: new(int64(0)), End: new(int64(-1))}.Validate()
 	require.EqualError(t, err, "end range -1 cannot be less than zero")
 }
 
@@ -237,22 +235,22 @@ func TestRangeClone(t *testing.T) {
 		{
 			name: "range with start and end",
 			rng: &Range{
-				Start: ptr.To(int64(0)),
-				End:   ptr.To(int64(100)),
+				Start: new(int64(0)),
+				End:   new(int64(100)),
 			},
 			want: &Range{
-				Start: ptr.To(int64(0)),
-				End:   ptr.To(int64(100)),
+				Start: new(int64(0)),
+				End:   new(int64(100)),
 			},
 		},
 		{
 			name: "range with only start",
 			rng: &Range{
-				Start: ptr.To(int64(50)),
+				Start: new(int64(50)),
 				End:   nil,
 			},
 			want: &Range{
-				Start: ptr.To(int64(50)),
+				Start: new(int64(50)),
 				End:   nil,
 			},
 		},
@@ -260,11 +258,11 @@ func TestRangeClone(t *testing.T) {
 			name: "range with only end",
 			rng: &Range{
 				Start: nil,
-				End:   ptr.To(int64(50)),
+				End:   new(int64(50)),
 			},
 			want: &Range{
 				Start: nil,
-				End:   ptr.To(int64(50)),
+				End:   new(int64(50)),
 			},
 		},
 	}
