@@ -9,7 +9,6 @@ import (
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/opencontainers/go-digest"
 
-	"github.com/spegel-org/spegel/internal/ptr"
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
@@ -190,8 +189,8 @@ func TestDistributionPathClone(t *testing.T) {
 				Scheme: "https",
 				Kind:   DistributionKindManifest,
 				Range: &httpx.Range{
-					Start: ptr.To[int64](0),
-					End:   ptr.To[int64](100),
+					Start: new(int64(0)),
+					End:   new(int64(100)),
 				},
 			},
 			want: DistributionPath{
@@ -203,8 +202,8 @@ func TestDistributionPathClone(t *testing.T) {
 				Scheme: "https",
 				Kind:   DistributionKindManifest,
 				Range: &httpx.Range{
-					Start: ptr.To[int64](0),
-					End:   ptr.To[int64](100),
+					Start: new(int64(0)),
+					End:   new(int64(100)),
 				},
 			},
 		},

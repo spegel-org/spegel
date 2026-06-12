@@ -40,7 +40,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
 	"sigs.k8s.io/kind/pkg/cluster"
 	kindnodes "sigs.k8s.io/kind/pkg/cluster/nodes"
@@ -696,7 +695,7 @@ func runConformanceTests(t *testing.T, k8sClient kubernetes.Interface, kindNodes
 				Namespace: ns.Name,
 			},
 			Spec: batchv1.JobSpec{
-				BackoffLimit: ptr.To(int32(0)),
+				BackoffLimit: new(int32(0)),
 				Template: corev1.PodTemplateSpec{
 					Spec: corev1.PodSpec{
 						RestartPolicy: corev1.RestartPolicyNever,
