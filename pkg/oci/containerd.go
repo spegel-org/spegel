@@ -249,9 +249,13 @@ func (c *Containerd) Subscribe(ctx context.Context) (map[Image][]digest.Digest, 
 		}
 		contentIdx[cImg.Target.Digest] = refs
 
-		dgsts := []digest.Digest{}
-		for _, ref := range refs {
-			dgsts = append(dgsts, ref.Digest)
+		// The walk does not read leaf content like layers, so their existence has to be
+		// checked before advertising. Lazily pulled images have layers which are missing
+		// from the content store and cannot be served.
+		dgsts, err := c.existingDigests(ctx, refs)
+		if err != nil {
+			log.Error(err, "skipping image that cannot be checked for existing content", "image", img.String())
+			continue
 		}
 		initial[img] = dgsts
 	}
@@ -285,6 +289,22 @@ func (c *Containerd) Subscribe(ctx context.Context) (map[Image][]digest.Digest, 
 		}
 	}()
 	return initial, eventCh, nil
+}
+
+// existingDigests returns the digests of the references which exist in the content store.
+func (c *Containerd) existingDigests(ctx context.Context, refs []Reference) ([]digest.Digest, error) {
+	dgsts := []digest.Digest{}
+	for _, ref := range refs {
+		_, err := c.client.ContentStore().Info(ctx, ref.Digest)
+		if errors.Is(err, errdefs.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		dgsts = append(dgsts, ref.Digest)
+	}
+	return dgsts, nil
 }
 
 func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, contentIdx map[digest.Digest][]Reference) ([]OCIEvent, error) {
