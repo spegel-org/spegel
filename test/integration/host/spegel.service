@@ -1,0 +1,20 @@
+[Unit]
+Description=Spegel peer-to-peer image cache
+Documentation=https://spegel.dev
+After=containerd.service network-online.target
+Requires=containerd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/spegel/peer.env
+ExecStart=/usr/local/bin/spegel registry \
+  --bootstrap-kind=http \
+  --http-bootstrap-addr=:5002 \
+  --http-bootstrap-peer=${SPEGEL_HTTP_BOOTSTRAP_PEER} \
+  --mirrored-registries https://ghcr.io https://registry.k8s.io https://docker.io
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
