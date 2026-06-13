@@ -75,5 +75,5 @@ jobs:
           IMG_REF=$(make build-image)
           echo "IMG_REF=${IMG_REF}" >> $GITHUB_OUTPUT
       - name: Run tests
-        run: INTEGRATION_TEST_STRATEGY="fast" IMG_REF=${{ steps.build.outputs.IMG_REF }} go test -v -race -count 1 -failfast ./...
+        run: INTEGRATION_TEST_STRATEGY="fast" IMG_REF=${{ steps.build.outputs.IMG_REF }} go test -v -timeout 30m -race -count 1 -failfast ./...
         working-directory: ./test/integration/kubernetes

@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -21,6 +23,8 @@ import (
 	"github.com/go-openapi/testify/v2/assert"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/moby/moby/client"
+	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/downloader"
@@ -48,6 +52,7 @@ import (
 	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/pkg/oci"
+	spegelregistry "github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/web"
 )
 
@@ -90,16 +95,7 @@ func TestKubernetes(t *testing.T) {
 	require.GreaterT(t, idx, -1)
 	kindVersion := modFile.Require[idx].Mod.Version
 
-	t.Log("Exporting Spegel image", imgRef)
-	saveRes, err := mobyClient.ImageSave(t.Context(), []string{imgRef})
-	require.NoError(t, err)
-	imgPath := filepath.Join(t.TempDir(), "image")
-	f, err := os.OpenFile(imgPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o644)
-	require.NoError(t, err)
-	_, err = io.Copy(f, saveRes)
-	require.NoError(t, err)
-	err = f.Close()
-	require.NoError(t, err)
+	imgPath := exportImage(t, mobyClient, imgRef)
 
 	proxyModes := []v1alpha4.ProxyMode{
 		v1alpha4.NFTablesProxyMode,
@@ -164,11 +160,6 @@ func TestKubernetes(t *testing.T) {
 	for _, tt := range tests {
 		name := strings.Join([]string{tt.kubernetesImg.Tag, string(tt.ipFamily), string(tt.proxyMode)}, "-")
 		t.Run(name, func(t *testing.T) {
-			t.Log("Creating Kind cluster")
-
-			kcPath := filepath.Join(t.TempDir(), "kind.kubeconfig")
-			provider := cluster.NewProvider()
-
 			containerdPatch := `version = 2
   [plugins."io.containerd.grpc.v1.cri".registry]
     config_path = "/etc/containerd/certs.d"
@@ -204,52 +195,8 @@ func TestKubernetes(t *testing.T) {
 					},
 				},
 			}
-			createOpts := []cluster.CreateOption{
-				cluster.CreateWithNodeImage(tt.kubernetesImg.String()),
-				cluster.CreateWithV1Alpha4Config(clusterCfg),
-				cluster.CreateWithKubeconfigPath(kcPath),
-			}
 			kindName := fmt.Sprintf("spegel-e2e-%s", strings.ReplaceAll(name, ".", "-"))
-			err := provider.Create(kindName, createOpts...)
-			require.NoError(t, err)
-			t.Cleanup(func() {
-				if t.Failed() {
-					return
-				}
-				err = provider.Delete(kindName, "")
-				require.NoError(t, err)
-			})
-
-			k8sCfg, err := clientcmd.BuildConfigFromFlags("", kcPath)
-			require.NoError(t, err)
-			k8sClient, err := kubernetes.NewForConfig(k8sCfg)
-			require.NoError(t, err)
-			k8sDynClient, err := dynamic.NewForConfig(k8sCfg)
-			require.NoError(t, err)
-
-			kindNodes, err := provider.ListNodes(kindName)
-			require.NoError(t, err)
-			controlPlaneNodeName := kindName + "-control-plane"
-			slices.SortStableFunc(kindNodes, func(a, b kindnodes.Node) int {
-				if a.String() == controlPlaneNodeName {
-					return -1
-				}
-				if b.String() == controlPlaneNodeName {
-					return 1
-				}
-				return 0
-			})
-			require.EventuallyWith(t, func(c *assert.CollectT) {
-				for _, kindNode := range kindNodes {
-					node, err := k8sClient.CoreV1().Nodes().Get(t.Context(), kindNode.String(), metav1.GetOptions{})
-					require.NoError(c, err)
-					idx := slices.IndexFunc(node.Status.Conditions, func(cond corev1.NodeCondition) bool {
-						return cond.Type == corev1.NodeReady
-					})
-					require.GreaterT(c, idx, -1)
-					require.EqualT(c, corev1.ConditionTrue, node.Status.Conditions[idx].Status)
-				}
-			}, 30*time.Second, 1*time.Second)
+			k8sClient, k8sDynClient, k8sCfg, kcPath, kindNodes := createKindCluster(t, kindName, tt.kubernetesImg, clusterCfg)
 
 			testImages := []string{
 				"ghcr.io/spegel-org/test-images/conformance:ed885fa",
@@ -258,36 +205,9 @@ func TestKubernetes(t *testing.T) {
 				"ghcr.io/spegel-org/benchmark:v2-10MB-4@sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b",
 			}
 
-			t.Log("Loading Spegel image into nodes")
-			f, err := os.Open(imgPath)
-			require.NoError(t, err)
-			imageDigest := ""
-			for _, node := range kindNodes {
-				_, err = f.Seek(0, io.SeekStart)
-				require.NoError(t, err)
-				err = nodeutils.LoadImageArchive(node, f)
-				require.NoError(t, err)
-				if imageDigest == "" {
-					var buf bytes.Buffer
-					err = node.CommandContext(t.Context(), "ctr", "-n=k8s.io", "image", "ls", "name=="+imgRef).SetStdout(&buf).Run()
-					require.NoError(t, err)
-					line := strings.Split(buf.String(), "\n")[1]
-					imageDigest = strings.Split(line, " ")[2]
-					require.NotEmpty(t, imageDigest)
-				}
-				err = node.CommandContext(t.Context(), "ctr", "-n=k8s.io", "image", "tag", imgRef, fmt.Sprintf("ghcr.io/spegel-org/spegel@%s", imageDigest)).Run()
-				require.NoError(t, err)
-			}
+			imageDigest := loadSpegelImage(t, kindNodes, imgPath, imgRef)
 
-			regClient, err := registry.NewClient()
-			require.NoError(t, err)
-			actionCfg := &action.Configuration{
-				RegistryClient: regClient,
-			}
-			actionCfg.SetLogger(slog.DiscardHandler)
-			clientGetter := &genericclioptions.ConfigFlags{KubeConfig: &kcPath}
-			err = actionCfg.Init(clientGetter, spegelNamespace, "secret")
-			require.NoError(t, err)
+			actionCfg := newHelmActionConfig(t, kcPath)
 
 			t.Cleanup(func() {
 				if !t.Failed() {
@@ -780,19 +700,26 @@ func noSpegelRestart(t *testing.T, k8sClient kubernetes.Interface) {
 	}
 }
 
-func getSpegelPeerID(t *testing.T, k8sClient kubernetes.Interface, kindNode kindnodes.Node) (string, string) {
+// getSpegelPod returns the Spegel pod running on the given node.
+func getSpegelPod(t *testing.T, k8sClient kubernetes.Interface, kindNode kindnodes.Node) corev1.Pod {
 	t.Helper()
 
 	podList, err := k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{FieldSelector: "spec.nodeName=" + kindNode.String()})
 	require.NoError(t, err)
 	require.Len(t, podList.Items, 1)
+	return podList.Items[0]
+}
 
-	portIdx := slices.IndexFunc(podList.Items[0].Spec.Containers[0].Ports, func(port corev1.ContainerPort) bool {
+func getSpegelPeerID(t *testing.T, k8sClient kubernetes.Interface, kindNode kindnodes.Node) (string, string) {
+	t.Helper()
+
+	pod := getSpegelPod(t, k8sClient, kindNode)
+	portIdx := slices.IndexFunc(pod.Spec.Containers[0].Ports, func(port corev1.ContainerPort) bool {
 		return port.Name == "metrics"
 	})
 	require.PositiveT(t, portIdx)
-	debugWebPort := podList.Items[0].Spec.Containers[0].Ports[portIdx].ContainerPort
-	podName := podList.Items[0].Name
+	debugWebPort := pod.Spec.Containers[0].Ports[portIdx].ContainerPort
+	podName := pod.Name
 
 	b, err := k8sClient.CoreV1().RESTClient().Get().
 		Namespace(spegelNamespace).
@@ -851,6 +778,19 @@ func dumpPods(t *testing.T, k8sClient kubernetes.Interface, namespace string, in
 	t.Log("\n" + strings.Join(output, "\n") + "\n")
 }
 
+func getNodeIP(t *testing.T, node *corev1.Node) string {
+	t.Helper()
+
+	for _, a := range node.Status.Addresses {
+		if a.Type != corev1.NodeInternalIP {
+			continue
+		}
+		return getIP6SafeString(t, a.Address)
+	}
+	require.FailNow(t, "node ip not found")
+	return ""
+}
+
 func getPodIP(t *testing.T, pod *corev1.Pod) string {
 	t.Helper()
 
@@ -867,4 +807,413 @@ func getIP6SafeString(t *testing.T, s string) string {
 		return fmt.Sprintf("[%s]", addr.String())
 	}
 	return addr.String()
+}
+
+const (
+	// stargzVersion is the release of stargz-snapshotter installed on the lazy pulling node.
+	stargzVersion = "0.18.2"
+	// stargzNamespace is the test namespace for pods running lazily pulled images.
+	stargzNamespace = "stargz-test"
+	// estargzImageRef is the reference of the eStargz image seeded into the cluster.
+	// The reference only exists within the cluster, guaranteeing that all of its
+	// content is served by Spegel.
+	estargzImageRef = "ghcr.io/spegel-org/test-estargz:v1"
+	// estargzSourceImageRef is the image converted to eStargz to create the test image.
+	estargzSourceImageRef = "docker.io/library/busybox:1.37.0"
+)
+
+// TestKubernetesStargz verifies that the stargz snapshotter can lazy pull images through
+// Spegel. The eStargz image is seeded on one node through a conventional pull, meaning
+// its content is fully present in the content store and advertised by Spegel. Another
+// node, configured with the stargz snapshotter and with upstream registry access blocked,
+// lazy pulls the image with all requests served by the seed node.
+//
+// Nodes which lazy pull do not write layer blobs to the content store. With the
+// estargz backend enabled, the lazily pulled blobs are served from the chunk cache of
+// the snapshotter once the background fetch has completed, turning the lazy pulling
+// node into a seed. The test verifies the full cycle by removing the image from the
+// original seed and pulling it back from the lazy pulling node.
+func TestKubernetesStargz(t *testing.T) {
+	testStrategy := os.Getenv("INTEGRATION_TEST_STRATEGY")
+	require.NotEmpty(t, testStrategy)
+
+	imgRef := os.Getenv("IMG_REF")
+	require.NotEmpty(t, imgRef)
+
+	mobyClient, err := client.New(client.FromEnv)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		mobyClient.Close()
+	})
+
+	imgPath := exportImage(t, mobyClient, imgRef)
+
+	kubernetesImg, err := oci.NewImage("ghcr.io", "spegel-org/test-images/kind-node", kubernetesVersions[0], "")
+	require.NoError(t, err)
+	t.Log("Pulling Kubernetes image", kubernetesImg.String())
+	resp, err := mobyClient.ImagePull(t.Context(), kubernetesImg.String(), client.ImagePullOptions{})
+	require.NoError(t, err)
+	err = resp.Wait(t.Context())
+	require.NoError(t, err)
+
+	containerdPatch := `version = 2
+  [plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = "/etc/containerd/certs.d"
+  [plugins."io.containerd.grpc.v1.cri".containerd]
+    discard_unpacked_layers = false`
+	clusterCfg := &v1alpha4.Cluster{
+		ContainerdConfigPatches: []string{containerdPatch},
+		Nodes: []v1alpha4.Node{
+			{
+				Role: v1alpha4.ControlPlaneRole,
+				Labels: map[string]string{
+					nodeTaintKey: "true",
+				},
+			},
+			{
+				Role: v1alpha4.WorkerRole,
+				Labels: map[string]string{
+					nodeTaintKey: "true",
+				},
+			},
+			{
+				Role: v1alpha4.WorkerRole,
+				Labels: map[string]string{
+					nodeTaintKey: "true",
+				},
+			},
+		},
+	}
+	k8sClient, k8sDynClient, _, kcPath, kindNodes := createKindCluster(t, "spegel-e2e-stargz", kubernetesImg, clusterCfg)
+	require.Len(t, kindNodes, 3)
+	seedNode := kindNodes[1]
+	lazyNode := kindNodes[2]
+
+	imageDigest := loadSpegelImage(t, kindNodes, imgPath, imgRef)
+
+	t.Log("Installing stargz snapshotter on the lazy pulling node")
+	stargzArchive := downloadStargzSnapshotter(t)
+	err = seedNode.CommandContext(t.Context(), "tar", "-xz", "-C", "/usr/local/bin", "ctr-remote").SetStdin(bytes.NewReader(stargzArchive)).Run()
+	require.NoError(t, err)
+	installStargzSnapshotter(t, k8sClient, lazyNode, stargzArchive)
+	waitForNodesReady(t, k8sClient, kindNodes)
+
+	// The image is seeded before Spegel is deployed so that it is part of the initial
+	// advertisement, as content created by the conversion has no registry source and is
+	// not advertised when created.
+	t.Log("Seeding eStargz image through a conventional pull")
+	pullImages(t, seedNode, []string{estargzSourceImageRef})
+	err = seedNode.CommandContext(t.Context(), "ctr-remote", "-n=k8s.io", "image", "convert", "--estargz", "--oci", estargzSourceImageRef, estargzImageRef).Run()
+	require.NoError(t, err)
+	manifestDgst := getImageDigest(t, seedNode, estargzImageRef)
+	layerDgsts := getManifestLayers(t, seedNode, manifestDgst)
+	require.NotEmpty(t, layerDgsts)
+
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		dumpPods(t, k8sClient, spegelNamespace, true)
+	})
+
+	t.Log("Deploying Spegel")
+	actionCfg := newHelmActionConfig(t, kcPath)
+	installSpegel(t, actionCfg, k8sClient, k8sDynClient, kindNodes, imageDigest)
+
+	t.Log("Blocking upstream registry access on the lazy pulling node")
+	blockRegistries(t, lazyNode)
+
+	t.Log("Lazy pulling eStargz image through Spegel")
+	pullImages(t, lazyNode, []string{estargzImageRef})
+
+	t.Log("Checking that the image was lazy pulled")
+	lazyContent := listContent(t, lazyNode)
+	require.Contains(t, lazyContent, manifestDgst)
+	for _, layerDgst := range layerDgsts {
+		require.NotContains(t, lazyContent, layerDgst)
+	}
+
+	// The lazy pulling node has the manifest and config in its content store but not the
+	// layers, so it advertises and serves only the content it can actually serve while
+	// the seed serves the whole image.
+	t.Log("Checking that the lazy pulling node only serves content it has")
+	repoPath := strings.TrimPrefix(estargzImageRef, "ghcr.io/")
+	repoPath = strings.Split(repoPath, ":")[0]
+	require.EqualT(t, http.StatusOK, getContentStatus(t, k8sClient, seedNode, repoPath, oci.DistributionKindManifest, manifestDgst))
+	require.EqualT(t, http.StatusOK, getContentStatus(t, k8sClient, lazyNode, repoPath, oci.DistributionKindManifest, manifestDgst))
+	for _, layerDgst := range layerDgsts {
+		require.EqualT(t, http.StatusOK, getContentStatus(t, k8sClient, seedNode, repoPath, oci.DistributionKindBlob, layerDgst))
+		require.EqualT(t, http.StatusNotFound, getContentStatus(t, k8sClient, lazyNode, repoPath, oci.DistributionKindBlob, layerDgst))
+	}
+}
+
+// blockRegistries blocks access to the upstream registries on the node, guaranteeing
+// that everything pulled afterwards is served from within the cluster.
+func blockRegistries(t *testing.T, node kindnodes.Node) {
+	t.Helper()
+
+	for _, domain := range []string{"ghcr.io", "docker.io", "registry-1.docker.io", "production.cloudflare.docker.com"} {
+		err := node.CommandContext(t.Context(), "sh", "-c", fmt.Sprintf(`echo 0.0.0.0 %s >>/etc/hosts`, domain)).Run()
+		require.NoError(t, err)
+	}
+}
+
+func waitForNodesReady(t *testing.T, k8sClient kubernetes.Interface, kindNodes []kindnodes.Node) {
+	t.Helper()
+
+	require.EventuallyWith(t, func(c *assert.CollectT) {
+		for _, kindNode := range kindNodes {
+			node, err := k8sClient.CoreV1().Nodes().Get(t.Context(), kindNode.String(), metav1.GetOptions{})
+			require.NoError(c, err)
+			idx := slices.IndexFunc(node.Status.Conditions, func(cond corev1.NodeCondition) bool {
+				return cond.Type == corev1.NodeReady
+			})
+			require.GreaterT(c, idx, -1)
+			require.EqualT(c, corev1.ConditionTrue, node.Status.Conditions[idx].Status)
+		}
+	}, 60*time.Second, 1*time.Second)
+}
+
+// exportImage saves the image from the local Docker daemon to a file.
+func exportImage(t *testing.T, mobyClient *client.Client, imgRef string) string {
+	t.Helper()
+
+	t.Log("Exporting Spegel image", imgRef)
+	saveRes, err := mobyClient.ImageSave(t.Context(), []string{imgRef})
+	require.NoError(t, err)
+	imgPath := filepath.Join(t.TempDir(), "image")
+	f, err := os.OpenFile(imgPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o644)
+	require.NoError(t, err)
+	_, err = io.Copy(f, saveRes)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+	return imgPath
+}
+
+// createKindCluster creates a Kind cluster and waits for every node to be ready. The
+// returned nodes are sorted with the control plane first.
+func createKindCluster(t *testing.T, kindName string, nodeImg oci.Image, clusterCfg *v1alpha4.Cluster) (kubernetes.Interface, dynamic.Interface, *restclient.Config, string, []kindnodes.Node) {
+	t.Helper()
+
+	t.Log("Creating Kind cluster")
+	kcPath := filepath.Join(t.TempDir(), "kind.kubeconfig")
+	provider := cluster.NewProvider()
+	createOpts := []cluster.CreateOption{
+		cluster.CreateWithNodeImage(nodeImg.String()),
+		cluster.CreateWithV1Alpha4Config(clusterCfg),
+		cluster.CreateWithKubeconfigPath(kcPath),
+	}
+	err := provider.Create(kindName, createOpts...)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if t.Failed() {
+			return
+		}
+		err = provider.Delete(kindName, "")
+		require.NoError(t, err)
+	})
+
+	k8sCfg, err := clientcmd.BuildConfigFromFlags("", kcPath)
+	require.NoError(t, err)
+	k8sClient, err := kubernetes.NewForConfig(k8sCfg)
+	require.NoError(t, err)
+	k8sDynClient, err := dynamic.NewForConfig(k8sCfg)
+	require.NoError(t, err)
+
+	kindNodes, err := provider.ListNodes(kindName)
+	require.NoError(t, err)
+	controlPlaneNodeName := kindName + "-control-plane"
+	slices.SortStableFunc(kindNodes, func(a, b kindnodes.Node) int {
+		if a.String() == controlPlaneNodeName {
+			return -1
+		}
+		if b.String() == controlPlaneNodeName {
+			return 1
+		}
+		return 0
+	})
+	waitForNodesReady(t, k8sClient, kindNodes)
+	return k8sClient, k8sDynClient, k8sCfg, kcPath, kindNodes
+}
+
+// loadSpegelImage loads the image archive into every node and returns the image digest.
+func loadSpegelImage(t *testing.T, kindNodes []kindnodes.Node, imgPath, imgRef string) string {
+	t.Helper()
+
+	t.Log("Loading Spegel image into nodes")
+	f, err := os.Open(imgPath)
+	require.NoError(t, err)
+	imageDigest := ""
+	for _, node := range kindNodes {
+		_, err = f.Seek(0, io.SeekStart)
+		require.NoError(t, err)
+		err = nodeutils.LoadImageArchive(node, f)
+		require.NoError(t, err)
+		if imageDigest == "" {
+			imageDigest = getImageDigest(t, node, imgRef)
+		}
+		err = node.CommandContext(t.Context(), "ctr", "-n=k8s.io", "image", "tag", imgRef, fmt.Sprintf("ghcr.io/spegel-org/spegel@%s", imageDigest)).Run()
+		require.NoError(t, err)
+	}
+	return imageDigest
+}
+
+// downloadStargzSnapshotter downloads the stargz snapshotter release archive for the
+// architecture of the test host, which matches the architecture of the Kind nodes.
+func downloadStargzSnapshotter(t *testing.T) []byte {
+	t.Helper()
+
+	arch := goruntime.GOARCH
+	url := fmt.Sprintf("https://github.com/containerd/stargz-snapshotter/releases/download/v%s/stargz-snapshotter-v%s-linux-%s.tar.gz", stargzVersion, stargzVersion, arch)
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.EqualT(t, http.StatusOK, resp.StatusCode)
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return b
+}
+
+// installStargzSnapshotter installs and starts the stargz snapshotter and configures
+// containerd to use it as the default snapshotter for CRI.
+func installStargzSnapshotter(t *testing.T, k8sClient kubernetes.Interface, node kindnodes.Node, archive []byte) {
+	t.Helper()
+
+	err := node.CommandContext(t.Context(), "tar", "-xz", "-C", "/usr/local/bin", "containerd-stargz-grpc", "ctr-remote").SetStdin(bytes.NewReader(archive)).Run()
+	require.NoError(t, err)
+
+	// The standalone stargz snapshotter does not read the containerd registry configuration.
+	// Mirrors have to be configured in the resolver configuration of the snapshotter.
+	k8sNode, err := k8sClient.CoreV1().Nodes().Get(t.Context(), node.String(), metav1.GetOptions{})
+	require.NoError(t, err)
+	nodeIP := getNodeIP(t, k8sNode)
+	snapshotterConfig := fmt.Sprintf(`[[resolver.host."ghcr.io".mirrors]]
+host = "%s:30020"
+insecure = true
+`, nodeIP)
+	err = nodeutils.WriteFile(node, "/etc/containerd-stargz-grpc/config.toml", snapshotterConfig)
+	require.NoError(t, err)
+
+	systemdUnit := `[Unit]
+Description=stargz snapshotter
+After=network.target
+Before=containerd.service
+
+[Service]
+Type=notify
+Environment=HOME=/root
+ExecStart=/usr/local/bin/containerd-stargz-grpc --log-level=debug --config=/etc/containerd-stargz-grpc/config.toml
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
+`
+	err = nodeutils.WriteFile(node, "/etc/systemd/system/stargz-snapshotter.service", systemdUnit)
+	require.NoError(t, err)
+	err = node.CommandContext(t.Context(), "systemctl", "daemon-reload").Run()
+	require.NoError(t, err)
+	err = node.CommandContext(t.Context(), "systemctl", "enable", "--now", "stargz-snapshotter").Run()
+	require.NoError(t, err)
+
+	err = node.CommandContext(t.Context(), "sed", "-i", `s/snapshotter = "overlayfs"/snapshotter = "stargz"\n  disable_snapshot_annotations = false/`, "/etc/containerd/config.toml").Run()
+	require.NoError(t, err)
+	proxyPlugin := `
+[proxy_plugins."stargz"]
+  type = "snapshot"
+  address = "/run/containerd-stargz-grpc/containerd-stargz-grpc.sock"
+`
+	err = node.CommandContext(t.Context(), "sh", "-c", fmt.Sprintf("cat >>/etc/containerd/config.toml <<'EOF'%sEOF", proxyPlugin)).Run()
+	require.NoError(t, err)
+	err = node.CommandContext(t.Context(), "systemctl", "restart", "containerd").Run()
+	require.NoError(t, err)
+	// Spegel exits when Containerd is restarted, wait for the pod to be recreated
+	// before waiting for the daemonset to become ready.
+	time.Sleep(5 * time.Second)
+}
+
+func newHelmActionConfig(t *testing.T, kcPath string) *action.Configuration {
+	t.Helper()
+
+	regClient, err := registry.NewClient()
+	require.NoError(t, err)
+	actionCfg := &action.Configuration{
+		RegistryClient: regClient,
+	}
+	actionCfg.SetLogger(slog.DiscardHandler)
+	clientGetter := &genericclioptions.ConfigFlags{KubeConfig: &kcPath}
+	err = actionCfg.Init(clientGetter, spegelNamespace, "secret")
+	require.NoError(t, err)
+	return actionCfg
+}
+
+// getImageDigest returns the digest of an image in the containerd store of the node.
+func getImageDigest(t *testing.T, node kindnodes.Node, ref string) string {
+	t.Helper()
+
+	var buf bytes.Buffer
+	err := node.CommandContext(t.Context(), "ctr", "-n=k8s.io", "image", "ls", "name=="+ref).SetStdout(&buf).Run()
+	require.NoError(t, err)
+	lines := strings.Split(buf.String(), "\n")
+	require.GreaterOrEqualT(t, len(lines), 2)
+	fields := strings.Fields(lines[1])
+	require.GreaterOrEqualT(t, len(fields), 3)
+	dgst, err := digest.Parse(fields[2])
+	require.NoError(t, err)
+	return dgst.String()
+}
+
+// getManifestLayers returns the layer digests referenced by the manifest.
+// Indexes are resolved to the manifest of the first listed platform.
+func getManifestLayers(t *testing.T, node kindnodes.Node, manifestDgst string) []string {
+	t.Helper()
+
+	var buf bytes.Buffer
+	err := node.CommandContext(t.Context(), "ctr", "-n=k8s.io", "content", "get", manifestDgst).SetStdout(&buf).Run()
+	require.NoError(t, err)
+	index := ocispec.Index{}
+	err = json.Unmarshal(buf.Bytes(), &index)
+	require.NoError(t, err)
+	if len(index.Manifests) > 0 {
+		return getManifestLayers(t, node, index.Manifests[0].Digest.String())
+	}
+	manifest := ocispec.Manifest{}
+	err = json.Unmarshal(buf.Bytes(), &manifest)
+	require.NoError(t, err)
+	layerDgsts := []string{}
+	for _, layer := range manifest.Layers {
+		layerDgsts = append(layerDgsts, layer.Digest.String())
+	}
+	return layerDgsts
+}
+
+// listContent returns all content digests in the containerd content store of the node.
+func listContent(t *testing.T, node kindnodes.Node) string {
+	t.Helper()
+
+	var buf bytes.Buffer
+	err := node.CommandContext(t.Context(), "ctr", "-n=k8s.io", "content", "ls", "-q").SetStdout(&buf).Run()
+	require.NoError(t, err)
+	return buf.String()
+}
+
+// getContentStatus requests content from the Spegel registry on the given node and
+// returns the response status code. The mirrored header is set so that the request is
+// only served with local content instead of being forwarded to other nodes.
+func getContentStatus(t *testing.T, k8sClient kubernetes.Interface, node kindnodes.Node, repoPath string, kind oci.DistributionKind, dgst string) int {
+	t.Helper()
+
+	pod := getSpegelPod(t, k8sClient, node)
+	result := k8sClient.CoreV1().RESTClient().Get().
+		Namespace(spegelNamespace).
+		Resource("pods").
+		Name(fmt.Sprintf("%s:%d", pod.Name, 5000)).
+		SubResource("proxy").
+		Suffix("v2", repoPath, string(kind), dgst).
+		SetHeader(spegelregistry.HeaderSpegelMirrored, "true").
+		Do(t.Context())
+	statusCode := 0
+	result.StatusCode(&statusCode)
+	return statusCode
 }

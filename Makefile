@@ -31,4 +31,8 @@ test-integration-containerd:
 
 .PHONY: test-integration-kubernetes
 test-integration-kubernetes: build-image
-	@cd ./test/integration/kubernetes && INTEGRATION_TEST_STRATEGY="fast" IMG_REF=${IMG_REF} go test -v -timeout 300s -count 1 ./...
+	@cd ./test/integration/kubernetes && INTEGRATION_TEST_STRATEGY="fast" IMG_REF=${IMG_REF} go test -v -timeout 300s -count 1 -run 'TestKubernetes$$' ./...
+
+.PHONY: test-integration-kubernetes-stargz
+test-integration-kubernetes-stargz: build-image
+	@cd ./test/integration/kubernetes && INTEGRATION_TEST_STRATEGY="fast" IMG_REF=${IMG_REF} go test -v -timeout 900s -count 1 -run 'TestKubernetesStargz$$' ./...
