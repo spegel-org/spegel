@@ -45,12 +45,12 @@ make test-integration-containerd
 make test-integration-kubernetes
 ```
 
-### Helm Documentation
+### Generated Content
 
 Changes to the Helm chart values will require the documentation to be regenerated.
 
 ```shell
-make helm-docs
+make generate
 ```
 
 ## Debugging
