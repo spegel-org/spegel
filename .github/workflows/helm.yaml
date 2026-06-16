@@ -31,11 +31,11 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Generate docs
-        run: make helm-docs
+        run: make -B generate
       - name: Check if working tree is dirty
         run: |
           if [[ $(git diff --stat) != '' ]]; then
             git diff
-            echo 'run make helm-docs and commit changes'
+            echo 'run make generate and commit changes'
             exit 1
           fi
