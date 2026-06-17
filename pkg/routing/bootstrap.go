@@ -146,7 +146,7 @@ type HTTPBootstrapper struct {
 
 // NewHTTPBootstrapper creates an HTTP bootstrapper.
 //
-// Self-serving identity at /id is enabled iff addr is non-empty.
+// Self-serving identity at /id is enabled if addr is non-empty.
 // The remote endpoint to fetch peer info from is given by either peer (a base URL; /id is appended) or url (used as is). Exactly one of the two must be set.
 // The tlsCA is an optional CA used to verify the bootstrap endpoint's TLS certificate, while the optional client tlsCert/tlsKey pair is used for mTLS authentication with the endpoint.
 func NewHTTPBootstrapper(addr string, peer, url url.URL, tlsCA, tlsCert, tlsKey []byte) (*HTTPBootstrapper, error) {
@@ -265,8 +265,8 @@ func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 // bootstrapPeerAddrInfo mirrors libp2p's peer.AddrInfo JSON shape but allows the ID to be omitted or empty.
 // libp2p's peer.AddrInfo.UnmarshalJSON rejects an empty ID, so we unmarshal into this struct and convert via fromBootstrapPeerAddrInfos.
 type bootstrapPeerAddrInfo struct {
-	ID    string
-	Addrs []string
+	ID    string   `json:"ID"`
+	Addrs []string `json:"Addrs"`
 }
 
 func fromBootstrapPeerAddrInfos(bootstrapPeerAddrInfos []bootstrapPeerAddrInfo) ([]peer.AddrInfo, error) {
