@@ -312,10 +312,10 @@ func TestRegistryHandler(t *testing.T) {
 			key:              "sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8",
 			distributionKind: oci.DistributionKindBlob,
 			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":2},"message":"waited too long for a response from a peer for sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8"}]}`),
+			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":2},"message":"waited too long for inflight dials to complete for sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8"}]}`),
 			expectedHeaders: http.Header{
 				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"191"},
+				httpx.HeaderContentLength: {"195"},
 			},
 		},
 		{
