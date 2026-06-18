@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -133,11 +132,7 @@ func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 
 var _ Bootstrapper = &HTTPBootstrapper{}
 
-// HTTPBootstrapper resolves bootstrap peers over HTTP. It can optionally also serve its own identity at /id so other Spegel nodes can bootstrap from it.
-//
-// The endpoint contract is a JSON array of libp2p peer.AddrInfo objects, with the relaxation that the ID field may be omitted or empty.
-// The embedded server always serves a single-element array containing its own identity, but external bootstrap servers may return multiple peers.
-// Any bootstrap server must respect the contract.
+// HTTPBootstrapper resolves bootstrap peers over HTTP.
 type HTTPBootstrapper struct {
 	httpClient *http.Client
 	addr       string
@@ -145,53 +140,25 @@ type HTTPBootstrapper struct {
 }
 
 // NewHTTPBootstrapper creates an HTTP bootstrapper.
-//
-// Self-serving identity at /id is enabled if addr is non-empty.
-// The remote endpoint to fetch peer info from is given by either peer (a base URL; /id is appended) or url (used as is). Exactly one of the two must be set.
-// The tlsCA is an optional CA used to verify the bootstrap endpoint's TLS certificate, while the optional client tlsCert/tlsKey pair is used for mTLS authentication with the endpoint.
-func NewHTTPBootstrapper(addr string, peer, url url.URL, tlsCA, tlsCert, tlsKey []byte) (*HTTPBootstrapper, error) {
-	if peer.Host == "" && url.Host == "" {
-		return nil, errors.New("either peer or url must be set")
-	}
-	if peer.Host != "" && url.Host != "" {
-		return nil, errors.New("peer and url are mutually exclusive")
-	}
-	endpoint := url.String()
-	if peer.Host != "" {
-		endpoint = peer.String() + "/id"
+func NewHTTPBootstrapper(addr string, bootstrapURL url.URL, pool *x509.CertPool, cert *tls.Certificate) (*HTTPBootstrapper, error) {
+	transport := httpx.BaseTransport()
+	if pool != nil || cert != nil {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			RootCAs:    pool,
+		}
+		if cert != nil {
+			tlsConfig.Certificates = []tls.Certificate{*cert}
+		}
+		transport.TLSClientConfig = tlsConfig
 	}
 	client := httpx.BaseClient()
-	var tlsConfig *tls.Config
-	if len(tlsCA) > 0 {
-		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-		caCertPool := x509.NewCertPool()
-		if !caCertPool.AppendCertsFromPEM(tlsCA) {
-			return nil, errors.New("failed to parse CA certificate")
-		}
-		tlsConfig.RootCAs = caCertPool
-	}
-	if len(tlsCert) > 0 || len(tlsKey) > 0 {
-		if len(tlsCert) == 0 || len(tlsKey) == 0 {
-			return nil, errors.New("both client TLS certificate and client TLS key must be provided")
-		}
-		cert, err := tls.X509KeyPair(tlsCert, tlsKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse client certificate: %w", err)
-		}
-		if tlsConfig == nil {
-			tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
-	}
-	if tlsConfig != nil {
-		transport := httpx.BaseTransport()
-		transport.TLSClientConfig = tlsConfig
-		client.Transport = transport
-	}
+	client.Transport = transport
+
 	return &HTTPBootstrapper{
 		httpClient: client,
 		addr:       addr,
-		endpoint:   endpoint,
+		endpoint:   bootstrapURL.String(),
 	}, nil
 }
 
@@ -249,27 +216,27 @@ func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	bootstrapPeerAddrInfos := []bootstrapPeerAddrInfo{}
+	bootstrapPeerAddrInfos := []BootstrapPeerAddrInfo{}
 	err = json.Unmarshal(b, &bootstrapPeerAddrInfos)
 	if err != nil {
 		return nil, err
 	}
 	bootstrapPeerAddrInfos = bootstrapPeerAddrInfos[:min(len(bootstrapPeerAddrInfos), limit)]
-	addrInfos, err := fromBootstrapPeerAddrInfos(bootstrapPeerAddrInfos)
+	addrInfos, err := FromBootstrapPeerAddrInfos(bootstrapPeerAddrInfos)
 	if err != nil {
 		return nil, err
 	}
 	return addrInfos, nil
 }
 
-// bootstrapPeerAddrInfo mirrors libp2p's peer.AddrInfo JSON shape but allows the ID to be omitted or empty.
+// BootstrapPeerAddrInfo mirrors libp2p's peer.AddrInfo JSON shape but allows the ID to be omitted or empty.
 // libp2p's peer.AddrInfo.UnmarshalJSON rejects an empty ID, so we unmarshal into this struct and convert via fromBootstrapPeerAddrInfos.
-type bootstrapPeerAddrInfo struct {
+type BootstrapPeerAddrInfo struct {
 	ID    string   `json:"ID"`
 	Addrs []string `json:"Addrs"`
 }
 
-func fromBootstrapPeerAddrInfos(bootstrapPeerAddrInfos []bootstrapPeerAddrInfo) ([]peer.AddrInfo, error) {
+func FromBootstrapPeerAddrInfos(bootstrapPeerAddrInfos []BootstrapPeerAddrInfo) ([]peer.AddrInfo, error) {
 	out := make([]peer.AddrInfo, len(bootstrapPeerAddrInfos))
 	for i, bootstrapPeerAddrInfo := range bootstrapPeerAddrInfos {
 		addrs := make([]ma.Multiaddr, len(bootstrapPeerAddrInfo.Addrs))
