@@ -125,9 +125,9 @@ func TestHTTPBootstrap(t *testing.T) {
 		ID:    id,
 		Addrs: []ma.Multiaddr{parentAddr},
 	}
-	peerURL, err := url.Parse("http://" + ln.Addr().String())
+	bootstrapURL, err := url.Parse("http://" + ln.Addr().String() + "/id")
 	require.NoError(t, err)
-	parentBs, err := NewHTTPBootstrapper(ln.Addr().String(), *peerURL, url.URL{}, nil, nil, nil)
+	parentBs, err := NewHTTPBootstrapper(ln.Addr().String(), *bootstrapURL, nil, nil)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	g, gCtx := errgroup.WithContext(ctx)
@@ -137,7 +137,7 @@ func TestHTTPBootstrap(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	childBs, err := NewHTTPBootstrapper("", *peerURL, url.URL{}, nil, nil, nil)
+	childBs, err := NewHTTPBootstrapper("", *bootstrapURL, nil, nil)
 	require.NoError(t, err)
 	addrInfos, err := childBs.Get(t.Context())
 	require.NoError(t, err)
@@ -157,45 +157,79 @@ func TestHTTPBootstrapEndpoint(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	g, gCtx := errgroup.WithContext(ctx)
 
+	now := time.Now()
+
 	caCert := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		IsCA:                  true,
-		Subject:               pkix.Name{CommonName: "ca", Organization: []string{"foo"}},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(1, 0, 0),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		SerialNumber: big.NewInt(1),
+		IsCA:         true,
+		Subject:      pkix.Name{CommonName: "ca", Organization: []string{"foo"}},
+		NotBefore:    now,
+		NotAfter:     now.AddDate(1, 0, 0),
+		KeyUsage: x509.KeyUsageDigitalSignature |
+			x509.KeyUsageKeyEncipherment |
+			x509.KeyUsageCertSign |
+			x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 	}
-	caPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-	caBytes, err := x509.CreateCertificate(rand.Reader, caCert, caCert, &caPrivateKey.PublicKey, caPrivateKey)
+	caDER, err := x509.CreateCertificate(rand.Reader, caCert, caCert, &caKey.PublicKey, caKey)
 	require.NoError(t, err)
-	svrCert := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: caDER,
+	}))
+
+	srvCert := &x509.Certificate{
+		SerialNumber:          big.NewInt(2),
 		Subject:               pkix.Name{CommonName: "srv", Organization: []string{"foo"}},
 		IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(1, 0, 0),
+		NotBefore:             now,
+		NotAfter:              now.AddDate(1, 0, 0),
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		BasicConstraintsValid: true,
 	}
-	srvPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	srvKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-	srvBytes, err := x509.CreateCertificate(rand.Reader, svrCert, caCert, &srvPrivateKey.PublicKey, caPrivateKey)
+	srvDER, err := x509.CreateCertificate(rand.Reader, srvCert, caCert, &srvKey.PublicKey, caKey)
 	require.NoError(t, err)
+	srvTLSCert, err := tls.X509KeyPair(
+		pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: srvDER,
+		}),
+		pem.EncodeToMemory(&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(srvKey),
+		}),
+	)
+	require.NoError(t, err)
+
 	clientCert := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
+		SerialNumber:          big.NewInt(3),
 		Subject:               pkix.Name{CommonName: "bootstrap", Organization: []string{"foo"}},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(1, 0, 0),
+		NotBefore:             now,
+		NotAfter:              now.AddDate(1, 0, 0),
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		BasicConstraintsValid: true,
 	}
-	clientPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	clientKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-	clientBytes, err := x509.CreateCertificate(rand.Reader, clientCert, caCert, &clientPrivateKey.PublicKey, caPrivateKey)
+	clientDER, err := x509.CreateCertificate(rand.Reader, clientCert, caCert, &clientKey.PublicKey, caKey)
+	require.NoError(t, err)
+	clientTLSCert, err := tls.X509KeyPair(
+		pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: clientDER,
+		}),
+		pem.EncodeToMemory(&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(clientKey),
+		}),
+	)
 	require.NoError(t, err)
 
 	addr, err := ma.NewMultiaddr("/ip4/10.1.2.3")
@@ -207,21 +241,15 @@ func TestHTTPBootstrapEndpoint(t *testing.T) {
 		//nolint:errcheck // ignore
 		w.Write(body)
 	}))
-	tlsCrt, err := tls.X509KeyPair(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srvBytes}),
-		pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(srvPrivateKey)}))
-	require.NoError(t, err)
 	srv.TLS = &tls.Config{
-		Certificates: []tls.Certificate{tlsCrt},
+		Certificates: []tls.Certificate{srvTLSCert},
 	}
 	srv.StartTLS()
 	defer srv.Close()
 
 	srvUrl, err := url.Parse(srv.URL)
 	require.NoError(t, err)
-	bs, err := NewHTTPBootstrapper("", url.URL{}, *srvUrl,
-		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caBytes}),
-		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: clientBytes}),
-		pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(clientPrivateKey)}))
+	bs, err := NewHTTPBootstrapper("", *srvUrl, pool, &clientTLSCert)
 	require.NoError(t, err)
 
 	g.Go(func() error {
@@ -237,64 +265,4 @@ func TestHTTPBootstrapEndpoint(t *testing.T) {
 	cancel()
 	err = g.Wait()
 	require.NoError(t, err)
-}
-
-func TestNewHTTPBootstrapperValidation(t *testing.T) {
-	t.Parallel()
-
-	someURL, err := url.Parse("http://10.1.2.3:1234")
-	require.NoError(t, err)
-	tests := []struct {
-		name    string
-		errMsg  string
-		peer    url.URL
-		url     url.URL
-		tlsCA   []byte
-		tlsCert []byte
-		tlsKey  []byte
-	}{
-		{
-			name:   "neither peer nor url set",
-			errMsg: "either peer or url must be set",
-		},
-		{
-			name:   "both peer and url set",
-			errMsg: "peer and url are mutually exclusive",
-			peer:   *someURL,
-			url:    *someURL,
-		},
-		{
-			name:   "malformed CA",
-			errMsg: "failed to parse CA certificate",
-			peer:   *someURL,
-			tlsCA:  []byte("not a pem"),
-		},
-		{
-			name:    "client cert without key",
-			errMsg:  "both client TLS certificate and client TLS key must be provided",
-			peer:    *someURL,
-			tlsCert: []byte("cert"),
-		},
-		{
-			name:   "client key without cert",
-			errMsg: "both client TLS certificate and client TLS key must be provided",
-			peer:   *someURL,
-			tlsKey: []byte("key"),
-		},
-		{
-			name:    "malformed client cert",
-			errMsg:  "failed to parse client certificate",
-			peer:    *someURL,
-			tlsCert: []byte("not a pem"),
-			tlsKey:  []byte("not a pem"),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			bs, err := NewHTTPBootstrapper("", tt.peer, tt.url, tt.tlsCA, tt.tlsCert, tt.tlsKey)
-			require.ErrorContains(t, err, tt.errMsg)
-			require.Nil(t, bs)
-		})
-	}
 }
