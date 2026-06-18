@@ -382,6 +382,9 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 			idleTimeoutCh = time.After(r.resolveTimeout)
 			exhaustedCh = iterator.Exhausted()
 		}
+		if len(fetchCtxs) > 0 && raceTimeoutCh == nil {
+			raceTimeoutCh = time.After(max(r.hedger.HighestPercentileDuration()*2, 100*time.Millisecond))
+		}
 
 		select {
 		case <-ctx.Done():
@@ -394,15 +397,13 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 		case <-idleTimeoutCh:
 			return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("waited too long for new peer with no inflight fetches for %s", dist.Identifier()), errDetails)
 		case <-raceTimeoutCh:
-			return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("waited too long for a response from a peer for %s", dist.Identifier()), errDetails)
+			return fetchResponse{}, oci.NewDistributionError(errCode, fmt.Sprintf("waited too long for inflight dials to complete for %s", dist.Identifier()), errDetails)
 		case <-fetchCh:
 			peer, ok := iterator.Acquire()
 			if !ok {
 				immediateCh <- false
 				continue
 			}
-
-			raceTimeoutCh = time.After(max(r.hedger.HighestPercentileDuration()*2, 100*time.Millisecond))
 
 			errDetails.Attempts += 1
 
