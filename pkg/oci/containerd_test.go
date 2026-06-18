@@ -104,8 +104,7 @@ func TestMirrorConfiguration(t *testing.T) {
 		existingFiles       map[string]string
 		expectedFiles       map[string]string
 		name                string
-		username            string
-		password            string
+		userinfo            *url.Userinfo
 		mirroredRegistries  []string
 		mirrorTargets       []string
 		resolveTags         bool
@@ -391,8 +390,7 @@ dial_timeout = '200ms'`,
 			mirroredRegistries: []string{"http://foo.bar:5000"},
 			mirrorTargets:      []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"},
 			prependExisting:    false,
-			username:           "hello",
-			password:           "world",
+			userinfo:           url.UserPassword("hello", "world"),
 			expectedFiles: map[string]string{
 				"foo.bar:5000/hosts.toml": `server = 'http://foo.bar:5000'
 
@@ -426,7 +424,7 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 				err = os.WriteFile(path, []byte(v), 0o644)
 				require.NoError(t, err)
 			}
-			err := AddMirrorConfiguration(t.Context(), registryConfigPath, tt.mirroredRegistries, tt.mirrorTargets, tt.resolveTags, tt.prependExisting, tt.username, tt.password)
+			err := AddMirrorConfiguration(t.Context(), registryConfigPath, tt.mirroredRegistries, tt.mirrorTargets, tt.resolveTags, tt.prependExisting, tt.userinfo)
 			require.NoError(t, err)
 			ok, err := dirExists(filepath.Join(registryConfigPath, "_backup"))
 			require.NoError(t, err)

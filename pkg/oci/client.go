@@ -79,8 +79,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 type CommonConfig struct {
 	Mirror   *url.URL
 	Header   http.Header
-	Username string
-	Password string
+	Userinfo *url.Userinfo
 }
 
 type PullConfig struct {
@@ -104,10 +103,9 @@ func WithPullHeader(header http.Header) PullOption {
 	}
 }
 
-func WithPullBasicAuth(username, password string) PullOption {
+func WithPullUserinfo(userinfo *url.Userinfo) PullOption {
 	return func(cfg *PullConfig) error {
-		cfg.Username = username
-		cfg.Password = password
+		cfg.Userinfo = userinfo
 		return nil
 	}
 }
@@ -138,10 +136,9 @@ func WithFetchHeader(k, v string) FetchOption {
 	}
 }
 
-func WithFetchBasicAuth(username, password string) FetchOption {
+func WithFetchUserinfo(userinfo *url.Userinfo) FetchOption {
 	return func(cfg *CommonConfig) error {
-		cfg.Username = username
-		cfg.Password = password
+		cfg.Userinfo = userinfo
 		return nil
 	}
 }
@@ -164,8 +161,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 	fetchOpt := func(commonCfg *CommonConfig) error {
 		commonCfg.Mirror = cfg.Mirror
 		commonCfg.Header = cfg.Header
-		commonCfg.Username = cfg.Username
-		commonCfg.Password = cfg.Password
+		commonCfg.Userinfo = cfg.Userinfo
 		return nil
 	}
 
@@ -305,12 +301,14 @@ func (c *Client) Fetch(ctx context.Context, dist DistributionPath, opts ...Fetch
 			return resilient.Unrecoverable(err)
 		}
 		httpx.CopyHeader(req.Header, cfg.Header)
-		req.SetBasicAuth(cfg.Username, cfg.Password)
 		req.Header.Set(httpx.HeaderUserAgent, "spegel")
 		req.Header.Add(httpx.HeaderAccept, ocispec.MediaTypeImageManifest)
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2Manifest)
 		req.Header.Add(httpx.HeaderAccept, ocispec.MediaTypeImageIndex)
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2ManifestList)
+		if cfg.Userinfo != nil {
+			req.Header.Set(httpx.HeaderAuthorization, httpx.UserinfoHeaderValue(*cfg.Userinfo))
+		}
 		if dist.Range != nil {
 			req.Header.Add(httpx.HeaderRange, dist.Range.String())
 		}
