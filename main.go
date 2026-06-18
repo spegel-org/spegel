@@ -167,11 +167,11 @@ func versionCommand(_ context.Context, args *VersionCmd) error {
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	args.MirrorTargets[0] = httpx.EncapsulateIPv6Host(args.MirrorTargets[0])
-	username, password, err := loadBasicAuth()
+	userinfo, err := httpx.LoadUserinfo("/etc/secrets/basic-auth")
 	if err != nil {
 		return err
 	}
-	err = oci.AddMirrorConfiguration(ctx, args.ContainerdRegistryConfigPath, args.MirroredRegistries, args.MirrorTargets, args.ResolveTags, args.PrependExisting, username, password)
+	err = oci.AddMirrorConfiguration(ctx, args.ContainerdRegistryConfigPath, args.MirroredRegistries, args.MirrorTargets, args.ResolveTags, args.PrependExisting, userinfo)
 	if err != nil {
 		return err
 	}
@@ -191,10 +191,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		return err
 	}
 
-	username, password, err := loadBasicAuth()
-	if err != nil {
-		return err
-	}
 	ociClient, err := oci.NewClient()
 	if err != nil {
 		return err
@@ -253,10 +249,14 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	})
 
 	// Registry
+	userinfo, err := httpx.LoadUserinfo("/etc/secrets/basic-auth")
+	if err != nil {
+		return err
+	}
 	registryOpts := []registry.RegistryOption{
 		registry.WithRegistryFilters(filters),
 		registry.WithResolveTimeout(args.MirrorResolveTimeout),
-		registry.WithBasicAuth(username, password),
+		registry.WithUserinfo(userinfo),
 		registry.WithOCIClient(ociClient),
 	}
 	reg, err := registry.NewRegistry(ociStore, router, registryOpts...)
@@ -365,19 +365,6 @@ func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //noli
 	default:
 		return nil, fmt.Errorf("unknown bootstrap kind %s", cfg.BootstrapKind)
 	}
-}
-
-func loadBasicAuth() (string, string, error) {
-	dirPath := "/etc/secrets/basic-auth"
-	username, err := os.ReadFile(filepath.Join(dirPath, "username"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return "", "", err
-	}
-	password, err := os.ReadFile(filepath.Join(dirPath, "password"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return "", "", err
-	}
-	return string(username), string(password), nil
 }
 
 func loadHTTPBootstrapperCerts(tlsCAFile, tlsCertFile, tlsKeyFile *string) (tlsCA, tlsCert, tlsKey []byte, err error) {

@@ -3,7 +3,6 @@ package oci
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -424,7 +423,7 @@ func contentLabelsToReferences(l map[string]string, dgst digest.Digest) ([]Refer
 // Refer to containerd registry configuration documentation for more information about required configuration.
 // https://github.com/containerd/containerd/blob/main/docs/cri/config.md#registry-configuration
 // https://github.com/containerd/containerd/blob/main/docs/hosts.md#registry-configuration---examples
-func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegistries, mirrorTargets []string, resolveTags, prependExisting bool, username, password string) error {
+func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegistries, mirrorTargets []string, resolveTags, prependExisting bool, userinfo *url.Userinfo) error {
 	log := logr.FromContextOrDiscard(ctx)
 
 	// Parse and verify mirror urls.
@@ -457,7 +456,7 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 		capabilities = append(capabilities, "resolve")
 	}
 	for _, mr := range parsedMirroredRegistries {
-		templatedHosts, err := templateHosts(mr, parsedMirrorTargets, capabilities, username, password)
+		templatedHosts, err := templateHosts(mr, parsedMirrorTargets, capabilities, userinfo)
 		if err != nil {
 			return err
 		}
@@ -618,7 +617,7 @@ func clearConfig(configPath string) error {
 	return nil
 }
 
-func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, capabilities []string, username, password string) (string, error) {
+func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, capabilities []string, userinfo *url.Userinfo) (string, error) {
 	server := parsedMirrorRegistry.String()
 	if parsedMirrorRegistry.String() == "https://docker.io" {
 		server = "https://registry-1.docker.io"
@@ -626,12 +625,9 @@ func templateHosts(parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL, 
 	if parsedMirrorRegistry == wildcardRegistryURL {
 		server = ""
 	}
-
 	authorization := ""
-	if username != "" || password != "" {
-		authorization = username + ":" + password
-		authorization = base64.StdEncoding.EncodeToString([]byte(authorization))
-		authorization = "Basic " + authorization
+	if userinfo != nil {
+		authorization = httpx.UserinfoHeaderValue(*userinfo)
 	}
 
 	hc := struct {

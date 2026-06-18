@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"regexp"
 	"testing"
 	"testing/synctest"
@@ -44,7 +45,7 @@ func TestRegistryOptions(t *testing.T) {
 		WithResolveRetries(5),
 		WithRegistryFilters(filters),
 		WithResolveTimeout(10 * time.Minute),
-		WithBasicAuth("foo", "bar"),
+		WithUserinfo(url.UserPassword("foo", "bar")),
 		WithOCIClient(ociClient),
 	}
 	cfg := RegistryConfig{}
@@ -54,8 +55,7 @@ func TestRegistryOptions(t *testing.T) {
 	require.SliceEqualT(t, filters, cfg.Filters)
 	require.EqualT(t, 10*time.Minute, cfg.ResolveTimeout)
 	require.Equal(t, ociClient, cfg.OCIClient)
-	require.EqualT(t, "foo", cfg.Username)
-	require.EqualT(t, "bar", cfg.Password)
+	require.EqualT(t, "foo:bar", cfg.Userinfo.String())
 }
 
 func TestProbeHandlers(t *testing.T) {
@@ -98,8 +98,7 @@ func TestBasicAuth(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		username    string
-		password    string
+		userinfo    *url.Userinfo
 		reqUsername string
 		reqPassword string
 		expected    int
@@ -116,38 +115,33 @@ func TestBasicAuth(t *testing.T) {
 		},
 		{
 			name:        "correct authentication",
-			username:    "foo",
-			password:    "bar",
+			userinfo:    url.UserPassword("foo", "bar"),
 			reqUsername: "foo",
 			reqPassword: "bar",
 			expected:    http.StatusOK,
 		},
 		{
 			name:        "invalid username",
-			username:    "foo",
-			password:    "bar",
+			userinfo:    url.UserPassword("foo", "bar"),
 			reqUsername: "wrong",
 			reqPassword: "bar",
 			expected:    http.StatusUnauthorized,
 		},
 		{
 			name:        "invalid password",
-			username:    "foo",
-			password:    "bar",
+			userinfo:    url.UserPassword("foo", "bar"),
 			reqUsername: "foo",
 			reqPassword: "wrong",
 			expected:    http.StatusUnauthorized,
 		},
 		{
 			name:     "missing authentication",
-			username: "foo",
-			password: "bar",
+			userinfo: url.UserPassword("foo", "bar"),
 			expected: http.StatusUnauthorized,
 		},
 		{
 			name:     "missing authentication",
-			username: "foo",
-			password: "bar",
+			userinfo: url.UserPassword("foo", "bar"),
 			expected: http.StatusUnauthorized,
 		},
 	}
@@ -155,7 +149,7 @@ func TestBasicAuth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			reg, err := NewRegistry(nil, nil, WithBasicAuth(tt.username, tt.password))
+			reg, err := NewRegistry(nil, nil, WithUserinfo(tt.userinfo))
 			require.NoError(t, err)
 			rw := httptest.NewRecorder()
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/v2/", nil)

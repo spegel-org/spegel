@@ -33,8 +33,7 @@ const (
 
 type RegistryConfig struct {
 	OCIClient      *oci.Client
-	Username       string
-	Password       string
+	Userinfo       *url.Userinfo
 	Filters        []oci.Filter
 	ResolveTimeout time.Duration
 	ResolveRetries int
@@ -70,10 +69,9 @@ func WithOCIClient(ociClient *oci.Client) RegistryOption {
 	}
 }
 
-func WithBasicAuth(username, password string) RegistryOption {
+func WithUserinfo(userinfo *url.Userinfo) RegistryOption {
 	return func(cfg *RegistryConfig) error {
-		cfg.Username = username
-		cfg.Password = password
+		cfg.Userinfo = userinfo
 		return nil
 	}
 }
@@ -88,8 +86,7 @@ type Registry struct {
 	ociStore       oci.Store
 	ociClient      *oci.Client
 	router         routing.Router
-	username       string
-	password       string
+	userinfo       *url.Userinfo
 	filters        []oci.Filter
 	resolveTimeout time.Duration
 	resolveRetries int
@@ -127,8 +124,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 		resolveRetries: cfg.ResolveRetries,
 		filters:        cfg.Filters,
 		resolveTimeout: cfg.ResolveTimeout,
-		username:       cfg.Username,
-		password:       cfg.Password,
+		userinfo:       cfg.Userinfo,
 		bufferPool:     bufferPool,
 		stats:          Statistics{},
 		hedger:         resilient.NewHedger([]float64{80, 85, 90}, 50*time.Millisecond),
@@ -174,13 +170,10 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 	rw.SetAttrs(HandlerAttrKey, "registry")
 
 	// Check basic authentication
-	if r.username != "" || r.password != "" {
-		username, password, _ := req.BasicAuth()
-		if r.username != username || r.password != password {
-			respErr := oci.NewDistributionError(oci.ErrCodeUnauthorized, "invalid credentials", nil)
-			rw.WriteError(http.StatusUnauthorized, respErr)
-			return
-		}
+	if r.userinfo != nil && !httpx.AuthenticateUserinfo(req.BasicAuth, *r.userinfo) {
+		respErr := oci.NewDistributionError(oci.ErrCodeUnauthorized, "invalid credentials", nil)
+		rw.WriteError(http.StatusUnauthorized, respErr)
+		return
 	}
 
 	// Quickly return 200 for /v2 to indicate that registry supports v2.
@@ -413,7 +406,7 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 					fetchOpts := []oci.FetchOption{
 						oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
 						oci.WithFetchMirror(mirror),
-						oci.WithFetchBasicAuth(r.username, r.password),
+						oci.WithFetchUserinfo(r.userinfo),
 					}
 					rc, desc, err := r.ociClient.Fetch(ctx, dist, fetchOpts...)
 					if err != nil {
