@@ -155,7 +155,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		dht.ProtocolPrefix("/spegel"),
 		dht.ProviderManagerOpts(
 			records.ProvideValidity(cfg.AdvertiseTTL+(2*cfg.MaxReprovideDelay)),
-			records.ProviderAddrTTL(1*time.Hour),
+			records.ProviderAddrTTL(cfg.AdvertiseTTL+(2*cfg.MaxReprovideDelay)+(5*time.Minute)),
 		),
 	}
 	kdht, err := dht.New(ctx, host, dhtOpts...)
