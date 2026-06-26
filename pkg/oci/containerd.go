@@ -21,6 +21,7 @@ import (
 	"github.com/containerd/containerd/v2/core/events"
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/containerd/v2/pkg/labels"
+	"github.com/containerd/containerd/v2/plugins"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
@@ -72,6 +73,14 @@ func NewContainerd(ctx context.Context, sock, namespace string, opts ...Containe
 	if err != nil {
 		return nil, err
 	}
+	contentPath := cfg.ContentPath
+	if contentPath == "" {
+		contentPath, err = getContentPath(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	mediaTypeIdx, err := lru.New[digest.Digest, string](100)
 	if err != nil {
 		return nil, err
@@ -79,7 +88,7 @@ func NewContainerd(ctx context.Context, sock, namespace string, opts ...Containe
 	c := &Containerd{
 		client:       client,
 		mediaTypeIdx: mediaTypeIdx,
-		contentPath:  cfg.ContentPath,
+		contentPath:  contentPath,
 	}
 	return c, nil
 }
@@ -418,6 +427,27 @@ func contentLabelsToReferences(l map[string]string, dgst digest.Digest) ([]Refer
 		return nil, fmt.Errorf("no distribution source labels found for %s", dgst)
 	}
 	return refs, nil
+}
+
+func getContentPath(ctx context.Context, client *client.Client) (string, error) {
+	pluginInfo, err := client.IntrospectionService().PluginInfo(ctx, string(plugins.ContentPlugin), "content", nil)
+	if err != nil {
+		return "", err
+	}
+	root, ok := pluginInfo.Plugin.Exports["root"]
+	if !ok {
+		logr.FromContextOrDiscard(ctx).Info("falling back to reading content from socket as content path could not be found in plugin")
+		return "", nil
+	}
+	ok, err = dirExists(root)
+	if err != nil && !errors.Is(err, os.ErrPermission) {
+		return "", err
+	}
+	if !ok {
+		logr.FromContextOrDiscard(ctx).Info("falling back to reading content from socket as content path directory does not exist")
+		return "", nil
+	}
+	return root, nil
 }
 
 // Refer to containerd registry configuration documentation for more information about required configuration.
