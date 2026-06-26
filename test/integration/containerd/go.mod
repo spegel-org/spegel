@@ -5,14 +5,14 @@ go 1.26.3
 replace github.com/spegel-org/spegel => ../../../
 
 require (
-	github.com/go-openapi/testify/v2 v2.5.1
-	github.com/moby/moby/api v1.54.2
-	github.com/moby/moby/client v0.4.1
+	github.com/go-openapi/testify/v2 v2.6.0
+	github.com/moby/moby/api v1.55.0
+	github.com/moby/moby/client v0.5.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
-	golang.org/x/sync v0.20.0
+	golang.org/x/sync v0.21.0
 	google.golang.org/grpc v1.81.1
-	k8s.io/cri-api v0.36.1
+	k8s.io/cri-api v0.36.2
 )
 
 require (
