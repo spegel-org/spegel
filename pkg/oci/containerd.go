@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/url"
 	"os"
 	"path"
@@ -30,6 +31,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
 	tomlu "github.com/pelletier/go-toml/v2/unstable"
+	"google.golang.org/grpc"
 
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/internal/resilient"
@@ -42,6 +44,7 @@ const (
 )
 
 type ContainerdConfig struct {
+	Conn        net.Conn
 	ContentPath string
 }
 
@@ -54,6 +57,13 @@ func WithContentPath(path string) ContainerdOption {
 	}
 }
 
+func WithConnection(conn net.Conn) ContainerdOption {
+	return func(c *ContainerdConfig) error {
+		c.Conn = conn
+		return nil
+	}
+}
+
 var _ Store = &Containerd{}
 
 type Containerd struct {
@@ -62,17 +72,27 @@ type Containerd struct {
 	contentPath  string
 }
 
-func NewContainerd(ctx context.Context, sock, namespace string, opts ...ContainerdOption) (*Containerd, error) {
+func NewContainerd(ctx context.Context, socketPath, namespace string, opts ...ContainerdOption) (*Containerd, error) {
 	cfg := ContainerdConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := client.New(sock, client.WithDefaultNamespace(namespace))
+	clientOpts := []client.Opt{
+		client.WithDefaultNamespace(namespace),
+	}
+	if cfg.Conn != nil {
+		dialOpt := grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+			return cfg.Conn, nil
+		})
+		clientOpts = append(clientOpts, client.WithExtraDialOpts([]grpc.DialOption{dialOpt}))
+	}
+	client, err := client.New(socketPath, clientOpts...)
 	if err != nil {
 		return nil, err
 	}
+
 	contentPath := cfg.ContentPath
 	if contentPath == "" {
 		contentPath, err = getContentPath(ctx, client)
@@ -85,6 +105,7 @@ func NewContainerd(ctx context.Context, sock, namespace string, opts ...Containe
 	if err != nil {
 		return nil, err
 	}
+
 	c := &Containerd{
 		client:       client,
 		mediaTypeIdx: mediaTypeIdx,
