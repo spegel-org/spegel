@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/url"
 	"os"
 	"path"
@@ -21,6 +22,7 @@ import (
 	"github.com/containerd/containerd/v2/core/events"
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/containerd/v2/pkg/labels"
+	"github.com/containerd/containerd/v2/plugins"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
 	"github.com/go-logr/logr"
@@ -29,6 +31,7 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pelletier/go-toml/v2"
 	tomlu "github.com/pelletier/go-toml/v2/unstable"
+	"google.golang.org/grpc"
 
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/internal/resilient"
@@ -41,6 +44,7 @@ const (
 )
 
 type ContainerdConfig struct {
+	Conn        net.Conn
 	ContentPath string
 }
 
@@ -53,6 +57,13 @@ func WithContentPath(path string) ContainerdOption {
 	}
 }
 
+func WithConnection(conn net.Conn) ContainerdOption {
+	return func(c *ContainerdConfig) error {
+		c.Conn = conn
+		return nil
+	}
+}
+
 var _ Store = &Containerd{}
 
 type Containerd struct {
@@ -61,25 +72,44 @@ type Containerd struct {
 	contentPath  string
 }
 
-func NewContainerd(ctx context.Context, sock, namespace string, opts ...ContainerdOption) (*Containerd, error) {
+func NewContainerd(ctx context.Context, socketPath, namespace string, opts ...ContainerdOption) (*Containerd, error) {
 	cfg := ContainerdConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := client.New(sock, client.WithDefaultNamespace(namespace))
+	clientOpts := []client.Opt{
+		client.WithDefaultNamespace(namespace),
+	}
+	if cfg.Conn != nil {
+		dialOpt := grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+			return cfg.Conn, nil
+		})
+		clientOpts = append(clientOpts, client.WithExtraDialOpts([]grpc.DialOption{dialOpt}))
+	}
+	client, err := client.New(socketPath, clientOpts...)
 	if err != nil {
 		return nil, err
 	}
+
+	contentPath := cfg.ContentPath
+	if contentPath == "" {
+		contentPath, err = getContentPath(ctx, client)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	mediaTypeIdx, err := lru.New[digest.Digest, string](100)
 	if err != nil {
 		return nil, err
 	}
+
 	c := &Containerd{
 		client:       client,
 		mediaTypeIdx: mediaTypeIdx,
-		contentPath:  cfg.ContentPath,
+		contentPath:  contentPath,
 	}
 	return c, nil
 }
@@ -418,6 +448,27 @@ func contentLabelsToReferences(l map[string]string, dgst digest.Digest) ([]Refer
 		return nil, fmt.Errorf("no distribution source labels found for %s", dgst)
 	}
 	return refs, nil
+}
+
+func getContentPath(ctx context.Context, client *client.Client) (string, error) {
+	pluginInfo, err := client.IntrospectionService().PluginInfo(ctx, string(plugins.ContentPlugin), "content", nil)
+	if err != nil {
+		return "", err
+	}
+	root, ok := pluginInfo.Plugin.Exports["root"]
+	if !ok {
+		logr.FromContextOrDiscard(ctx).Info("falling back to reading content from socket as content path could not be found in plugin")
+		return "", nil
+	}
+	ok, err = dirExists(root)
+	if err != nil && !errors.Is(err, os.ErrPermission) {
+		return "", err
+	}
+	if !ok {
+		logr.FromContextOrDiscard(ctx).Info("falling back to reading content from socket as content path directory does not exist")
+		return "", nil
+	}
+	return root, nil
 }
 
 // Refer to containerd registry configuration documentation for more information about required configuration.
