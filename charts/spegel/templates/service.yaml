@@ -33,7 +33,11 @@ metadata:
   {{- end }}
 spec:
   type: NodePort
+  {{- if .Values.service.registry.internalTrafficLocal }}
+  internalTrafficPolicy: Local
+  {{- else }}
   trafficDistribution: PreferSameNode
+  {{- end }}
   selector:
     app.kubernetes.io/component: spegel
     {{- include "spegel.selectorLabels" . | nindent 4 }}
