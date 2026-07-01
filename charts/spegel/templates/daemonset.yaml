@@ -39,11 +39,12 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       priorityClassName: {{ .Values.priorityClassName }}
-      {{- if .Values.spegel.containerdMirrorAdd }}
+      {{- if or .Values.spegel.containerdMirrorAdd .Values.extraInitContainers }}
       initContainers:
       {{- with .Values.extraInitContainers }}
         {{- toYaml . | nindent 6 }}
       {{- end }}
+      {{- if .Values.spegel.containerdMirrorAdd }}
       - name: configuration
         image: "{{ include "spegel.image" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -81,6 +82,7 @@ spec:
             mountPath: "/etc/secrets/basic-auth"
             readOnly: true
           {{- end }}
+      {{- end }}
       {{- end }}
       containers:
       - name: registry
