@@ -10,11 +10,13 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	ctrdclient "github.com/containerd/containerd/v2/client"
 	"github.com/go-openapi/testify/v2/assert"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
+	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -179,6 +181,36 @@ func TestContainerdPull(t *testing.T) {
 				require.NoError(t, err)
 				ensureEvents(t, eventCh, expectedDeleteEvents)
 			}
+
+			t.Log("Checking that content missing from the content store is not advertised")
+			_, err = imageClient.PullImage(t.Context(), &runtimeapi.PullImageRequest{Image: &runtimeapi.ImageSpec{Image: imgs[0]}})
+			require.NoError(t, err)
+			// Drain the create events for the tag reference and the seven content digests.
+			for range 8 {
+				<-eventCh
+			}
+			// Remove a layer blob from the content store to replicate the state left behind
+			// by remote snapshotters, which lazy pull images without writing layer blobs to
+			// the content store.
+			ctrdClient, err := ctrdclient.New(socketPath, ctrdclient.WithDefaultNamespace("k8s.io"))
+			require.NoError(t, err)
+			missingDgst := digest.Digest("sha256:99ea62d595b5a3e1d01639af2781f97730eca4086f5308be58f68b18c244adc9")
+			err = ctrdClient.ContentStore().Delete(t.Context(), missingDgst)
+			require.NoError(t, err)
+			err = ctrdClient.Close()
+			require.NoError(t, err)
+
+			missingStore, err := oci.NewContainerd(t.Context(), socketPath, "k8s.io")
+			require.NoError(t, err)
+			missingInitial, _, err := missingStore.Subscribe(t.Context())
+			require.NoError(t, err)
+			require.NotEmpty(t, missingInitial)
+			for _, dgsts := range missingInitial {
+				require.Len(t, dgsts, 6)
+				require.NotContains(t, dgsts, missingDgst)
+			}
+			err = missingStore.Close()
+			require.NoError(t, err)
 
 			t.Log("Closing Containerd store")
 			err = connClient.Close()
