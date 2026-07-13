@@ -1,8 +1,12 @@
 module github.com/spegel-org/spegel
 
+<<<<<<< HEAD
 go 1.25.7
 
 toolchain go1.26.4
+=======
+go 1.26.5
+>>>>>>> 1f4164b (Bump Go to 1.26.5)
 
 require (
 	cuelabs.dev/go/oci/ociregistry v0.0.0-20250530080122-d0efc28a5723

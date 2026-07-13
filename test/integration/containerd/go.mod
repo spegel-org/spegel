@@ -1,8 +1,12 @@
 module github.com/spegel-org/spegel/test/integration/containerd
 
+<<<<<<< HEAD
 go 1.25.7
 
 toolchain go1.26.2
+=======
+go 1.26.5
+>>>>>>> 1f4164b (Bump Go to 1.26.5)
 
 replace github.com/spegel-org/spegel => ../../../
 
