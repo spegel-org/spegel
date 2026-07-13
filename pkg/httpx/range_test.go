@@ -215,6 +215,15 @@ func TestContentRange(t *testing.T) {
 
 	_, err = ContentRangeFromRange(Range{Start: nil, End: nil}, 100)
 	require.EqualError(t, err, "start and end range cannot both be empty")
+
+	start := int64(1000)
+	_, err = ContentRangeFromRange(Range{Start: &start}, 1000)
+	require.EqualError(t, err, "start 1000 is out of bounds for size 1000")
+
+	start = int64(1500)
+	end := int64(2000)
+	_, err = ContentRangeFromRange(Range{Start: &start, End: &end}, 1000)
+	require.EqualError(t, err, "start 1500 is out of bounds for size 1000")
 }
 
 func TestRangeClone(t *testing.T) {
