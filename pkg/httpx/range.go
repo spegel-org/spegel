@@ -142,6 +142,9 @@ func ContentRangeFromRange(rng Range, size int64) (ContentRange, error) {
 
 	// Offset with unknown size.
 	if rng.End == nil {
+		if *rng.Start >= size {
+			return ContentRange{}, fmt.Errorf("start %d is out of bounds for size %d", *rng.Start, size)
+		}
 		crng := ContentRange{
 			Start: *rng.Start,
 			End:   size - 1,
@@ -151,6 +154,9 @@ func ContentRangeFromRange(rng Range, size int64) (ContentRange, error) {
 	}
 
 	// Known start and end range.
+	if *rng.Start >= size {
+		return ContentRange{}, fmt.Errorf("start %d is out of bounds for size %d", *rng.Start, size)
+	}
 	crng := ContentRange{
 		Start: *rng.Start,
 		End:   min(*rng.End, size-1),
