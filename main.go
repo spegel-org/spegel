@@ -27,6 +27,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
+	"github.com/spegel-org/spegel/pkg/oci/containerd"
 	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/state"
@@ -167,7 +168,7 @@ func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 	if err != nil {
 		return err
 	}
-	err = oci.AddMirrorConfiguration(ctx, args.ContainerdRegistryConfigPath, args.MirroredRegistries, args.MirrorTargets, args.ResolveTags, args.PrependExisting, userinfo)
+	err = containerd.AddMirrorConfiguration(ctx, args.ContainerdRegistryConfigPath, args.MirroredRegistries, args.MirrorTargets, args.ResolveTags, args.PrependExisting, userinfo)
 	if err != nil {
 		return err
 	}
@@ -205,7 +206,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 
 	// OCI Store
-	ociStore, err := oci.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, oci.WithContentPath(args.ContainerdContentPath))
+	ociStore, err := containerd.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, containerd.WithContentPath(args.ContainerdContentPath))
 	if err != nil {
 		return err
 	}

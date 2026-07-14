@@ -21,6 +21,7 @@ import (
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
 
 	"github.com/spegel-org/spegel/pkg/oci"
+	"github.com/spegel-org/spegel/pkg/oci/containerd"
 )
 
 var (
@@ -116,7 +117,7 @@ func TestContainerdPull(t *testing.T) {
 			require.NoError(t, err)
 			imageClient := runtimeapi.NewImageServiceClient(connClient)
 
-			containerdStore, err := oci.NewContainerd(t.Context(), socketPath, "k8s.io")
+			containerdStore, err := containerd.NewContainerd(t.Context(), socketPath, "k8s.io")
 			require.NoError(t, err)
 			name := containerdStore.Name()
 			require.EqualT(t, "containerd", name)

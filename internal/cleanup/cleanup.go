@@ -14,13 +14,13 @@ import (
 
 	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/pkg/httpx"
-	"github.com/spegel-org/spegel/pkg/oci"
+	"github.com/spegel-org/spegel/pkg/oci/containerd"
 )
 
 func Run(ctx context.Context, addr, configPath string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
-	err := oci.CleanupMirrorConfiguration(ctx, configPath)
+	err := containerd.CleanupMirrorConfiguration(ctx, configPath)
 	if err != nil {
 		return err
 	}

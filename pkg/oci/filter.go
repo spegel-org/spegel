@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	wildcardRegistries  = []string{"_default", "*"}
-	wildcardRegistryURL = url.URL{Host: wildcardRegistries[0]}
+	WildcardRegistries  = []string{"_default", "*"}
+	WildcardRegistryURL = url.URL{Host: WildcardRegistries[0]}
 )
 
 type Filter interface {
@@ -59,14 +59,14 @@ func FilterForMirroredRegistries(mirroredRegistries []string) (*RegistryWhitelis
 	if len(mirroredRegistries) == 0 {
 		return nil, nil
 	}
-	rus, err := parseRegistries(mirroredRegistries, true)
+	rus, err := ParseRegistries(mirroredRegistries, true)
 	if err != nil {
 		return nil, err
 	}
 	registryHosts := []string{}
 	for _, ru := range rus {
 		// No registry filter when wildcard is part of mirrored registries.
-		if ru == wildcardRegistryURL {
+		if ru == WildcardRegistryURL {
 			return nil, nil
 		}
 		registryHosts = append(registryHosts, ru.Host)
@@ -74,14 +74,14 @@ func FilterForMirroredRegistries(mirroredRegistries []string) (*RegistryWhitelis
 	return &RegistryWhitelistFilter{Whitelist: registryHosts}, nil
 }
 
-func parseRegistries(registries []string, allowWildcard bool) ([]url.URL, error) {
+func ParseRegistries(registries []string, allowWildcard bool) ([]url.URL, error) {
 	if len(registries) == 0 && allowWildcard {
-		return []url.URL{wildcardRegistryURL}, nil
+		return []url.URL{WildcardRegistryURL}, nil
 	}
 	rus := []url.URL{}
 	hasWildcard := false
 	for _, s := range registries {
-		if slices.Contains(wildcardRegistries, s) {
+		if slices.Contains(WildcardRegistries, s) {
 			if !allowWildcard {
 				return nil, errors.New("wildcard registries are not allowed")
 			}
@@ -89,7 +89,7 @@ func parseRegistries(registries []string, allowWildcard bool) ([]url.URL, error)
 				return nil, errors.New("registries should not contain two wildcards")
 			}
 			hasWildcard = true
-			rus = append(rus, wildcardRegistryURL)
+			rus = append(rus, WildcardRegistryURL)
 			continue
 		}
 		u, err := url.Parse(s)

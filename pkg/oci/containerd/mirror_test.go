@@ -1,4 +1,4 @@
-package oci
+package containerd
 
 import (
 	iofs "io/fs"
@@ -10,7 +10,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-openapi/testify/v2/require"
-	"github.com/opencontainers/go-digest"
+
+	"github.com/spegel-org/spegel/pkg/oci"
 )
 
 func TestBackupConfig(t *testing.T) {
@@ -39,62 +40,6 @@ func TestBackupConfig(t *testing.T) {
 	files, err = os.ReadDir(filepath.Join(configPath, "_backup"))
 	require.NoError(t, err)
 	require.Len(t, files, 1)
-}
-
-func TestContentLabelsToReferences(t *testing.T) {
-	t.Parallel()
-
-	dgst := digest.Digest("foo")
-	tests := []struct {
-		name     string
-		labels   map[string]string
-		expected []Reference
-	}{
-		{
-			name: "one matching",
-			labels: map[string]string{
-				"containerd.io/distribution.source.docker.io": "library/alpine",
-			},
-			expected: []Reference{
-				{
-					Registry:   "docker.io",
-					Repository: "library/alpine",
-					Digest:     dgst,
-				},
-			},
-		},
-		{
-			name: "multiple matching",
-			labels: map[string]string{
-				"containerd.io/distribution.source.example.com": "foo",
-				"containerd.io/distribution.source.ghcr.io":     "spegel-org/spegel",
-			},
-			expected: []Reference{
-				{
-					Registry:   "ghcr.io",
-					Repository: "spegel-org/spegel",
-					Digest:     dgst,
-				},
-				{
-					Registry:   "example.com",
-					Repository: "foo",
-					Digest:     dgst,
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(t.Name(), func(t *testing.T) {
-			t.Parallel()
-
-			refs, err := contentLabelsToReferences(tt.labels, dgst)
-			require.NoError(t, err)
-			require.ElementsMatchT(t, tt.expected, refs)
-		})
-	}
-
-	_, err := contentLabelsToReferences(map[string]string{}, dgst)
-	require.EqualError(t, err, "no distribution source labels found for foo")
 }
 
 func TestMirrorConfiguration(t *testing.T) {
@@ -148,7 +93,7 @@ dial_timeout = '200ms'`,
 		{
 			name:               "default is explicitly set",
 			resolveTags:        true,
-			mirroredRegistries: []string{wildcardRegistries[0]},
+			mirroredRegistries: []string{oci.WildcardRegistries[0]},
 			mirrorTargets:      []string{"http://127.0.0.1:5000"},
 			prependExisting:    false,
 			expectedFiles: map[string]string{
@@ -449,7 +394,6 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 		})
 	}
 }
-
 func TestExistingHosts(t *testing.T) {
 	t.Parallel()
 
