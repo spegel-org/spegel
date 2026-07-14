@@ -116,7 +116,7 @@ func TestParseRegistries(t *testing.T) {
 	t.Parallel()
 
 	registries := []string{"https://docker.io", "_default", "http://localhost:9090"}
-	rus, err := parseRegistries(registries, true)
+	rus, err := ParseRegistries(registries, true)
 	require.NoError(t, err)
 	strs := []string{}
 	for _, ru := range rus {
@@ -149,7 +149,7 @@ func TestParseRegistries(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := parseRegistries(tt.registries, tt.allowWildcard)
+			_, err := ParseRegistries(tt.registries, tt.allowWildcard)
 			require.EqualError(t, err, tt.expected)
 		})
 	}
