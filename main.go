@@ -22,8 +22,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/spegel-org/spegel/internal/cleanup"
 	"github.com/spegel-org/spegel/internal/version"
+	"github.com/spegel-org/spegel/pkg/cleanup"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
