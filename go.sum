@@ -356,6 +356,13 @@ github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
 github.com/kr/text v0.2.0/go.mod h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE=
+<<<<<<< HEAD
+=======
+github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7 h1:X+ZQBfowwqkgcWQ7lsqMm2V/epdSldxK/sMAgZp5lR0=
+github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7/go.mod h1:5t74FncKqpQ45F4tIUdLN0IOiP7SJSTUKRPqYsojQHg=
+github.com/kvick-org/pkg/version v0.0.0-20260714201549-203456789dd7 h1:h7LBqdhZ2+x/U+h1AaUIxbtPLGh6zchJyYQAUbHLFDU=
+github.com/kvick-org/pkg/version v0.0.0-20260714201549-203456789dd7/go.mod h1:1c2dWjRJGIOryGOFTk9iunP49wJSpt5PLsBvye/Iuto=
+>>>>>>> 8e97bc7 (Switch to using version from pkg)
 github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/libp2p/go-buffer-pool v0.1.0 h1:oK4mSFcQz7cTQIfqbe4MIj9gLW+mnanjyFtc6cdF0Y8=

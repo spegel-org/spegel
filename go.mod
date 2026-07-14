@@ -16,6 +16,11 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ipfs/go-cid v0.6.1
+<<<<<<< HEAD
+=======
+	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
+	github.com/kvick-org/pkg/version v0.0.0-20260714201549-203456789dd7
+>>>>>>> 8e97bc7 (Switch to using version from pkg)
 	github.com/libp2p/go-libp2p v0.48.0
 	github.com/libp2p/go-libp2p-kad-dht v0.41.0
 	github.com/miekg/dns v1.1.72
