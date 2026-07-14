@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,13 +20,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/kvick-org/pkg/errgroup"
+	"github.com/kvick-org/pkg/version"
 
-	"github.com/spegel-org/spegel/internal/version"
 	"github.com/spegel-org/spegel/pkg/cleanup"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/oci/containerd"
+	"github.com/spegel-org/spegel/pkg/preflight"
 	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/state"
@@ -144,22 +144,11 @@ func versionCommand(_ context.Context, args *VersionCmd) error {
 	if err != nil {
 		return err
 	}
-	switch args.Format {
-	case "text":
-		//nolint: forbidigo // Output already formatted so no need to log formatting.
-		fmt.Printf("spegel version %s %s\n", versionInfo.Build.Version, versionInfo.Build.Commit)
-		return nil
-	case "json":
-		b, err := json.Marshal(&versionInfo)
-		if err != nil {
-			return err
-		}
-		//nolint: forbidigo // Output already formatted so no need to log formatting.
-		fmt.Print(string(b))
-		return nil
-	default:
-		return fmt.Errorf("unknown output format %s", args.Format)
+	err = versionInfo.Output(os.Stdout, version.OutputFormat(args.Format))
+	if err != nil {
+		return err
 	}
+	return nil
 }
 
 func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
@@ -183,7 +172,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	if err != nil {
 		return err
 	}
-	err = versionInfo.Preflight()
+	err = preflight.Check(versionInfo)
 	if err != nil {
 		return err
 	}
