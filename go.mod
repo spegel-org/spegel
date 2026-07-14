@@ -16,6 +16,7 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ipfs/go-cid v0.6.1
+	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
 	github.com/libp2p/go-libp2p v0.48.0
 	github.com/libp2p/go-libp2p-kad-dht v0.41.0
 	github.com/miekg/dns v1.1.72
@@ -27,7 +28,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/prometheus/client_golang v1.23.2
 	go.uber.org/goleak v1.3.0
-	golang.org/x/sync v0.21.0
+	golang.org/x/sync v0.22.0
 )
 
 require (

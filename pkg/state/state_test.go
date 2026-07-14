@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/go-logr/logr"
 	tlog "github.com/go-logr/logr/testing"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+
+	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
@@ -104,9 +104,9 @@ func TestTrack(t *testing.T) {
 				},
 			}
 			router := routing.NewMemoryRouter(map[string][]routing.Peer{}, self)
-			g, gCtx := errgroup.WithContext(ctx)
-			g.Go(func() error {
-				return Track(gCtx, ociStore, router, WithRegistryFilters(tt.registryFilters))
+			group := errgroup.WithContext(ctx)
+			group.Go(func(ctx context.Context) error {
+				return Track(ctx, ociStore, router, WithRegistryFilters(tt.registryFilters))
 			})
 			time.Sleep(100 * time.Millisecond)
 
@@ -134,7 +134,7 @@ func TestTrack(t *testing.T) {
 			}
 
 			cancel()
-			err := g.Wait()
+			err := group.Wait()
 			require.ErrorIs(t, err, context.Canceled)
 		})
 	}

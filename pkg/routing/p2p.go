@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"time"
 
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/go-logr/logr"
@@ -36,6 +35,8 @@ import (
 	mc "github.com/multiformats/go-multicodec"
 	mh "github.com/multiformats/go-multihash"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/internal/option"
@@ -214,18 +215,18 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 	log.Info("starting p2p router", "id", r.host.ID())
 
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		err := r.bootstrapper.Run(gCtx, *host.InfoFromHost(r.host))
+	group := errgroup.WithContext(ctx)
+	group.Go(func(ctx context.Context) error {
+		err := r.bootstrapper.Run(ctx, *host.InfoFromHost(r.host))
 		if err != nil {
 			return err
 		}
 		return nil
 	})
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		for {
 			select {
-			case <-gCtx.Done():
+			case <-ctx.Done():
 				return nil
 			case <-r.connectivityGate.WaitFor(true):
 				start := time.Now()
@@ -235,7 +236,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 					}),
 					resilient.WithLastErrorOnly(),
 				}
-				err := resilient.Retry(gCtx, 0, resilient.BackoffDelay(50*time.Millisecond, 10*time.Second), func(ctx context.Context) error {
+				err := resilient.Retry(ctx, 0, resilient.BackoffDelay(50*time.Millisecond, 10*time.Second), func(ctx context.Context) error {
 					if !r.connectivityGate.State() {
 						return nil
 					}
@@ -254,7 +255,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 				}
 				log.Info("bootstrap completed connectivity is reached", "duration", time.Since(start))
 			case <-time.After(30 * time.Minute):
-				err := bootstrapPeers(gCtx, r.bootstrapper, r.kdht, r.protocols)
+				err := bootstrapPeers(ctx, r.bootstrapper, r.kdht, r.protocols)
 				if err != nil {
 					log.Error(err, "periodic bootstrap failed")
 					continue
@@ -264,7 +265,7 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 	})
 
 	errs := []error{}
-	err := g.Wait()
+	err := group.Wait()
 	if err != nil {
 		errs = append(errs, err)
 	}

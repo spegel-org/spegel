@@ -8,11 +8,11 @@ replace github.com/spegel-org/spegel => ../../../
 
 require (
 	github.com/go-openapi/testify/v2 v2.6.0
+	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
-	golang.org/x/sync v0.21.0
 	google.golang.org/grpc v1.81.1
 	k8s.io/cri-api v0.36.1
 )
@@ -69,6 +69,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260406210006-6f92a3bedf2d // indirect

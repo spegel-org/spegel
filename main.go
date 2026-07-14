@@ -16,11 +16,11 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/alexflint/go-arg"
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/internal/version"
 	"github.com/spegel-org/spegel/pkg/cleanup"
@@ -177,7 +177,7 @@ func configurationCommand(ctx context.Context, args *ConfigurationCmd) error {
 
 func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	log := logr.FromContextOrDiscard(ctx)
-	g, ctx := errgroup.WithContext(ctx)
+	group := errgroup.WithContext(ctx)
 
 	versionInfo, err := version.Load()
 	if err != nil {
@@ -228,7 +228,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	if err != nil {
 		return err
 	}
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		err := router.Run(ctx)
 		if err != nil {
 			return err
@@ -237,7 +237,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	})
 
 	// State tracking
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		err := state.Track(ctx, ociStore, router, state.WithRegistryFilters(filters))
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
@@ -265,13 +265,13 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		Addr:    args.RegistryAddr,
 		Handler: reg.Handler(log),
 	}
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
 	})
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -311,13 +311,13 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		Addr:    args.MetricsAddr,
 		Handler: mux,
 	}
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
 	})
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -325,7 +325,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	})
 
 	log.Info("running Spegel", "registry", args.RegistryAddr, "router", args.RouterAddr)
-	err = g.Wait()
+	err = group.Wait()
 	if err != nil {
 		return err
 	}

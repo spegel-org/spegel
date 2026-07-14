@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+
+	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
@@ -171,7 +171,7 @@ func (bs *HTTPBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) err
 	if err != nil {
 		return err
 	}
-	g, ctx := errgroup.WithContext(ctx)
+	group := errgroup.WithContext(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/id", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -182,19 +182,19 @@ func (bs *HTTPBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) err
 		Addr:    bs.addr,
 		Handler: mux,
 	}
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
 	})
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	})
-	return g.Wait()
+	return group.Wait()
 }
 
 func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
