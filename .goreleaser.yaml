@@ -19,7 +19,6 @@ builds:
       - -w
     flags:
       - -trimpath
-      - -a
     no_unique_dist_dir: true
     binary: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}/{{ .ProjectName }}"
 archives:
