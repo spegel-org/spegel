@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/fluxcd/cli-utils/pkg/kstatus/status"
 	"github.com/go-openapi/testify/v2/assert"
 	"github.com/go-openapi/testify/v2/require"
@@ -44,6 +42,8 @@ import (
 	"sigs.k8s.io/kind/pkg/cluster"
 	kindnodes "sigs.k8s.io/kind/pkg/cluster/nodes"
 	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
+
+	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/web"
@@ -110,19 +110,19 @@ func TestKubernetes(t *testing.T) {
 	}
 
 	kubernetesImgs := []oci.Image{}
-	pullGroup, pullCtx := errgroup.WithContext(t.Context())
+	pullGroup := errgroup.WithContext(t.Context())
 	for _, kubernetesVersion := range kubernetesVersions {
 		img, err := oci.NewImage("ghcr.io", "spegel-org/test-images/kind-node", kubernetesVersion, "")
 		require.NoError(t, err)
 		kubernetesImgs = append(kubernetesImgs, img)
 
 		t.Log("Pulling Kubernetes image", img.String())
-		pullGroup.Go(func() error {
-			resp, err := mobyClient.ImagePull(pullCtx, img.String(), client.ImagePullOptions{})
+		pullGroup.Go(func(ctx context.Context) error {
+			resp, err := mobyClient.ImagePull(ctx, img.String(), client.ImagePullOptions{})
 			if err != nil {
 				return err
 			}
-			err = resp.Wait(pullCtx)
+			err = resp.Wait(ctx)
 			if err != nil {
 				return err
 			}

@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/go-logr/logr"
 	tlog "github.com/go-logr/logr/testing"
 	"github.com/go-openapi/testify/v2/assert"
@@ -16,6 +14,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
+
+	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/internal/option"
 )
@@ -43,7 +43,7 @@ func TestP2PRouter(t *testing.T) {
 	log := tlog.NewTestLogger(t)
 	ctx := logr.NewContext(t.Context(), log)
 	ctx, cancel := context.WithCancel(ctx)
-	g, gCtx := errgroup.WithContext(ctx)
+	group := errgroup.WithContext(ctx)
 
 	// Remove the 8 connection per IP limit.
 	routerOpts := []P2PRouterOption{
@@ -54,8 +54,8 @@ func TestP2PRouter(t *testing.T) {
 	primaryBs := NewStaticBootstrapper(nil)
 	primaryRouter, err := NewP2PRouter(t.Context(), "localhost:0", primaryBs, "9090", routerOpts...)
 	require.NoError(t, err)
-	g.Go(func() error {
-		return primaryRouter.Run(gCtx)
+	group.Go(func(ctx context.Context) error {
+		return primaryRouter.Run(ctx)
 	})
 	ready, err := primaryRouter.Ready(t.Context())
 	require.NoError(t, err)
@@ -93,8 +93,8 @@ func TestP2PRouter(t *testing.T) {
 		bs := NewStaticBootstrapper([]peer.AddrInfo{*host.InfoFromHost(primaryRouter.host)})
 		r, err := NewP2PRouter(t.Context(), "localhost:0", bs, "9091", routerOpts...)
 		require.NoError(t, err)
-		g.Go(func() error {
-			return r.Run(gCtx)
+		group.Go(func(ctx context.Context) error {
+			return r.Run(ctx)
 		})
 		routers = append(routers, r)
 	}
@@ -170,7 +170,7 @@ func TestP2PRouter(t *testing.T) {
 
 	// Shutdown should complete without errors.
 	cancel()
-	err = g.Wait()
+	err = group.Wait()
 	require.NoError(t, err)
 }
 
@@ -178,15 +178,15 @@ func TestProvideTTL(t *testing.T) {
 	t.Parallel()
 
 	runCtx, runCancel := context.WithCancel(t.Context())
-	g, runCtx := errgroup.WithContext(runCtx)
+	group := errgroup.WithContext(runCtx)
 
 	routers := []*P2PRouter{}
 	for range 5 {
 		bs := NewStaticBootstrapper(nil)
 		router, err := NewP2PRouter(t.Context(), ":0", bs, "9090", WithAdvertiseTTL(5*time.Second), WithMaxReprovideDelay(1*time.Second))
 		require.NoError(t, err)
-		g.Go(func() error {
-			return router.Run(runCtx)
+		group.Go(func(ctx context.Context) error {
+			return router.Run(ctx)
 		})
 		for _, r := range routers {
 			bs.Add(*host.InfoFromHost(r.host))
@@ -226,7 +226,7 @@ func TestProvideTTL(t *testing.T) {
 	}
 
 	runCancel()
-	err = g.Wait()
+	err = group.Wait()
 	require.NoError(t, err)
 }
 

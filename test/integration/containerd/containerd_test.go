@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/go-openapi/testify/v2/assert"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/moby/moby/api/types/container"
@@ -19,6 +17,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
+
+	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/oci/containerd"
@@ -52,19 +52,19 @@ func TestContainerdPull(t *testing.T) {
 	})
 
 	containerdImgs := []oci.Image{}
-	pullGroup, pullCtx := errgroup.WithContext(t.Context())
+	pullGroup := errgroup.WithContext(t.Context())
 	for _, containerdVersion := range containerdVersions {
 		img, err := oci.NewImage("ghcr.io", "spegel-org/test-images/containerd", containerdVersion, "")
 		require.NoError(t, err)
 		containerdImgs = append(containerdImgs, img)
 
 		t.Log("Pulling Containerd image", img.String())
-		pullGroup.Go(func() error {
-			resp, err := mobyClient.ImagePull(pullCtx, img.String(), client.ImagePullOptions{})
+		pullGroup.Go(func(ctx context.Context) error {
+			resp, err := mobyClient.ImagePull(ctx, img.String(), client.ImagePullOptions{})
 			if err != nil {
 				return err
 			}
-			err = resp.Wait(pullCtx)
+			err = resp.Wait(ctx)
 			if err != nil {
 				return err
 			}

@@ -17,13 +17,13 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/miekg/dns"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+
+	"github.com/kvick-org/pkg/errgroup"
 )
 
 func TestStaticBootstrap(t *testing.T) {
@@ -42,9 +42,9 @@ func TestStaticBootstrap(t *testing.T) {
 	bs := NewStaticBootstrapper(peers)
 
 	ctx, cancel := context.WithCancel(t.Context())
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		return bs.Run(gCtx, peer.AddrInfo{})
+	group := errgroup.WithContext(ctx)
+	group.Go(func(ctx context.Context) error {
+		return bs.Run(ctx, peer.AddrInfo{})
 	})
 
 	bsPeers, err := bs.Get(t.Context())
@@ -52,7 +52,7 @@ func TestStaticBootstrap(t *testing.T) {
 	require.ElementsMatch(t, peers, bsPeers)
 
 	cancel()
-	err = g.Wait()
+	err = group.Wait()
 	require.NoError(t, err)
 }
 
@@ -60,7 +60,7 @@ func TestDNSBootstrap(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(t.Context())
-	g, gCtx := errgroup.WithContext(ctx)
+	group := errgroup.WithContext(ctx)
 
 	rr, err := dns.NewRR("example.com. 30 IN A 10.1.2.3")
 	require.NoError(t, err)
@@ -79,11 +79,11 @@ func TestDNSBootstrap(t *testing.T) {
 		PacketConn: pc,
 		Handler:    mux,
 	}
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		return srv.ActivateAndServe()
 	})
-	g.Go(func() error {
-		<-gCtx.Done()
+	group.Go(func(ctx context.Context) error {
+		<-ctx.Done()
 		return srv.Shutdown()
 	})
 
@@ -95,8 +95,8 @@ func TestDNSBootstrap(t *testing.T) {
 			return net.Dial("udp", pc.LocalAddr().String())
 		},
 	}
-	g.Go(func() error {
-		return bs.Run(gCtx, peer.AddrInfo{})
+	group.Go(func(ctx context.Context) error {
+		return bs.Run(ctx, peer.AddrInfo{})
 	})
 	addrInfos, err := bs.Get(ctx)
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestDNSBootstrap(t *testing.T) {
 	require.EqualT(t, "{: [/ip4/10.1.2.3]}", addrInfos[0].String())
 
 	cancel()
-	err = g.Wait()
+	err = group.Wait()
 	require.NoError(t, err)
 }
 
@@ -130,9 +130,9 @@ func TestHTTPBootstrap(t *testing.T) {
 	parentBs, err := NewHTTPBootstrapper(ln.Addr().String(), *bootstrapURL, nil, nil)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		return parentBs.Run(gCtx, parentAddrInfo)
+	group := errgroup.WithContext(ctx)
+	group.Go(func(ctx context.Context) error {
+		return parentBs.Run(ctx, parentAddrInfo)
 	})
 
 	time.Sleep(100 * time.Millisecond)
@@ -147,7 +147,7 @@ func TestHTTPBootstrap(t *testing.T) {
 	require.EqualT(t, "{12D3KooWAsvvigG9jqjMNWMmqXph6BvszxTus6Fg6k5UZda2iKDB: [/ip4/127.0.0.1/tcp/4001]}", addrInfos[0].String())
 
 	cancel()
-	err = g.Wait()
+	err = group.Wait()
 	require.NoError(t, err)
 }
 
@@ -155,7 +155,7 @@ func TestHTTPBootstrapEndpoint(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(t.Context())
-	g, gCtx := errgroup.WithContext(ctx)
+	group := errgroup.WithContext(ctx)
 
 	now := time.Now()
 
@@ -252,8 +252,8 @@ func TestHTTPBootstrapEndpoint(t *testing.T) {
 	bs, err := NewHTTPBootstrapper("", *srvUrl, pool, &clientTLSCert)
 	require.NoError(t, err)
 
-	g.Go(func() error {
-		return bs.Run(gCtx, peer.AddrInfo{})
+	group.Go(func(ctx context.Context) error {
+		return bs.Run(ctx, peer.AddrInfo{})
 	})
 
 	addrInfos, err := bs.Get(ctx)
@@ -263,6 +263,6 @@ func TestHTTPBootstrapEndpoint(t *testing.T) {
 	require.Equal(t, "{: [/ip4/10.1.2.3]}", addrInfos[0].String())
 
 	cancel()
-	err = g.Wait()
+	err = group.Wait()
 	require.NoError(t, err)
 }

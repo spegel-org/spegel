@@ -43,6 +43,8 @@ linters:
             - github.com/containerd/containerd/v2
             - github.com/containerd/containerd/api
           deny:
+            - pkg: "golang.org/x/sync/errgroup"
+              desc: use github.com/kvick-org/pkg/errgroup instead
             - pkg: "math/rand$"
               desc: use math/rand/v2 instead
             - pkg: "github.com/pkg/errors"
@@ -115,7 +117,7 @@ formatters:
         - standard
         - prefix(golang.org/x)
         - default
-        - prefix(github.com/spegel-org)
+        - prefix(github.com/spegel-org, github.com/kvick-org)
         - localmodule
       no-inline-comments: true
       no-prefix-comments: true

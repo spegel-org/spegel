@@ -8,9 +8,9 @@ import (
 	"net/url"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/go-logr/logr"
+
+	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/pkg/httpx"
@@ -25,7 +25,7 @@ func Run(ctx context.Context, addr, configPath string) error {
 		return err
 	}
 
-	g, gCtx := errgroup.WithContext(ctx)
+	group := errgroup.WithContext(ctx)
 
 	mux := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet && req.URL.Path != "/readyz" {
@@ -39,21 +39,21 @@ func Run(ctx context.Context, addr, configPath string) error {
 		Addr:    addr,
 		Handler: mux,
 	}
-	g.Go(func() error {
+	group.Go(func(ctx context.Context) error {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
 	})
-	g.Go(func() error {
-		<-gCtx.Done()
+	group.Go(func(ctx context.Context) error {
+		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	})
 
 	log.Info("waiting to be shutdown")
-	err = g.Wait()
+	err = group.Wait()
 	if err != nil {
 		return err
 	}
@@ -111,16 +111,16 @@ func Wait(ctx context.Context, probeEndpoint string, period time.Duration, thres
 }
 
 func probeIPs(ctx context.Context, client *http.Client, ips []net.IPAddr, port string) error {
-	g, gCtx := errgroup.WithContext(ctx)
-	g.SetLimit(10)
+	group := errgroup.WithContext(ctx)
+	group.SetLimit(10)
 	for _, ip := range ips {
-		g.Go(func() error {
+		group.Go(func(ctx context.Context) error {
 			u := url.URL{
 				Scheme: "http",
 				Host:   net.JoinHostPort(ip.String(), port),
 				Path:   "/readyz",
 			}
-			reqCtx, cancel := context.WithTimeout(gCtx, 1*time.Second)
+			reqCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 			defer cancel()
 			req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, u.String(), nil)
 			if err != nil {
@@ -138,7 +138,7 @@ func probeIPs(ctx context.Context, client *http.Client, ips []net.IPAddr, port s
 			return nil
 		})
 	}
-	err := g.Wait()
+	err := group.Wait()
 	if err != nil {
 		return err
 	}

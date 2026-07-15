@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/go-openapi/testify/v2/require"
+
+	"github.com/kvick-org/pkg/errgroup"
 )
 
 func TestCleanupFail(t *testing.T) {
@@ -40,22 +40,22 @@ func TestCleanupSucceed(t *testing.T) {
 	require.NoError(t, err)
 	timeoutCtx, timeoutCancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer timeoutCancel()
-	g, gCtx := errgroup.WithContext(timeoutCtx)
-	g.Go(func() error {
-		err := Run(gCtx, addr, t.TempDir())
+	group := errgroup.WithContext(timeoutCtx)
+	group.Go(func(ctx context.Context) error {
+		err := Run(ctx, addr, t.TempDir())
 		if err != nil {
 			return err
 		}
 		return nil
 	})
-	g.Go(func() error {
-		err := Wait(gCtx, addr, 100*time.Microsecond, 3)
+	group.Go(func(ctx context.Context) error {
+		err := Wait(ctx, addr, 100*time.Microsecond, 3)
 		if err != nil {
 			return err
 		}
 		return nil
 	})
 
-	err = g.Wait()
+	err = group.Wait()
 	require.NoError(t, err)
 }
