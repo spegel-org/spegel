@@ -30,10 +30,10 @@ func (i Info) Preflight() error {
 	if os.Getenv("KUBERNETES_SERVICE_HOST") == "" {
 		return nil
 	}
-	if i.Runtime.OS != "linux" && i.Runtime.Distro != "Distroless" {
-		return fmt.Errorf("unsupported container distro %s", i.Runtime.Distro)
+	if i.Runtime.OS == "linux" && i.Runtime.Distro == "Distroless" {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("unsupported container distro %s", i.Runtime.Distro)
 }
 
 func Load() (Info, error) {
