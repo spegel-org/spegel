@@ -15,7 +15,7 @@ require (
 	github.com/containerd/typeurl/v2 v2.3.0
 	github.com/go-logr/logr v1.4.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/ipfs/go-cid v0.6.1
+	github.com/ipfs/go-cid v0.6.2
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
 	github.com/kvick-org/pkg/version v0.0.0-20260714201549-203456789dd7
 	github.com/libp2p/go-libp2p v0.48.0
