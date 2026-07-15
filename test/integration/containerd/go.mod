@@ -7,7 +7,7 @@ toolchain go1.26.5
 replace github.com/spegel-org/spegel => ../../../
 
 require (
-	github.com/go-openapi/testify/v2 v2.5.1
+	github.com/go-openapi/testify/v2 v2.6.0
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
 	github.com/opencontainers/image-spec v1.1.1
