@@ -143,6 +143,12 @@ grafanaDashboard:
     matchLabels: {}
       # dashboards: grafana
 
+networkPolicy:
+  # -- If true creates a NetworkPolicy that limits libp2p router traffic to Spegel peers in the release namespace.
+  enabled: false
+  # -- Extra peers allowed to reach the libp2p router port, appended to the in-namespace Spegel selector.
+  additionalRouterPeers: []
+
 # -- Priority class name to use for the pod.
 priorityClassName: system-node-critical
 
