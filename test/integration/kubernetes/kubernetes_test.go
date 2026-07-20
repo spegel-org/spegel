@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/mod/modfile"
+
 	"github.com/fluxcd/cli-utils/pkg/kstatus/status"
 	"github.com/go-openapi/testify/v2/assert"
 	"github.com/go-openapi/testify/v2/require"
@@ -51,9 +53,9 @@ import (
 
 var (
 	kubernetesVersions = []string{
-		"1.36.1",
-		"1.35.5",
-		"1.34.8",
+		"v1.36.2",
+		"v1.35.6",
+		"v1.34.9",
 	}
 )
 
@@ -77,6 +79,16 @@ func TestKubernetes(t *testing.T) {
 	t.Cleanup(func() {
 		mobyClient.Close()
 	})
+
+	b, err := os.ReadFile("go.mod")
+	require.NoError(t, err)
+	modFile, err := modfile.Parse("go.mod", b, nil)
+	require.NoError(t, err)
+	idx := slices.IndexFunc(modFile.Require, func(r *modfile.Require) bool {
+		return r.Mod.Path == "sigs.k8s.io/kind"
+	})
+	require.GreaterT(t, idx, -1)
+	kindVersion := modFile.Require[idx].Mod.Version
 
 	t.Log("Exporting Spegel image", imgRef)
 	saveRes, err := mobyClient.ImageSave(t.Context(), []string{imgRef})
@@ -112,7 +124,7 @@ func TestKubernetes(t *testing.T) {
 	kubernetesImgs := []oci.Image{}
 	pullGroup := errgroup.WithContext(t.Context())
 	for _, kubernetesVersion := range kubernetesVersions {
-		img, err := oci.NewImage("ghcr.io", "spegel-org/test-images/kind-node", kubernetesVersion, "")
+		img, err := oci.NewImage("ghcr.io", "spegel-org/test-images/kind-node", fmt.Sprintf("%s-%s", kindVersion, kubernetesVersion), "")
 		require.NoError(t, err)
 		kubernetesImgs = append(kubernetesImgs, img)
 
