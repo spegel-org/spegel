@@ -1,0 +1,37 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "spegel.fullname" . }}
+  namespace: {{ include "spegel.namespace" . }}
+  labels:
+    {{- include "spegel.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "spegel.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # The libp2p router runs the DHT and peer mesh. Only other Spegel peers in
+    # this namespace need to reach it, so keep it closed to everything else.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "spegel.selectorLabels" . | nindent 14 }}
+        {{- with .Values.networkPolicy.additionalRouterPeers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: {{ .Values.service.router.port }}
+          protocol: TCP
+        - port: {{ .Values.service.router.port }}
+          protocol: UDP
+    # The registry and metrics ports stay open so image pulls and scraping keep
+    # working as before.
+    - ports:
+        - port: {{ .Values.service.registry.port }}
+          protocol: TCP
+        - port: {{ .Values.service.metrics.port }}
+          protocol: TCP
+{{- end }}

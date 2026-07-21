@@ -32,6 +32,8 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | livenessProbe.enabled | bool | `false` | When enabled a liveness probe will be added to the registry. |
 | nameOverride | string | `""` | Overrides the name of the chart. |
 | namespaceOverride | string | `""` | Overrides the namespace where spegel resources are installed. |
+| networkPolicy.additionalRouterPeers | list | `[]` | Extra peers allowed to reach the libp2p router port, appended to the in-namespace Spegel selector. |
+| networkPolicy.enabled | bool | `false` | If true creates a NetworkPolicy that limits libp2p router traffic to Spegel peers in the release namespace. |
 | nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for pod assignment. |
 | podAnnotations | object | `{}` | Annotations to add to the pod. |
 | podSecurityContext | object | `{}` | Security context for the pod. |
