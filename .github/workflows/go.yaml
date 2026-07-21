@@ -31,6 +31,7 @@ jobs:
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f #v7.0.0
+        if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unit
@@ -49,6 +50,7 @@ jobs:
         working-directory: ./test/integration/containerd
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f #v7.0.0
+        if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: integration-containerd
