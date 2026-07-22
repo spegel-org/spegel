@@ -12,9 +12,14 @@ require (
 	github.com/moby/moby/client v0.4.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
+<<<<<<< HEAD
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.80.0
 	k8s.io/cri-api v0.35.3
+=======
+	google.golang.org/grpc v1.82.1
+	k8s.io/cri-api v0.36.1
+>>>>>>> bddf96a (Bump google.golang.org/grpc from 1.81.1 to 1.82.1)
 )
 
 require (
