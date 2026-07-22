@@ -402,6 +402,7 @@ func TestKubernetes(t *testing.T) {
 			require.NoError(t, err)
 			podList, err = k8sClient.CoreV1().Pods(spegelNamespace).List(t.Context(), metav1.ListOptions{})
 			require.NoError(t, err)
+			require.Len(t, podList.Items, 2)
 			err = k8sClient.CoreV1().Pods(spegelNamespace).DeleteCollection(t.Context(), metav1.DeleteOptions{}, metav1.ListOptions{})
 			require.NoError(t, err)
 			require.EventuallyWith(t, func(c *assert.CollectT) {

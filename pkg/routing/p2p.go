@@ -159,7 +159,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 			records.ProviderAddrTTL(1*time.Hour),
 		),
 	}
-	kdht, err := dht.New(ctx, host, dhtOpts...)
+	kdht, err := dht.New(host, dhtOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("could not create distributed hash table: %w", err)
 	}
@@ -186,6 +186,7 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		provider.WithOfflineDelay(0),
 		provider.WithConnectivityCheckOnlineInterval(30 * time.Second),
 		provider.WithAddLocalRecord(func(h mh.Multihash) error {
+			//nolint: staticcheck // Need to use the context to cancel.
 			return kdht.ProviderStore().AddProvider(kdht.Context(), h, peer.AddrInfo{ID: host.ID()})
 		}),
 	}
@@ -631,9 +632,13 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, pro
 		return errors.New("routing table is empty after bootstrapping")
 	}
 	errCh := kdht.RefreshRoutingTable()
-	err = <-errCh
-	if err != nil {
-		return err
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err = <-errCh:
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
