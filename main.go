@@ -30,7 +30,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/preflight"
 	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
-	"github.com/spegel-org/spegel/pkg/state"
+	"github.com/spegel-org/spegel/pkg/store"
 	"github.com/spegel-org/spegel/pkg/web"
 )
 
@@ -177,11 +177,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		return err
 	}
 
-	ociClient, err := oci.NewClient()
-	if err != nil {
-		return err
-	}
-
+	// OCI Configuration
 	filters := []oci.Filter{}
 	regFilter, err := oci.FilterForMirroredRegistries(args.MirroredRegistries)
 	if err != nil {
@@ -193,13 +189,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	for _, r := range args.RegistryFilters {
 		filters = append(filters, oci.RegexFilter{Regex: r})
 	}
-
-	// OCI Store
-	ociStore, err := containerd.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, containerd.WithContentPath(args.ContainerdContentPath))
+	ociClient, err := oci.NewClient()
 	if err != nil {
 		return err
 	}
-	defer ociStore.Close()
 
 	// Router
 	_, registryPort, err := net.SplitHostPort(args.RegistryAddr)
@@ -225,9 +218,14 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		return nil
 	})
 
-	// State tracking
+	// Store
+	ctrd, err := containerd.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, containerd.WithContentPath(args.ContainerdContentPath))
+	if err != nil {
+		return err
+	}
+	defer ctrd.Close()
 	group.Go(func(ctx context.Context) error {
-		err := state.Track(ctx, ociStore, router, state.WithRegistryFilters(filters))
+		err := store.Track(ctx, ctrd, router)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -246,7 +244,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		registry.WithUserinfo(userinfo),
 		registry.WithOCIClient(ociClient),
 	}
-	reg, err := registry.NewRegistry(ociStore, router, registryOpts...)
+	reg, err := registry.NewRegistry(ctrd, router, registryOpts...)
 	if err != nil {
 		return err
 	}
@@ -290,7 +288,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 			Scheme: "http",
 			Host:   args.RegistryAddr,
 		}
-		web, err := web.NewWeb(router, ociStore, reg, mirror, webOpts...)
+		web, err := web.NewWeb(router, ctrd, reg, mirror, webOpts...)
 		if err != nil {
 			return err
 		}

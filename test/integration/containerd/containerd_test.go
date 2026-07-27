@@ -8,12 +8,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/containerd/containerd/v2/core/images"
 	"github.com/go-openapi/testify/v2/assert"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
+	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"go.uber.org/goleak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -21,8 +24,11 @@ import (
 	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/internal/testutil"
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/oci/containerd"
+	"github.com/spegel-org/spegel/pkg/store"
+	"github.com/spegel-org/spegel/pkg/store/storetest"
 )
 
 var (
@@ -31,6 +37,10 @@ var (
 		"2.2.6",
 	}
 )
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
 
 func TestContainerdPull(t *testing.T) {
 	testStrategy := os.Getenv("INTEGRATION_TEST_STRATEGY")
@@ -118,11 +128,13 @@ func TestContainerdPull(t *testing.T) {
 			require.NoError(t, err)
 			imageClient := runtimeapi.NewImageServiceClient(connClient)
 
-			containerdStore, err := containerd.NewContainerd(t.Context(), socketPath, "k8s.io")
+			ctrd, err := containerd.NewContainerd(t.Context(), socketPath, "k8s.io")
 			require.NoError(t, err)
-			name := containerdStore.Name()
+			name := ctrd.Name()
 			require.EqualT(t, "containerd", name)
-			initial, eventCh, err := containerdStore.Subscribe(t.Context())
+
+			subCtx, subCancel := context.WithCancel(t.Context())
+			initial, eventCh, err := ctrd.Subscribe(subCtx)
 			require.NoError(t, err)
 			require.Empty(t, initial)
 
@@ -134,29 +146,24 @@ func TestContainerdPull(t *testing.T) {
 			for _, s := range imgs {
 				benchmarkImg, err := oci.ParseImage(s, oci.AllowTagOnly())
 				require.NoError(t, err)
-				expectedDescs := []ocispec.Descriptor{
-					{Digest: "sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b", Size: 1371, MediaType: "application/vnd.docker.distribution.manifest.v2+json"},
-					{Digest: "sha256:7582c2cc65ef30105b84c1c6812f71c8012663c6352b01fe2f483238313ab0ed", Size: 307023, MediaType: "application/octet-stream"},
-					{Digest: "sha256:85bdfbf66d5c95e296fd1332d94e6a0ac86508af48fbd28b825db7c15b39cdad", Size: 1318, MediaType: "application/vnd.oci.image.config.v1+json"},
-					{Digest: "sha256:99ea62d595b5a3e1d01639af2781f97730eca4086f5308be58f68b18c244adc9", Size: 2622396, MediaType: "application/octet-stream"},
-					{Digest: "sha256:a3dbaff286eb1da0a03dd99d51cbeacb6f38f1dfd1ce04c267278d835fa64865", Size: 2622398, MediaType: "application/octet-stream"},
-					{Digest: "sha256:d76a66ca5a6e5fdd3b4f5df356b7762572327f0d9c1dbf4d71d1116fbc623589", Size: 2622396, MediaType: "application/octet-stream"},
-					{Digest: "sha256:df178cf0f2112519a5ff06bec070a33b2e2a968936466ccfec15b13f1a51ae86", Size: 2622395, MediaType: "application/octet-stream"},
+				expectedDescs := []store.Descriptor{
+					{Digest: "sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b", Size: 1371, MediaType: images.MediaTypeDockerSchema2Manifest},
+					{Digest: "sha256:7582c2cc65ef30105b84c1c6812f71c8012663c6352b01fe2f483238313ab0ed", Size: 307023, MediaType: httpx.ContentTypeBinary},
+					{Digest: "sha256:85bdfbf66d5c95e296fd1332d94e6a0ac86508af48fbd28b825db7c15b39cdad", Size: 1318, MediaType: ocispec.MediaTypeImageConfig},
+					{Digest: "sha256:99ea62d595b5a3e1d01639af2781f97730eca4086f5308be58f68b18c244adc9", Size: 2622396, MediaType: httpx.ContentTypeBinary},
+					{Digest: "sha256:a3dbaff286eb1da0a03dd99d51cbeacb6f38f1dfd1ce04c267278d835fa64865", Size: 2622398, MediaType: httpx.ContentTypeBinary},
+					{Digest: "sha256:d76a66ca5a6e5fdd3b4f5df356b7762572327f0d9c1dbf4d71d1116fbc623589", Size: 2622396, MediaType: httpx.ContentTypeBinary},
+					{Digest: "sha256:df178cf0f2112519a5ff06bec070a33b2e2a968936466ccfec15b13f1a51ae86", Size: 2622395, MediaType: httpx.ContentTypeBinary},
 				}
-				expectedCreateEvents := []oci.OCIEvent{}
-				expectedDeleteEvents := []oci.OCIEvent{}
+				expectedCreateEvents := []store.Event{}
+				expectedDeleteEvents := []store.Event{}
 				if benchmarkImg.Tag != "" && benchmarkImg.Digest == "" {
-					expectedCreateEvents = append(expectedCreateEvents, oci.OCIEvent{Type: oci.CreateEvent, Reference: benchmarkImg.Reference})
-					expectedDeleteEvents = append(expectedDeleteEvents, oci.OCIEvent{Type: oci.DeleteEvent, Reference: benchmarkImg.Reference})
+					expectedCreateEvents = append(expectedCreateEvents, store.Event{Type: store.CreateEvent, Key: benchmarkImg.String()})
+					expectedDeleteEvents = append(expectedDeleteEvents, store.Event{Type: store.DeleteEvent, Key: benchmarkImg.String()})
 				}
 				for _, desc := range expectedDescs {
-					ref := oci.Reference{
-						Registry:   benchmarkImg.Registry,
-						Repository: benchmarkImg.Repository,
-						Digest:     desc.Digest,
-					}
-					expectedCreateEvents = append(expectedCreateEvents, oci.OCIEvent{Type: oci.CreateEvent, Reference: ref})
-					expectedDeleteEvents = append(expectedDeleteEvents, oci.OCIEvent{Type: oci.DeleteEvent, Reference: ref})
+					expectedCreateEvents = append(expectedCreateEvents, store.Event{Type: store.CreateEvent, Key: desc.Digest.String()})
+					expectedDeleteEvents = append(expectedDeleteEvents, store.Event{Type: store.DeleteEvent, Key: desc.Digest.String()})
 				}
 
 				t.Log("Pulling image with CRI", benchmarkImg.String())
@@ -164,17 +171,23 @@ func TestContainerdPull(t *testing.T) {
 				require.NoError(t, err)
 				testutil.EnsureEvents(t, eventCh, expectedCreateEvents)
 
-				t.Log("Checking Containerd store")
-				imgs, err := containerdStore.ListImages(t.Context())
+				t.Log("Store conformance")
+				imgs, err := ctrd.ListImages(t.Context())
 				require.NoError(t, err)
 				require.Len(t, imgs, 1)
 				tagName, ok := imgs[0].TagName()
-				if ok {
-					require.EqualT(t, benchmarkImg.String(), tagName)
-					dgst, err := containerdStore.Resolve(t.Context(), tagName)
-					require.NoError(t, err)
-					require.EqualT(t, imgs[0].Digest, dgst)
+
+				cfg := storetest.ConformanceConfig{
+					Name:               "containerd",
+					NotFoundRef:        "dummy",
+					NotFoundDigest:     digest.FromBytes(nil),
+					ExistingDescriptor: expectedDescs[2],
 				}
+				if ok {
+					cfg.ExistingRef = tagName
+					cfg.ExistingRefDigest = imgs[0].Digest
+				}
+				storetest.Conformance(t, ctrd, cfg)
 
 				t.Log("Deleting image with CRI", benchmarkImg.String())
 				_, err = imageClient.RemoveImage(t.Context(), &runtimeapi.RemoveImageRequest{Image: &runtimeapi.ImageSpec{Image: benchmarkImg.String()}})
@@ -182,11 +195,20 @@ func TestContainerdPull(t *testing.T) {
 				testutil.EnsureEvents(t, eventCh, expectedDeleteEvents)
 			}
 
+			t.Log("Closing subscription")
+			subCancel()
+			testutil.WaitForClose(t, eventCh)
+
 			t.Log("Closing Containerd store")
+			_, eventCh, err = ctrd.Subscribe(t.Context())
+			require.NoError(t, err)
+
 			err = connClient.Close()
 			require.NoError(t, err)
-			err = containerdStore.Close()
+			err = ctrd.Close()
+
 			require.NoError(t, err)
+			testutil.WaitForClose(t, eventCh)
 		})
 	}
 	err = mobyClient.Close()

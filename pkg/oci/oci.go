@@ -1,13 +1,11 @@
 package oci
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
 
 	"github.com/containerd/containerd/v2/core/images"
-	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/spegel-org/spegel/pkg/httpx"
@@ -18,44 +16,6 @@ const (
 	// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-manifests
 	ManifestMaxSize = 4 * 1024 * 1024
 )
-
-var (
-	ErrNotFound = errors.New("content not found")
-)
-
-type EventType string
-
-const (
-	CreateEvent EventType = "CREATE"
-	DeleteEvent EventType = "DELETE"
-)
-
-type OCIEvent struct {
-	Type      EventType
-	Reference Reference
-}
-
-type Store interface {
-	// Name returns the name of the store implementation.
-	Name() string
-
-	// ListImages returns a list of all local images.
-	ListImages(ctx context.Context) ([]Image, error)
-
-	// Resolve returns the digest for the tagged image name reference.
-	// The ref is expected to be in the format `registry/name:tag`.
-	Resolve(ctx context.Context, ref string) (digest.Digest, error)
-
-	// Descriptor returns the OCI descriptor for the given digest.
-	Descriptor(ctx context.Context, dgst digest.Digest) (ocispec.Descriptor, error)
-
-	// Open returns the streamable content for the given digest.
-	Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
-
-	// Subscribe returns an initial state of content  and a channel informing of any changes.
-	// The digest for the top level image layer should be included in the digest slice.
-	Subscribe(ctx context.Context) (map[Image][]digest.Digest, <-chan OCIEvent, error)
-}
 
 // FingerprintMediaType attempts to determine the media type based on the json structure.
 func FingerprintMediaType(r io.Reader) (string, error) {

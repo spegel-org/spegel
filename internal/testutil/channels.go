@@ -45,6 +45,20 @@ func RequireChannelClosed[T any](t *testing.T, ch <-chan T) {
 	}
 }
 
+func WaitForClose[T any](t *testing.T, ch <-chan T) {
+	t.Helper()
+
+	select {
+	case <-t.Context().Done():
+		require.FailNow(t, "context cancelled channel waiting")
+	case _, ok := <-ch:
+		if !ok {
+			return
+		}
+		require.FailNow(t, "channel is receiving values but expected to be closed")
+	}
+}
+
 func EnsureEvents[T comparable](t *testing.T, ch <-chan T, expected []T) {
 	t.Helper()
 
