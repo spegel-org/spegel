@@ -44,3 +44,18 @@ func RequireChannelClosed[T any](t *testing.T, ch <-chan T) {
 		require.FailNow(t, "channel is open but expected to be closed")
 	}
 }
+
+func EnsureEvents[T comparable](t *testing.T, ch <-chan T, expected []T) {
+	t.Helper()
+
+	received := []T{}
+	for range len(expected) {
+		select {
+		case <-t.Context().Done():
+			require.FailNow(t, "context cancelled channel waiting")
+		case event := <-ch:
+			received = append(received, event)
+		}
+	}
+	require.ElementsMatchT(t, expected, received)
+}
