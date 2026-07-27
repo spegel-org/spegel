@@ -27,7 +27,7 @@ test-unit:
 
 .PHONY: test-integration-containerd
 test-integration-containerd:
-	@cd ./test/integration/containerd && INTEGRATION_TEST_STRATEGY="fast" go test -v -timeout 200s -count 1 ./...
+	@cd ./test/integration/containerd && INTEGRATION_TEST_STRATEGY="fast" go test -v -timeout 15s -count 1 ./...
 
 .PHONY: test-integration-kubernetes
 test-integration-kubernetes: build-image

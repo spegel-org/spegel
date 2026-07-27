@@ -21,6 +21,10 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing/libp2p"
 )
 
+type ImageLister interface {
+	ListImages(ctx context.Context) ([]oci.Image, error)
+}
+
 //go:embed templates/*
 var templatesFS embed.FS
 

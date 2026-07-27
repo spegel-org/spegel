@@ -9,11 +9,12 @@ import (
 	"time"
 
 	ctrdclient "github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/core/images"
 	"github.com/go-openapi/testify/v2/assert"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
-	"github.com/moby/moby/client"
+	mobyclient "github.com/moby/moby/client"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"go.uber.org/goleak"
@@ -24,6 +25,7 @@ import (
 	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/internal/testutil"
+	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/oci/containerd"
 	"github.com/spegel-org/spegel/pkg/store"
@@ -56,7 +58,7 @@ func TestContainerdPull(t *testing.T) {
 		t.Fatal("unknown test strategy", testStrategy)
 	}
 
-	mobyClient, err := client.New(client.FromEnv)
+	mobyClient, err := mobyclient.New(mobyclient.FromEnv)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		mobyClient.Close()
@@ -71,7 +73,7 @@ func TestContainerdPull(t *testing.T) {
 
 		t.Log("Pulling Containerd image", img.String())
 		pullGroup.Go(func(ctx context.Context) error {
-			resp, err := mobyClient.ImagePull(ctx, img.String(), client.ImagePullOptions{})
+			resp, err := mobyClient.ImagePull(ctx, img.String(), mobyclient.ImagePullOptions{})
 			if err != nil {
 				return err
 			}
@@ -93,7 +95,7 @@ func TestContainerdPull(t *testing.T) {
 				fmt.Sprintf("GROUP_ID=%d", os.Getgid()),
 			}
 			runPath := t.TempDir()
-			createOpt := client.ContainerCreateOptions{
+			createOpt := mobyclient.ContainerCreateOptions{
 				Config: &container.Config{
 					Image: img.String(),
 					Tty:   false,
@@ -112,10 +114,10 @@ func TestContainerdPull(t *testing.T) {
 			}
 			createResp, err := mobyClient.ContainerCreate(t.Context(), createOpt)
 			require.NoError(t, err)
-			_, err = mobyClient.ContainerStart(t.Context(), createResp.ID, client.ContainerStartOptions{})
+			_, err = mobyClient.ContainerStart(t.Context(), createResp.ID, mobyclient.ContainerStartOptions{})
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				mobyClient.ContainerStop(context.Background(), createResp.ID, client.ContainerStopOptions{})
+				mobyClient.ContainerStop(context.Background(), createResp.ID, mobyclient.ContainerStopOptions{})
 			})
 			require.EventuallyWith(t, func(collect *assert.CollectT) {
 				require.FileExists(collect, filepath.Join(runPath, "ready"))
@@ -171,14 +173,14 @@ func TestContainerdPull(t *testing.T) {
 			for _, s := range imgs {
 				benchmarkImg, err := oci.ParseImage(s, oci.AllowTagOnly())
 				require.NoError(t, err)
-				expectedDescs := []ocispec.Descriptor{
-					{Digest: "sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b", Size: 1371, MediaType: "application/vnd.docker.distribution.manifest.v2+json"},
-					{Digest: "sha256:7582c2cc65ef30105b84c1c6812f71c8012663c6352b01fe2f483238313ab0ed", Size: 307023, MediaType: "application/octet-stream"},
-					{Digest: "sha256:85bdfbf66d5c95e296fd1332d94e6a0ac86508af48fbd28b825db7c15b39cdad", Size: 1318, MediaType: "application/vnd.oci.image.config.v1+json"},
-					{Digest: "sha256:99ea62d595b5a3e1d01639af2781f97730eca4086f5308be58f68b18c244adc9", Size: 2622396, MediaType: "application/octet-stream"},
-					{Digest: "sha256:a3dbaff286eb1da0a03dd99d51cbeacb6f38f1dfd1ce04c267278d835fa64865", Size: 2622398, MediaType: "application/octet-stream"},
-					{Digest: "sha256:d76a66ca5a6e5fdd3b4f5df356b7762572327f0d9c1dbf4d71d1116fbc623589", Size: 2622396, MediaType: "application/octet-stream"},
-					{Digest: "sha256:df178cf0f2112519a5ff06bec070a33b2e2a968936466ccfec15b13f1a51ae86", Size: 2622395, MediaType: "application/octet-stream"},
+				expectedDescs := []store.Descriptor{
+					{Digest: "sha256:735223c59bb4df293176337f84f42b58ac53cb5a4740752b7aa56c19c0f6ec5b", Size: 1371, MediaType: images.MediaTypeDockerSchema2Manifest},
+					{Digest: "sha256:7582c2cc65ef30105b84c1c6812f71c8012663c6352b01fe2f483238313ab0ed", Size: 307023, MediaType: httpx.ContentTypeBinary},
+					{Digest: "sha256:85bdfbf66d5c95e296fd1332d94e6a0ac86508af48fbd28b825db7c15b39cdad", Size: 1318, MediaType: ocispec.MediaTypeImageConfig},
+					{Digest: "sha256:99ea62d595b5a3e1d01639af2781f97730eca4086f5308be58f68b18c244adc9", Size: 2622396, MediaType: httpx.ContentTypeBinary},
+					{Digest: "sha256:a3dbaff286eb1da0a03dd99d51cbeacb6f38f1dfd1ce04c267278d835fa64865", Size: 2622398, MediaType: httpx.ContentTypeBinary},
+					{Digest: "sha256:d76a66ca5a6e5fdd3b4f5df356b7762572327f0d9c1dbf4d71d1116fbc623589", Size: 2622396, MediaType: httpx.ContentTypeBinary},
+					{Digest: "sha256:df178cf0f2112519a5ff06bec070a33b2e2a968936466ccfec15b13f1a51ae86", Size: 2622395, MediaType: httpx.ContentTypeBinary},
 				}
 				expectedCreateEvents := []store.Event{}
 				expectedDeleteEvents := []store.Event{}
@@ -207,6 +209,11 @@ func TestContainerdPull(t *testing.T) {
 					require.NoError(t, err)
 					require.EqualT(t, imgs[0].Digest, dgst)
 				}
+				if ok {
+					cfg.ExistingRef = tagName
+					cfg.ExistingRefDigest = imgs[0].Digest
+				}
+				storetest.Conformance(t, ctrd, cfg)
 
 				time.Sleep(1 * time.Second)
 
