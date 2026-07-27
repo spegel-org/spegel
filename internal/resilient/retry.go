@@ -100,8 +100,7 @@ func RetryValue[T any](ctx context.Context, attempts int, delay DelayFunc, fn fu
 		if err == nil {
 			return result, nil
 		}
-		var unrecoverableErr *unrecoverableError
-		if errors.As(err, &unrecoverableErr) {
+		if unrecoverableErr, ok := errors.AsType[*unrecoverableError](err); ok {
 			errs = append(errs, unrecoverableErr.error)
 			break
 		}

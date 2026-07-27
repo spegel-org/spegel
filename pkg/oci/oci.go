@@ -61,8 +61,8 @@ type Store interface {
 func FingerprintMediaType(r io.Reader) (string, error) {
 	dec := json.NewDecoder(r)
 	tok, err := dec.Token()
-	var syntaxErr *json.SyntaxError
-	if errors.As(err, &syntaxErr) {
+	//nolint:errcheck // We are only interested in the error type not the error content.
+	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
 		return httpx.ContentTypeBinary, nil
 	}
 	if err != nil {
