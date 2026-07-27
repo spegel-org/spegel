@@ -20,6 +20,7 @@ import (
 
 	"github.com/kvick-org/pkg/errgroup"
 
+	"github.com/spegel-org/spegel/internal/testutil"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/oci/containerd"
 )
@@ -161,7 +162,7 @@ func TestContainerdPull(t *testing.T) {
 				t.Log("Pulling image with CRI", benchmarkImg.String())
 				_, err = imageClient.PullImage(t.Context(), &runtimeapi.PullImageRequest{Image: &runtimeapi.ImageSpec{Image: benchmarkImg.String()}})
 				require.NoError(t, err)
-				ensureEvents(t, eventCh, expectedCreateEvents)
+				testutil.EnsureEvents(t, eventCh, expectedCreateEvents)
 
 				t.Log("Checking Containerd store")
 				imgs, err := containerdStore.ListImages(t.Context())
@@ -178,7 +179,7 @@ func TestContainerdPull(t *testing.T) {
 				t.Log("Deleting image with CRI", benchmarkImg.String())
 				_, err = imageClient.RemoveImage(t.Context(), &runtimeapi.RemoveImageRequest{Image: &runtimeapi.ImageSpec{Image: benchmarkImg.String()}})
 				require.NoError(t, err)
-				ensureEvents(t, eventCh, expectedDeleteEvents)
+				testutil.EnsureEvents(t, eventCh, expectedDeleteEvents)
 			}
 
 			t.Log("Closing Containerd store")
@@ -190,15 +191,4 @@ func TestContainerdPull(t *testing.T) {
 	}
 	err = mobyClient.Close()
 	require.NoError(t, err)
-}
-
-func ensureEvents(t *testing.T, ch <-chan oci.OCIEvent, expected []oci.OCIEvent) {
-	t.Helper()
-
-	received := []oci.OCIEvent{}
-	for range len(expected) {
-		event := <-ch
-		received = append(received, event)
-	}
-	require.ElementsMatchT(t, expected, received)
 }
