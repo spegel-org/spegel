@@ -63,8 +63,8 @@ func (r *response) WriteError(statusCode int, err error) {
 	r.error = err
 
 	b, ct, rbErr := func() ([]byte, string, error) {
-		var respErr ResponseError
-		if !errors.As(err, &respErr) {
+		respErr, ok := errors.AsType[ResponseError](err)
+		if !ok {
 			return nil, "", nil
 		}
 		b, ct, err := respErr.ResponseBody()

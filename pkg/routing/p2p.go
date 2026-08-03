@@ -607,13 +607,13 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, pro
 			}
 			addrInfo.ID = id
 			err = kdht.Host().Connect(bootstrapCtx, addrInfo)
-			var mismatchErr sec.ErrPeerIDMismatch
-			if !errors.As(err, &mismatchErr) {
+			mismatchErr, ok := errors.AsType[sec.ErrPeerIDMismatch](err)
+			kdht.Host().Peerstore().ClearAddrs(addrInfo.ID)
+			kdht.Host().Peerstore().RemovePeer(addrInfo.ID)
+			if !ok {
 				errs = append(errs, err)
 				continue
 			}
-			kdht.Host().Peerstore().ClearAddrs(addrInfo.ID)
-			kdht.Host().Peerstore().RemovePeer(addrInfo.ID)
 			addrInfo.ID = mismatchErr.Actual
 		}
 
