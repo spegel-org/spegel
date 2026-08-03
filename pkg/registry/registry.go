@@ -23,6 +23,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
+	"github.com/spegel-org/spegel/pkg/store"
 )
 
 const (
@@ -83,7 +84,7 @@ type Statistics struct {
 type Registry struct {
 	bufferPool     *sync.Pool
 	hedger         *resilient.Hedger
-	ociStore       oci.Store
+	store          store.Store
 	ociClient      *oci.Client
 	router         routing.Router
 	userinfo       *url.Userinfo
@@ -93,7 +94,7 @@ type Registry struct {
 	stats          Statistics
 }
 
-func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
+func NewRegistry(store store.Store, router routing.Router, opts ...RegistryOption) (*Registry, error) {
 	cfg := RegistryConfig{
 		ResolveRetries: 3,
 		ResolveTimeout: 20 * time.Millisecond,
@@ -118,7 +119,7 @@ func NewRegistry(ociStore oci.Store, router routing.Router, opts ...RegistryOpti
 	}
 
 	r := &Registry{
-		ociStore:       ociStore,
+		store:          store,
 		router:         router,
 		ociClient:      cfg.OCIClient,
 		resolveRetries: cfg.ResolveRetries,
@@ -203,9 +204,9 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		// If content is present locally we should skip the mirroring and just serve it.
 		var ociErr error
 		if dist.Digest == "" {
-			_, ociErr = r.ociStore.Resolve(req.Context(), dist.Identifier())
+			_, ociErr = r.store.Resolve(req.Context(), dist.Identifier())
 		} else {
-			_, ociErr = r.ociStore.Descriptor(req.Context(), dist.Digest)
+			_, ociErr = r.store.Descriptor(req.Context(), dist.Digest)
 		}
 		if ociErr != nil {
 			r.mirrorHandler(req.Context(), dist, rw)
@@ -480,7 +481,7 @@ func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPat
 	rw.SetAttrs(HandlerAttrKey, "manifest")
 
 	if dist.Digest == "" {
-		dgst, err := r.ociStore.Resolve(ctx, dist.Identifier())
+		dgst, err := r.store.Resolve(ctx, dist.Identifier())
 		if err != nil {
 			respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get digest for image tag %s", dist.Identifier()), nil)
 			rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -488,7 +489,7 @@ func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPat
 		}
 		dist.Digest = dgst
 	}
-	desc, err := r.ociStore.Descriptor(ctx, dist.Digest)
+	desc, err := r.store.Descriptor(ctx, dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -509,7 +510,7 @@ func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPat
 		return
 	}
 
-	rc, err := r.ociStore.Open(ctx, dist.Digest)
+	rc, err := r.store.Open(ctx, dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeManifestUnknown, fmt.Sprintf("could not get manifest %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -527,7 +528,7 @@ func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPat
 func (r *Registry) blobHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
 	rw.SetAttrs(HandlerAttrKey, "blob")
 
-	desc, err := r.ociStore.Descriptor(ctx, dist.Digest)
+	desc, err := r.store.Descriptor(ctx, dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get blob %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))
@@ -573,7 +574,7 @@ func (r *Registry) blobHandler(ctx context.Context, dist oci.DistributionPath, r
 		return
 	}
 
-	rc, err := r.ociStore.Open(ctx, dist.Digest)
+	rc, err := r.store.Open(ctx, dist.Digest)
 	if err != nil {
 		respErr := oci.NewDistributionError(oci.ErrCodeBlobUnknown, fmt.Sprintf("could not get reader for blob %s", dist.Digest), nil)
 		rw.WriteError(http.StatusNotFound, errors.Join(respErr, err))

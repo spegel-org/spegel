@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -15,18 +16,22 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
+type imageLister struct{}
+
+func (imageLister) ListImages(ctx context.Context) ([]oci.Image, error) {
+	return nil, nil
+}
+
 func TestWeb(t *testing.T) {
 	t.Parallel()
 
 	router, err := routing.NewP2PRouter(t.Context(), ":0", nil, "5000")
 	require.NoError(t, err)
 
-	ociStore := oci.NewMemory()
-
-	reg, err := registry.NewRegistry(ociStore, router)
+	reg, err := registry.NewRegistry(nil, router)
 	require.NoError(t, err)
 
-	w, err := NewWeb(router, ociStore, reg, nil)
+	w, err := NewWeb(router, imageLister{}, reg, nil)
 	require.NoError(t, err)
 	require.NotNil(t, w.tmpls)
 
