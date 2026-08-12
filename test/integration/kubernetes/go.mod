@@ -10,15 +10,15 @@ require (
 	github.com/fluxcd/cli-utils v1.2.2
 	github.com/go-openapi/testify/v2 v2.6.0
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
-	github.com/moby/moby/client v0.5.0
+	github.com/moby/moby/client v0.5.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
 	golang.org/x/mod v0.38.0
 	helm.sh/helm/v4 v4.2.3
-	k8s.io/api v0.36.2
-	k8s.io/apimachinery v0.36.2
-	k8s.io/cli-runtime v0.36.2
-	k8s.io/client-go v0.36.2
-	k8s.io/kubectl v0.36.2
+	k8s.io/api v0.36.3
+	k8s.io/apimachinery v0.36.3
+	k8s.io/cli-runtime v0.36.3
+	k8s.io/client-go v0.36.3
+	k8s.io/kubectl v0.36.3
 	sigs.k8s.io/kind v0.32.0
 )
 
@@ -229,10 +229,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.36.1 // indirect
 	k8s.io/apiserver v0.36.1 // indirect
-	k8s.io/component-base v0.36.2 // indirect
+	k8s.io/component-base v0.36.3 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260319004828-5883c5ee87b9 // indirect
-	k8s.io/streaming v0.36.2 // indirect
+	k8s.io/streaming v0.36.3 // indirect
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 	oras.land/oras-go/v2 v2.6.1 // indirect
@@ -241,6 +241,6 @@ require (
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.3 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
