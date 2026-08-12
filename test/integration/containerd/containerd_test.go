@@ -14,6 +14,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"go.uber.org/goleak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1"
@@ -31,6 +32,10 @@ var (
 		"2.2.6",
 	}
 )
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
 
 func TestContainerdPull(t *testing.T) {
 	testStrategy := os.Getenv("INTEGRATION_TEST_STRATEGY")
@@ -122,7 +127,9 @@ func TestContainerdPull(t *testing.T) {
 			require.NoError(t, err)
 			name := containerdStore.Name()
 			require.EqualT(t, "containerd", name)
-			initial, eventCh, err := containerdStore.Subscribe(t.Context())
+
+			subCtx, subCancel := context.WithCancel(t.Context())
+			initial, eventCh, err := containerdStore.Subscribe(subCtx)
 			require.NoError(t, err)
 			require.Empty(t, initial)
 
@@ -182,11 +189,20 @@ func TestContainerdPull(t *testing.T) {
 				testutil.EnsureEvents(t, eventCh, expectedDeleteEvents)
 			}
 
+			t.Log("Closing subscription")
+			subCancel()
+			testutil.WaitForClose(t, eventCh)
+
 			t.Log("Closing Containerd store")
+			_, eventCh, err = containerdStore.Subscribe(t.Context())
+			require.NoError(t, err)
+
 			err = connClient.Close()
 			require.NoError(t, err)
 			err = containerdStore.Close()
 			require.NoError(t, err)
+
+			testutil.WaitForClose(t, eventCh)
 		})
 	}
 	err = mobyClient.Close()
