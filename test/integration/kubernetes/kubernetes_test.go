@@ -165,25 +165,22 @@ func TestKubernetes(t *testing.T) {
 		name := strings.Join([]string{tt.kubernetesImg.Tag, string(tt.ipFamily), string(tt.proxyMode)}, "-")
 		t.Run(name, func(t *testing.T) {
 			t.Log("Creating Kind cluster")
+
 			kcPath := filepath.Join(t.TempDir(), "kind.kubeconfig")
 			provider := cluster.NewProvider()
-			containerdPatch := `[plugins."io.containerd.grpc.v1.cri".registry]
+
+			containerdPatch := `version = 2
+  [plugins."io.containerd.grpc.v1.cri".registry]
     config_path = "/etc/containerd/certs.d"
-  # Discarding unpacked layers causes them to be removed, which defeats the purpose of a local cache.
-  # Aditioanlly nodes will report having layers which no long exist.
-  # This is by default false in containerd.
   [plugins."io.containerd.grpc.v1.cri".containerd]
     discard_unpacked_layers = false
-  # This is just to make sure that images are not shared between namespaces.
   [plugins."io.containerd.metadata.v1.bolt"]
     content_sharing_policy = "isolated"`
+
 			clusterCfg := &v1alpha4.Cluster{
 				Networking: v1alpha4.Networking{
 					KubeProxyMode: tt.proxyMode,
 					IPFamily:      tt.ipFamily,
-				},
-				FeatureGates: map[string]bool{
-					"ImageVolume": true,
 				},
 				ContainerdConfigPatches: []string{containerdPatch},
 				Nodes: []v1alpha4.Node{
@@ -852,19 +849,6 @@ func dumpPods(t *testing.T, k8sClient kubernetes.Interface, namespace string, in
 		}
 	}
 	t.Log("\n" + strings.Join(output, "\n") + "\n")
-}
-
-func getNodeIP(t *testing.T, node *corev1.Node) string {
-	t.Helper()
-
-	for _, a := range node.Status.Addresses {
-		if a.Type != corev1.NodeInternalIP {
-			continue
-		}
-		return getIP6SafeString(t, a.Address)
-	}
-	require.FailNow(t, "node ip not found")
-	return ""
 }
 
 func getPodIP(t *testing.T, pod *corev1.Pod) string {
