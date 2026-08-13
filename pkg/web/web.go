@@ -48,13 +48,13 @@ type Web struct {
 	mirror    *url.URL
 	router    *routing.P2PRouter
 	ociClient *oci.Client
-	ociStore  oci.Store
+	imgLister oci.ImageLister
 	tmpls     *template.Template
 	reg       *registry.Registry
 	filters   []oci.Filter
 }
 
-func NewWeb(router *routing.P2PRouter, ociStore oci.Store, reg *registry.Registry, mirror *url.URL, opts ...WebOption) (*Web, error) {
+func NewWeb(router *routing.P2PRouter, imgLister oci.ImageLister, reg *registry.Registry, mirror *url.URL, opts ...WebOption) (*Web, error) {
 	cfg := WebConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
@@ -80,7 +80,7 @@ func NewWeb(router *routing.P2PRouter, ociStore oci.Store, reg *registry.Registr
 	return &Web{
 		router:    router,
 		ociClient: cfg.OCIClient,
-		ociStore:  ociStore,
+		imgLister: imgLister,
 		filters:   cfg.Filters,
 		tmpls:     tmpls,
 		reg:       reg,
@@ -138,7 +138,7 @@ type statsData struct {
 func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	data := statsData{}
 
-	images, err := w.ociStore.ListImages(req.Context())
+	images, err := w.imgLister.ListImages(req.Context())
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
