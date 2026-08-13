@@ -95,14 +95,14 @@ func main() {
 	args := &Arguments{}
 	arg.MustParse(args)
 
-	err := run(context.Background(), args)
+	err := run(args)
 	if err != nil {
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, args *Arguments) error {
-	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
+func run(args *Arguments) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	opts := slog.HandlerOptions{
@@ -133,7 +133,7 @@ func run(ctx context.Context, args *Arguments) error {
 		log.Error(err, "exit with error")
 		return err
 	}
-	if args.Version != nil {
+	if args.Version == nil {
 		log.Info("exit gracefully")
 	}
 	return nil
@@ -262,8 +262,8 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	})
 	group.Go(func(ctx context.Context) error {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+		shutdownCtx, shutdownCancel := signal.NotifyContext(context.WithoutCancel(ctx), syscall.SIGINT)
+		defer shutdownCancel()
 		return regSrv.Shutdown(shutdownCtx)
 	})
 
@@ -308,8 +308,8 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	})
 	group.Go(func(ctx context.Context) error {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+		shutdownCtx, shutdownCancel := signal.NotifyContext(context.WithoutCancel(ctx), syscall.SIGINT)
+		defer shutdownCancel()
 		return metricsSrv.Shutdown(shutdownCtx)
 	})
 
