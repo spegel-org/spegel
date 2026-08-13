@@ -36,6 +36,9 @@ const (
 	listImageFilter = `name~="^.+/"`
 )
 
+var _ oci.Store = &Containerd{}
+var _ oci.ImageLister = &Containerd{}
+
 type ContainerdConfig struct {
 	Conn        net.Conn
 	ContentPath string
@@ -56,8 +59,6 @@ func WithConnection(conn net.Conn) ContainerdOption {
 		return nil
 	}
 }
-
-var _ oci.Store = &Containerd{}
 
 type Containerd struct {
 	client       *client.Client
