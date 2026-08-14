@@ -25,7 +25,6 @@ var templatesFS embed.FS
 
 type WebConfig struct {
 	OCIClient *oci.Client
-	Filters   []oci.Filter
 }
 
 type WebOption = option.Option[WebConfig]
@@ -37,13 +36,6 @@ func WithOCIClient(ociClient *oci.Client) WebOption {
 	}
 }
 
-func WithRegistryFilters(filters []oci.Filter) WebOption {
-	return func(cfg *WebConfig) error {
-		cfg.Filters = filters
-		return nil
-	}
-}
-
 type Web struct {
 	mirror    *url.URL
 	router    *routing.P2PRouter
@@ -51,7 +43,6 @@ type Web struct {
 	imgLister oci.ImageLister
 	tmpls     *template.Template
 	reg       *registry.Registry
-	filters   []oci.Filter
 }
 
 func NewWeb(router *routing.P2PRouter, imgLister oci.ImageLister, reg *registry.Registry, mirror *url.URL, opts ...WebOption) (*Web, error) {
@@ -81,7 +72,6 @@ func NewWeb(router *routing.P2PRouter, imgLister oci.ImageLister, reg *registry.
 		router:    router,
 		ociClient: cfg.OCIClient,
 		imgLister: imgLister,
-		filters:   cfg.Filters,
 		tmpls:     tmpls,
 		reg:       reg,
 		mirror:    mirror,
@@ -138,17 +128,12 @@ type statsData struct {
 func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	data := statsData{}
 
-	images, err := w.imgLister.ListImages(req.Context())
+	imgs, err := w.imgLister.ListImages(req.Context())
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, err)
 		return
 	}
-	for _, img := range images {
-		if oci.MatchesFilter(img.Reference, w.filters) {
-			continue
-		}
-		data.Images = append(data.Images, img)
-	}
+	data.Images = imgs
 
 	stats := w.reg.Stats()
 	mirrorLastSuccess := stats.MirrorLastSuccess.Load()

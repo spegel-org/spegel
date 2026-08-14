@@ -42,20 +42,28 @@ var _ oci.ImageLister = &Containerd{}
 type ContainerdConfig struct {
 	Conn        net.Conn
 	ContentPath string
+	Filters     []oci.Filter
 }
 
 type ContainerdOption = option.Option[ContainerdConfig]
 
 func WithContentPath(path string) ContainerdOption {
-	return func(c *ContainerdConfig) error {
-		c.ContentPath = path
+	return func(cfg *ContainerdConfig) error {
+		cfg.ContentPath = path
 		return nil
 	}
 }
 
 func WithConnection(conn net.Conn) ContainerdOption {
-	return func(c *ContainerdConfig) error {
-		c.Conn = conn
+	return func(cfg *ContainerdConfig) error {
+		cfg.Conn = conn
+		return nil
+	}
+}
+
+func WithFilters(filters []oci.Filter) ContainerdOption {
+	return func(cfg *ContainerdConfig) error {
+		cfg.Filters = filters
 		return nil
 	}
 }
@@ -64,6 +72,7 @@ type Containerd struct {
 	client       *client.Client
 	mediaTypeIdx *lru.Cache[digest.Digest, string]
 	contentPath  string
+	filters      []oci.Filter
 }
 
 func NewContainerd(ctx context.Context, socketPath, namespace string, opts ...ContainerdOption) (*Containerd, error) {
@@ -134,6 +143,9 @@ func (c *Containerd) ListImages(ctx context.Context) ([]oci.Image, error) {
 		}
 		if img.Tag != "" {
 			tagDgsts[img.Digest] = img.Tag
+		}
+		if oci.MatchesFilter(img.Reference, c.filters) {
+			continue
 		}
 		imgs = append(imgs, img)
 	}
@@ -248,6 +260,10 @@ func (c *Containerd) Subscribe(ctx context.Context) (map[oci.Image][]digest.Dige
 			log.Error(err, "skipping image that cannot be parsed", "image", img.String())
 			continue
 		}
+		if oci.MatchesFilter(img.Reference, c.filters) {
+			continue
+		}
+
 		refs := []oci.Reference{}
 		handler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 			children, err := images.ChildrenHandler(c.client.ContentStore()).Handle(ctx, desc)
@@ -365,6 +381,9 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		if err != nil {
 			return nil, err
 		}
+		if oci.MatchesFilter(img.Reference, c.filters) {
+			return nil, nil
+		}
 		// Just advertise the image if it is a tag reference.
 		if img.Digest == "" {
 			return []oci.OCIEvent{{Type: oci.CreateEvent, Reference: img.Reference}}, nil
@@ -401,6 +420,9 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		img, err := oci.ParseImage(e.GetName(), oci.AllowTagOnly())
 		if err != nil {
 			return nil, err
+		}
+		if oci.MatchesFilter(img.Reference, c.filters) {
+			return nil, nil
 		}
 		// Just advertise the image if it is a tag reference.
 		if img.Digest == "" {

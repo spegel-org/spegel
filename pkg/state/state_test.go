@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"math/rand/v2"
 	"net/netip"
-	"regexp"
 	"slices"
 	"strconv"
 	"testing"
@@ -62,80 +61,49 @@ func TestTrack(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	tests := []struct {
-		name            string
-		registryFilters []oci.Filter
-		expectedImages  []string
-	}{
-		{
-			name:            "no filters",
-			registryFilters: []oci.Filter{},
-			expectedImages:  []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
-		},
-		{
-			name:            "filter docker.io only",
-			registryFilters: []oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`^docker\.io/`)}},
-			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
-		},
-		{
-			name:            "filter multiple registries",
-			registryFilters: []oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`^docker\.io/`)}, oci.RegexFilter{Regex: regexp.MustCompile(`^ghcr\.io/`)}},
-			expectedImages:  []string{"quay.io/namespace/repo:latest", "localhost:5000/test:latest"},
-		},
-		{
-			name:            "filter latest tags",
-			registryFilters: []oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}},
-			expectedImages:  []string{"ghcr.io/spegel-org/spegel:v0.0.9"},
+	log := tlog.NewTestLogger(t)
+	ctx := logr.NewContext(t.Context(), log)
+	ctx, cancel := context.WithCancel(ctx)
+
+	self := routing.Peer{
+		Host:      "test",
+		Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
+		Metadata: routing.PeerMetadata{
+			RegistryPort: 5000,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	router := routing.NewMemoryRouter(map[string][]routing.Peer{}, self)
+	group := errgroup.WithContext(ctx)
+	group.Go(func(ctx context.Context) error {
+		return Track(ctx, ociStore, router)
+	})
+	time.Sleep(100 * time.Millisecond)
 
-			log := tlog.NewTestLogger(t)
-			ctx := logr.NewContext(t.Context(), log)
-			ctx, cancel := context.WithCancel(ctx)
-
-			self := routing.Peer{
-				Host:      "test",
-				Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
-				Metadata: routing.PeerMetadata{
-					RegistryPort: 5000,
-				},
-			}
-			router := routing.NewMemoryRouter(map[string][]routing.Peer{}, self)
-			group := errgroup.WithContext(ctx)
-			group.Go(func(ctx context.Context) error {
-				return Track(ctx, ociStore, router, WithRegistryFilters(tt.registryFilters))
-			})
-			time.Sleep(100 * time.Millisecond)
-
-			// Check that all images are advertised by digest (this should always happen)
-			for _, img := range imgs {
-				peers, ok := router.Get(img.Digest.String())
-				require.TrueT(t, ok, "Image digest %s should be advertised", img.Digest.String())
-				require.Len(t, peers, 1)
-			}
-
-			// Check that images have been filtered
-			for _, img := range imgs {
-				tagName, ok := img.TagName()
-				if !ok {
-					continue
-				}
-				peers, ok := router.Get(tagName)
-				shouldBeAdvertised := slices.Contains(tt.expectedImages, tagName)
-				if shouldBeAdvertised {
-					require.TrueT(t, ok, "Image %s should be advertised", tagName)
-					require.Len(t, peers, 1)
-				} else {
-					require.FalseT(t, ok, "Image %s should NOT be advertised", tagName)
-				}
-			}
-
-			cancel()
-			err := group.Wait()
-			require.ErrorIs(t, err, context.Canceled)
-		})
+	// Check that all images are advertised by digest (this should always happen)
+	for _, img := range imgs {
+		peers, ok := router.Get(img.Digest.String())
+		require.TrueT(t, ok, "Image digest %s should be advertised", img.Digest.String())
+		require.Len(t, peers, 1)
 	}
+
+	// Check that images have been filtered
+	for _, img := range imgs {
+		tagName, ok := img.TagName()
+		if !ok {
+			continue
+		}
+		peers, ok := router.Get(tagName)
+		expectedImages := []string{"docker.io/library/ubuntu:latest", "ghcr.io/spegel-org/spegel:v0.0.9", "quay.io/namespace/repo:latest", "localhost:5000/test:latest"}
+		shouldBeAdvertised := slices.Contains(expectedImages, tagName)
+		if shouldBeAdvertised {
+			require.TrueT(t, ok, "Image %s should be advertised", tagName)
+			require.Len(t, peers, 1)
+		} else {
+			require.FalseT(t, ok, "Image %s should NOT be advertised", tagName)
+		}
+	}
+
+	cancel()
+	err := group.Wait()
+	require.ErrorIs(t, err, context.Canceled)
 }
