@@ -90,7 +90,11 @@ func (m *MemoryRouter) Delete(key string, peer Peer) {
 	peers = slices.DeleteFunc(peers, func(v Peer) bool {
 		return v.Host == peer.Host
 	})
-	m.resolver[key] = peers
+	if len(peers) == 0 {
+		delete(m.resolver, key)
+	} else {
+		m.resolver[key] = peers
+	}
 }
 
 func (m *MemoryRouter) Get(key string) ([]Peer, bool) {

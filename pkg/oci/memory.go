@@ -35,13 +35,6 @@ func (m *Memory) Name() string {
 	return "memory"
 }
 
-func (m *Memory) Subscribe(ctx context.Context) (map[Image][]digest.Digest, <-chan OCIEvent, error) {
-	m.mx.RLock()
-	defer m.mx.RUnlock()
-
-	return m.images, nil, nil
-}
-
 func (m *Memory) ListImages(ctx context.Context) ([]Image, error) {
 	m.mx.RLock()
 	defer m.mx.RUnlock()
