@@ -7,32 +7,12 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 
-type TrackerConfig struct {
-	Filters []oci.Filter
-}
-
-type TrackerOption = option.Option[TrackerConfig]
-
-func WithRegistryFilters(filters []oci.Filter) TrackerOption {
-	return func(cfg *TrackerConfig) error {
-		cfg.Filters = filters
-		return nil
-	}
-}
-
-func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts ...TrackerOption) error {
-	cfg := TrackerConfig{}
-	err := option.Apply(&cfg, opts...)
-	if err != nil {
-		return err
-	}
-
+func Track(ctx context.Context, ociStore oci.Store, router routing.Router) error {
 	initial, eventCh, err := ociStore.Subscribe(ctx)
 	if err != nil {
 		return err
@@ -41,13 +21,13 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 	// Initial advertisement of all content.
 	keys := []string{}
 	for img, dgsts := range initial {
-		if !oci.MatchesFilter(img.Reference, cfg.Filters) {
-			tagName, ok := img.TagName()
-			if ok {
-				metrics.AdvertisedImageTags.WithLabelValues(img.Registry).Inc()
-				keys = append(keys, tagName)
-			}
+		// if !oci.MatchesFilter(img.Reference, cfg.Filters) {
+		tagName, ok := img.TagName()
+		if ok {
+			metrics.AdvertisedImageTags.WithLabelValues(img.Registry).Inc()
+			keys = append(keys, tagName)
 		}
+		// }
 		metrics.AdvertisedImageDigests.WithLabelValues(img.Registry).Inc()
 		for _, dgst := range dgsts {
 			metrics.AdvertisedContentDigests.WithLabelValues(img.Registry).Inc()
@@ -69,7 +49,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 			if !ok {
 				return errors.New("event channel closed")
 			}
-			err := handleEvent(ctx, router, event, cfg.Filters)
+			err := handleEvent(ctx, router, event)
 			if err != nil {
 				logr.FromContextOrDiscard(ctx).Error(err, "could not handle event")
 				continue
@@ -78,10 +58,7 @@ func Track(ctx context.Context, ociStore oci.Store, router routing.Router, opts 
 	}
 }
 
-func handleEvent(ctx context.Context, router routing.Router, event oci.OCIEvent, filters []oci.Filter) error {
-	if oci.MatchesFilter(event.Reference, filters) {
-		return nil
-	}
+func handleEvent(ctx context.Context, router routing.Router, event oci.OCIEvent) error {
 	logr.FromContextOrDiscard(ctx).Info("OCI event", "ref", event.Reference.String(), "type", event.Type)
 	switch event.Type {
 	case oci.CreateEvent:

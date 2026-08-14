@@ -182,6 +182,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		return err
 	}
 
+	// OCI Filters.
 	filters := []oci.Filter{}
 	regFilter, err := oci.FilterForMirroredRegistries(args.MirroredRegistries)
 	if err != nil {
@@ -194,14 +195,14 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		filters = append(filters, oci.RegexFilter{Regex: r})
 	}
 
-	// OCI Store
-	ociStore, err := containerd.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, containerd.WithContentPath(args.ContainerdContentPath))
+	// Containerd store.
+	ctrd, err := containerd.NewContainerd(ctx, args.ContainerdSock, args.ContainerdNamespace, containerd.WithContentPath(args.ContainerdContentPath), containerd.WithFilters(filters))
 	if err != nil {
 		return err
 	}
-	defer ociStore.Close()
+	defer ctrd.Close()
 
-	// Router
+	// Routing and state tracking.
 	_, registryPort, err := net.SplitHostPort(args.RegistryAddr)
 	if err != nil {
 		return err
@@ -224,17 +225,15 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		}
 		return nil
 	})
-
-	// State tracking
 	group.Go(func(ctx context.Context) error {
-		err := state.Track(ctx, ociStore, router, state.WithRegistryFilters(filters))
+		err := state.Track(ctx, ctrd, router)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
 		return nil
 	})
 
-	// Registry
+	// OCI registry.
 	userinfo, err := httpx.LoadUserinfo("/etc/secrets/basic-auth")
 	if err != nil {
 		return err
@@ -246,7 +245,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		registry.WithUserinfo(userinfo),
 		registry.WithOCIClient(ociClient),
 	}
-	reg, err := registry.NewRegistry(ociStore, router, registryOpts...)
+	reg, err := registry.NewRegistry(ctrd, router, registryOpts...)
 	if err != nil {
 		return err
 	}
@@ -284,13 +283,12 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	if args.DebugWebEnabled {
 		webOpts := []web.WebOption{
 			web.WithOCIClient(ociClient),
-			web.WithRegistryFilters(filters),
 		}
 		mirror := &url.URL{
 			Scheme: "http",
 			Host:   args.RegistryAddr,
 		}
-		web, err := web.NewWeb(router, ociStore, reg, mirror, webOpts...)
+		web, err := web.NewWeb(router, ctrd, reg, mirror, webOpts...)
 		if err != nil {
 			return err
 		}
