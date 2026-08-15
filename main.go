@@ -29,7 +29,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci/containerd"
 	"github.com/spegel-org/spegel/pkg/preflight"
 	"github.com/spegel-org/spegel/pkg/registry"
-	"github.com/spegel-org/spegel/pkg/routing"
+	"github.com/spegel-org/spegel/pkg/routing/libp2p"
 	"github.com/spegel-org/spegel/pkg/state"
 	"github.com/spegel-org/spegel/pkg/web"
 )
@@ -211,10 +211,10 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	if err != nil {
 		return err
 	}
-	routerOpts := []routing.P2PRouterOption{
-		routing.WithDataDir(args.DataDir),
+	routerOpts := []libp2p.RouterOption{
+		libp2p.WithDataDir(args.DataDir),
 	}
-	router, err := routing.NewP2PRouter(ctx, args.RouterAddr, bootstrapper, registryPort, routerOpts...)
+	router, err := libp2p.NewRouter(ctx, args.RouterAddr, bootstrapper, registryPort, routerOpts...)
 	if err != nil {
 		return err
 	}
@@ -335,18 +335,18 @@ func cleanupWaitCommand(ctx context.Context, args *CleanupWaitCmd) error {
 	return nil
 }
 
-func getBootstrapper(cfg BootstrapConfig) (routing.Bootstrapper, error) { //nolint: ireturn // Return type can be different structs.
+func getBootstrapper(cfg BootstrapConfig) (libp2p.Bootstrapper, error) { //nolint: ireturn // Return type can be different structs.
 	switch cfg.BootstrapKind {
 	case "dns":
-		return routing.NewDNSBootstrapper(cfg.DNSBootstrapDomain), nil
+		return libp2p.NewDNSBootstrapper(cfg.DNSBootstrapDomain), nil
 	case "http":
 		pool, cert, err := httpx.LoadCerts(cfg.HTTPBootstrapCertDir)
 		if err != nil {
 			return nil, err
 		}
-		return routing.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapURL, pool, cert)
+		return libp2p.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapURL, pool, cert)
 	case "static":
-		return routing.NewStaticBootstrapperFromStrings(cfg.StaticBootstrapPeers)
+		return libp2p.NewStaticBootstrapperFromStrings(cfg.StaticBootstrapPeers)
 	default:
 		return nil, fmt.Errorf("unknown bootstrap kind %s", cfg.BootstrapKind)
 	}

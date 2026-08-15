@@ -1,4 +1,4 @@
-package routing
+package libp2p
 
 import (
 	"context"
@@ -26,11 +26,11 @@ func TestP2PRouterOptions(t *testing.T) {
 	libp2pOpts := []libp2p.Option{
 		libp2p.ListenAddrStrings("foo"),
 	}
-	opts := []P2PRouterOption{
+	opts := []RouterOption{
 		WithLibP2POptions(libp2pOpts...),
 		WithDataDir("foobar"),
 	}
-	cfg := P2PRouterConfig{}
+	cfg := RouterConfig{}
 	err := option.Apply(&cfg, opts...)
 	require.NoError(t, err)
 	require.Equal(t, libp2pOpts, cfg.Libp2pOpts)
@@ -46,13 +46,13 @@ func TestP2PRouter(t *testing.T) {
 	group := errgroup.WithContext(ctx)
 
 	// Remove the 8 connection per IP limit.
-	routerOpts := []P2PRouterOption{
+	routerOpts := []RouterOption{
 		WithLibP2POptions(libp2p.ResourceManager(&network.NullResourceManager{})),
 	}
 
 	// Create primary router with no peer to bootstrap with.
 	primaryBs := NewStaticBootstrapper(nil)
-	primaryRouter, err := NewP2PRouter(t.Context(), "localhost:0", primaryBs, "9090", routerOpts...)
+	primaryRouter, err := NewRouter(t.Context(), "localhost:0", primaryBs, "9090", routerOpts...)
 	require.NoError(t, err)
 	group.Go(func(ctx context.Context) error {
 		return primaryRouter.Run(ctx)
@@ -88,10 +88,10 @@ func TestP2PRouter(t *testing.T) {
 	require.FalseT(t, ok)
 
 	// Create routers that all bootstrap with the primary router.
-	routers := []*P2PRouter{}
+	routers := []*Router{}
 	for range 30 {
 		bs := NewStaticBootstrapper([]peer.AddrInfo{*host.InfoFromHost(primaryRouter.host)})
-		r, err := NewP2PRouter(t.Context(), "localhost:0", bs, "9091", routerOpts...)
+		r, err := NewRouter(t.Context(), "localhost:0", bs, "9091", routerOpts...)
 		require.NoError(t, err)
 		group.Go(func(ctx context.Context) error {
 			return r.Run(ctx)
@@ -180,10 +180,10 @@ func TestProvideTTL(t *testing.T) {
 	runCtx, runCancel := context.WithCancel(t.Context())
 	group := errgroup.WithContext(runCtx)
 
-	routers := []*P2PRouter{}
+	routers := []*Router{}
 	for range 5 {
 		bs := NewStaticBootstrapper(nil)
-		router, err := NewP2PRouter(t.Context(), ":0", bs, "9090", WithAdvertiseTTL(5*time.Second), WithMaxReprovideDelay(1*time.Second))
+		router, err := NewRouter(t.Context(), ":0", bs, "9090", WithAdvertiseTTL(5*time.Second), WithMaxReprovideDelay(1*time.Second))
 		require.NoError(t, err)
 		group.Go(func(ctx context.Context) error {
 			return router.Run(ctx)
@@ -364,7 +364,7 @@ func TestListPeers(t *testing.T) {
 	t.Parallel()
 
 	isolatedBs := NewStaticBootstrapper(nil)
-	isolatedRouter, err := NewP2PRouter(t.Context(), "localhost:0", isolatedBs, "9090")
+	isolatedRouter, err := NewRouter(t.Context(), "localhost:0", isolatedBs, "9090")
 	require.NoError(t, err)
 
 	isolatedAddrs, err := isolatedRouter.ListPeers()
@@ -377,7 +377,7 @@ func TestLocalAddress(t *testing.T) {
 	t.Parallel()
 
 	bs := NewStaticBootstrapper(nil)
-	router, err := NewP2PRouter(t.Context(), ":0", bs, "9090")
+	router, err := NewRouter(t.Context(), ":0", bs, "9090")
 	require.NoError(t, err)
 
 	ipAddrs, err := router.LocalAddresses()

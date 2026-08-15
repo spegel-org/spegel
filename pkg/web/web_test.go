@@ -13,12 +13,13 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
+	"github.com/spegel-org/spegel/pkg/routing/libp2p"
 )
 
 func TestWeb(t *testing.T) {
 	t.Parallel()
 
-	router, err := routing.NewP2PRouter(t.Context(), ":0", nil, "5000")
+	router, err := libp2p.NewRouter(t.Context(), ":0", nil, "5000")
 	require.NoError(t, err)
 
 	ociStore := oci.NewMemory()
@@ -68,7 +69,7 @@ func TestWeb(t *testing.T) {
 	require.EqualT(t, http.StatusOK, resp.StatusCode)
 
 	measure := measureResult{
-		LookupResults: []routing.LookupResult{{}},
+		LookupResults: []libp2p.LookupResult{{}},
 		PullResults:   []pullResult{{}},
 	}
 	rw, rec = httpx.NewRecorder()

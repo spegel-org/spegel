@@ -18,6 +18,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
+	"github.com/spegel-org/spegel/pkg/routing/libp2p"
 )
 
 //go:embed templates/*
@@ -38,14 +39,14 @@ func WithOCIClient(ociClient *oci.Client) WebOption {
 
 type Web struct {
 	mirror    *url.URL
-	router    *routing.P2PRouter
+	router    *libp2p.Router
 	ociClient *oci.Client
 	imgLister oci.ImageLister
 	tmpls     *template.Template
 	reg       *registry.Registry
 }
 
-func NewWeb(router *routing.P2PRouter, imgLister oci.ImageLister, reg *registry.Registry, mirror *url.URL, opts ...WebOption) (*Web, error) {
+func NewWeb(router *libp2p.Router, imgLister oci.ImageLister, reg *registry.Registry, mirror *url.URL, opts ...WebOption) (*Web, error) {
 	cfg := WebConfig{}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
@@ -165,7 +166,7 @@ type pullResult struct {
 }
 
 type measureResult struct {
-	LookupResults []routing.LookupResult
+	LookupResults []libp2p.LookupResult
 	PullResults   []pullResult
 	PeerDuration  time.Duration
 	PullDuration  time.Duration

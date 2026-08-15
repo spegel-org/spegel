@@ -1,4 +1,4 @@
-package routing
+package libp2p
 
 import (
 	"context"
@@ -42,65 +42,66 @@ import (
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/pkg/metrics"
+	"github.com/spegel-org/spegel/pkg/routing"
 )
 
 const (
 	lookupCacheTTL = 5 * time.Second
 )
 
-type P2PRouterConfig struct {
+type RouterConfig struct {
 	DataDir           string
 	Libp2pOpts        []libp2p.Option
 	AdvertiseTTL      time.Duration
 	MaxReprovideDelay time.Duration
 }
 
-type P2PRouterOption = option.Option[P2PRouterConfig]
+type RouterOption = option.Option[RouterConfig]
 
-func WithLibP2POptions(opts ...libp2p.Option) P2PRouterOption {
-	return func(cfg *P2PRouterConfig) error {
+func WithLibP2POptions(opts ...libp2p.Option) RouterOption {
+	return func(cfg *RouterConfig) error {
 		cfg.Libp2pOpts = opts
 		return nil
 	}
 }
 
-func WithDataDir(dataDir string) P2PRouterOption {
-	return func(cfg *P2PRouterConfig) error {
+func WithDataDir(dataDir string) RouterOption {
+	return func(cfg *RouterConfig) error {
 		cfg.DataDir = dataDir
 		return nil
 	}
 }
 
-func WithAdvertiseTTL(ttl time.Duration) P2PRouterOption {
-	return func(cfg *P2PRouterConfig) error {
+func WithAdvertiseTTL(ttl time.Duration) RouterOption {
+	return func(cfg *RouterConfig) error {
 		cfg.AdvertiseTTL = ttl
 		return nil
 	}
 }
 
-func WithMaxReprovideDelay(delay time.Duration) P2PRouterOption {
-	return func(cfg *P2PRouterConfig) error {
+func WithMaxReprovideDelay(delay time.Duration) RouterOption {
+	return func(cfg *RouterConfig) error {
 		cfg.MaxReprovideDelay = delay
 		return nil
 	}
 }
 
-var _ Router = &P2PRouter{}
+var _ routing.Router = &Router{}
 
-type P2PRouter struct {
+type Router struct {
 	bootstrapper     Bootstrapper
 	host             host.Host
 	kdht             *dht.IpfsDHT
 	prov             *provider.SweepingProvider
 	lookupGroup      *singleflight.Group
-	lookupCache      *expirable.LRU[string, *Iterator]
+	lookupCache      *expirable.LRU[string, *routing.Iterator]
 	connectivityGate *channel.Gate
 	protocols        []ma.Multiaddr
 	registryPort     uint16
 }
 
-func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...P2PRouterOption) (*P2PRouter, error) {
-	cfg := P2PRouterConfig{
+func NewRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...RouterOption) (*Router, error) {
+	cfg := RouterConfig{
 		AdvertiseTTL:      15 * time.Minute,
 		MaxReprovideDelay: 2 * time.Minute,
 	}
@@ -195,24 +196,24 @@ func NewP2PRouter(ctx context.Context, addr string, bs Bootstrapper, registryPor
 		return nil, err
 	}
 
-	return &P2PRouter{
+	return &Router{
 		bootstrapper:     bs,
 		host:             host,
 		kdht:             kdht,
 		prov:             prov,
 		lookupGroup:      &singleflight.Group{},
-		lookupCache:      expirable.NewLRU[string, *Iterator](0, nil, lookupCacheTTL),
+		lookupCache:      expirable.NewLRU[string, *routing.Iterator](0, nil, lookupCacheTTL),
 		connectivityGate: connectivityGate,
 		protocols:        protocols,
 		registryPort:     uint16(registryPort),
 	}, nil
 }
 
-func (r *P2PRouter) Host() host.Host {
+func (r *Router) Host() host.Host {
 	return r.host
 }
 
-func (r *P2PRouter) Run(ctx context.Context) error {
+func (r *Router) Run(ctx context.Context) error {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 	log.Info("starting p2p router", "id", r.host.ID())
 
@@ -283,14 +284,14 @@ func (r *P2PRouter) Run(ctx context.Context) error {
 	return nil
 }
 
-func (r *P2PRouter) Ready(ctx context.Context) (bool, error) {
+func (r *Router) Ready(ctx context.Context) (bool, error) {
 	if r.kdht.RoutingTable().Size() == 0 {
 		return false, nil
 	}
 	return !r.connectivityGate.State(), nil
 }
 
-func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (*Iterator, error) {
+func (r *Router) Lookup(ctx context.Context, key string, count int) (*routing.Iterator, error) {
 	log := logr.FromContextOrDiscard(ctx).WithValues("host", r.host.ID().String(), "key", key)
 	c, err := createCid(key)
 	if err != nil {
@@ -308,7 +309,7 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (*Iterato
 			// Open iterator to run refresh.
 			iter.Open()
 		} else {
-			iter = NewIterator()
+			iter = routing.NewIterator()
 			r.lookupCache.Add(c.String(), iter)
 		}
 
@@ -330,10 +331,10 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (*Iterato
 					log.Error(err, "could not convert address")
 					continue
 				}
-				peer := Peer{
+				peer := routing.Peer{
 					Host:      addrInfo.ID.String(),
 					Addresses: ipAddrs,
-					Metadata: PeerMetadata{
+					Metadata: routing.PeerMetadata{
 						RegistryPort: r.registryPort,
 					},
 				}
@@ -346,16 +347,16 @@ func (r *P2PRouter) Lookup(ctx context.Context, key string, count int) (*Iterato
 		return nil, err
 	}
 	//nolint: errcheck // Impossible to be another type.
-	return res.(*Iterator), nil
+	return res.(*routing.Iterator), nil
 }
 
 type LookupResult struct {
-	Peer     Peer
+	Peer     routing.Peer
 	Duration time.Duration
 }
 
 // Measure returns a list of time results containing the time it took to find each peer.
-func (r *P2PRouter) Measure(ctx context.Context, key string) ([]LookupResult, error) {
+func (r *Router) Measure(ctx context.Context, key string) ([]LookupResult, error) {
 	c, err := createCid(key)
 	if err != nil {
 		return nil, err
@@ -372,10 +373,10 @@ func (r *P2PRouter) Measure(ctx context.Context, key string) ([]LookupResult, er
 			return nil, err
 		}
 		res := LookupResult{
-			Peer: Peer{
+			Peer: routing.Peer{
 				Host:      addrInfo.ID.String(),
 				Addresses: ipAddrs,
-				Metadata: PeerMetadata{
+				Metadata: routing.PeerMetadata{
 					RegistryPort: r.registryPort,
 				},
 			},
@@ -386,7 +387,7 @@ func (r *P2PRouter) Measure(ctx context.Context, key string) ([]LookupResult, er
 	return results, nil
 }
 
-func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
+func (r *Router) Advertise(ctx context.Context, keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -410,7 +411,7 @@ func (r *P2PRouter) Advertise(ctx context.Context, keys []string) error {
 	return nil
 }
 
-func (r *P2PRouter) Withdraw(ctx context.Context, keys []string) error {
+func (r *Router) Withdraw(ctx context.Context, keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -429,8 +430,8 @@ func (r *P2PRouter) Withdraw(ctx context.Context, keys []string) error {
 	return nil
 }
 
-func (r *P2PRouter) ListPeers() ([]Peer, error) {
-	peers := []Peer{}
+func (r *Router) ListPeers() ([]routing.Peer, error) {
+	peers := []routing.Peer{}
 	ids := r.kdht.RoutingTable().ListPeers()
 	for _, id := range ids {
 		addrs := r.host.Peerstore().Addrs(id)
@@ -438,10 +439,10 @@ func (r *P2PRouter) ListPeers() ([]Peer, error) {
 		if err != nil {
 			return nil, err
 		}
-		peer := Peer{
+		peer := routing.Peer{
 			Host:      id.String(),
 			Addresses: ipAddrs,
-			Metadata: PeerMetadata{
+			Metadata: routing.PeerMetadata{
 				RegistryPort: r.registryPort,
 			},
 		}
@@ -450,7 +451,7 @@ func (r *P2PRouter) ListPeers() ([]Peer, error) {
 	return peers, nil
 }
 
-func (r *P2PRouter) LocalAddresses() ([]netip.Addr, error) {
+func (r *Router) LocalAddresses() ([]netip.Addr, error) {
 	ipAddrs, err := toIPAddrs(r.host.Addrs())
 	if err != nil {
 		return nil, err
