@@ -9,7 +9,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.3.0
 	github.com/alexflint/go-arg v1.6.1
 	github.com/containerd/containerd/api v1.11.1
-	github.com/containerd/containerd/v2 v2.3.3
+	github.com/containerd/containerd/v2 v2.3.4
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v1.0.0-rc.4
 	github.com/containerd/typeurl/v2 v2.3.0
