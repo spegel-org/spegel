@@ -29,8 +29,8 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci/containerd"
 	"github.com/spegel-org/spegel/pkg/preflight"
 	"github.com/spegel-org/spegel/pkg/registry"
+	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/routing/libp2p"
-	"github.com/spegel-org/spegel/pkg/state"
 	"github.com/spegel-org/spegel/pkg/web"
 )
 
@@ -226,7 +226,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		return nil
 	})
 	group.Go(func(ctx context.Context) error {
-		err := state.Track(ctx, ctrd, router)
+		err := routing.Sync(ctx, router, ctrd)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}

@@ -23,18 +23,6 @@ var (
 	ErrNotFound = errors.New("content not found")
 )
 
-type EventType string
-
-const (
-	CreateEvent EventType = "CREATE"
-	DeleteEvent EventType = "DELETE"
-)
-
-type OCIEvent struct {
-	Type      EventType
-	Reference Reference
-}
-
 type Store interface {
 	// Name returns the name of the store implementation.
 	Name() string
@@ -48,10 +36,6 @@ type Store interface {
 
 	// Open returns the streamable content for the given digest.
 	Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
-
-	// Subscribe returns an initial state of content  and a channel informing of any changes.
-	// The digest for the top level image layer should be included in the digest slice.
-	Subscribe(ctx context.Context) (map[Image][]digest.Digest, <-chan OCIEvent, error)
 }
 
 type ImageLister interface {

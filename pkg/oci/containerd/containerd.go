@@ -30,14 +30,12 @@ import (
 	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
-)
-
-const (
-	listImageFilter = `name~="^.+/"`
+	"github.com/spegel-org/spegel/pkg/store"
 )
 
 var _ oci.Store = &Containerd{}
 var _ oci.ImageLister = &Containerd{}
+var _ store.Watcher = &Containerd{}
 
 type ContainerdConfig struct {
 	Conn        net.Conn
@@ -130,7 +128,7 @@ func (c *Containerd) Name() string {
 }
 
 func (c *Containerd) ListImages(ctx context.Context) ([]oci.Image, error) {
-	cImgs, err := c.client.ImageService().List(ctx, listImageFilter)
+	cImgs, err := c.client.ImageService().List(ctx, `name~="^.+/"`)
 	if err != nil {
 		return nil, err
 	}
@@ -238,65 +236,37 @@ func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekC
 	}, nil
 }
 
-func (c *Containerd) Subscribe(ctx context.Context) (map[oci.Image][]digest.Digest, <-chan oci.OCIEvent, error) {
+func (c *Containerd) Watch(ctx context.Context) ([]store.Event, <-chan store.Event, error) {
 	log := logr.FromContextOrDiscard(ctx)
 
-	eventCh := make(chan oci.OCIEvent)
+	eventCh := make(chan store.Event)
 	subCtx, subCancel := context.WithCancel(ctx)
 	eventFilters := []string{`topic~="/images/create|/images/delete",event.name~="^.+/"`, `topic~="/content/create"`}
 	envelopeCh, cErrCh := c.client.EventService().Subscribe(subCtx, eventFilters...)
 
 	// Populate the content index.
-	initial := map[oci.Image][]digest.Digest{}
 	contentIdx := map[digest.Digest][]oci.Reference{}
-	cImgs, err := c.client.ImageService().List(ctx, listImageFilter)
+	initial := []store.Event{}
+
+	imgs, err := c.ListImages(ctx)
 	if err != nil {
 		subCancel()
 		return nil, nil, err
 	}
-	for _, cImg := range cImgs {
-		img, err := oci.ParseImage(cImg.Name, oci.WithDigest(cImg.Target.Digest))
+	for _, img := range imgs {
+		refs, err := walkImage(ctx, c.client, img)
 		if err != nil {
-			log.Error(err, "skipping image that cannot be parsed", "image", img.String())
-			continue
+			subCancel()
+			return nil, nil, err
 		}
-		if oci.MatchesFilter(img.Reference, c.filters) {
-			continue
-		}
-
-		refs := []oci.Reference{}
-		handler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-			children, err := images.ChildrenHandler(c.client.ContentStore()).Handle(ctx, desc)
-			if errors.Is(err, errdefs.ErrNotFound) {
-				return nil, nil
+		contentIdx[img.Digest] = refs
+		for i, ref := range refs {
+			event := store.Event{Type: store.CreateEvent, Digest: ref.Digest}
+			if tagName, ok := img.TagName(); ok && i == 0 {
+				event.Reference = tagName
 			}
-			if err != nil {
-				return nil, err
-			}
-			ref := oci.Reference{
-				Registry:   img.Registry,
-				Repository: img.Repository,
-				Digest:     desc.Digest,
-			}
-			refs = append(refs, ref)
-			return children, nil
-		})
-		err = images.Walk(ctx, handler, cImg.Target)
-		if err != nil {
-			log.Error(err, "skipping image that cannot be walked", "image", img.String())
-			continue
+			initial = append(initial, event)
 		}
-		contentIdx[cImg.Target.Digest] = refs
-
-		// The walk does not read leaf content like layers, so their existence has to be
-		// checked before advertising. Lazily pulled images have layers which are missing
-		// from the content store and cannot be served.
-		dgsts, err := c.existingDigests(ctx, refs)
-		if err != nil {
-			log.Error(err, "skipping image that cannot be checked for existing content", "image", img.String())
-			continue
-		}
-		initial[img] = dgsts
 	}
 
 	go func() {
@@ -317,8 +287,9 @@ func (c *Containerd) Subscribe(ctx context.Context) (map[oci.Image][]digest.Dige
 			}
 		}
 	}()
+
 	go func() {
-		// Required so that the event channel closes in case containerd is restarted.
+		// Required so that the event channel closes in case Containerd is restarted.
 		defer subCancel()
 		for err := range cErrCh {
 			if errors.Is(err, context.Canceled) {
@@ -327,26 +298,11 @@ func (c *Containerd) Subscribe(ctx context.Context) (map[oci.Image][]digest.Dige
 			log.Error(err, "received containerd event error")
 		}
 	}()
+
 	return initial, eventCh, nil
 }
 
-// existingDigests returns the digests of the references which exist in the content store.
-func (c *Containerd) existingDigests(ctx context.Context, refs []oci.Reference) ([]digest.Digest, error) {
-	dgsts := []digest.Digest{}
-	for _, ref := range refs {
-		_, err := c.client.ContentStore().Info(ctx, ref.Digest)
-		if errors.Is(err, errdefs.ErrNotFound) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		dgsts = append(dgsts, ref.Digest)
-	}
-	return dgsts, nil
-}
-
-func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, contentIdx map[digest.Digest][]oci.Reference) ([]oci.OCIEvent, error) {
+func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, contentIdx map[digest.Digest][]oci.Reference) ([]store.Event, error) {
 	if envelope.Event == nil {
 		return nil, errors.New("envelope event cannot be nil")
 	}
@@ -354,6 +310,7 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal envelope event: %w", err)
 	}
+
 	switch e := evt.(type) {
 	case *eventtypes.ContentCreate:
 		dgst := digest.Digest(e.GetDigest())
@@ -371,9 +328,9 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		if err != nil {
 			return nil, err
 		}
-		events := []oci.OCIEvent{}
+		events := []store.Event{}
 		for _, ref := range refs {
-			events = append(events, oci.OCIEvent{Type: oci.CreateEvent, Reference: ref})
+			events = append(events, store.Event{Type: store.CreateEvent, Digest: ref.Digest})
 		}
 		return events, nil
 	case *eventtypes.ImageCreate:
@@ -385,32 +342,11 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 			return nil, nil
 		}
 		// Just advertise the image if it is a tag reference.
-		if img.Digest == "" {
-			return []oci.OCIEvent{{Type: oci.CreateEvent, Reference: img.Reference}}, nil
+		if tagName, ok := img.TagName(); ok {
+			return []store.Event{{Type: store.CreateEvent, Reference: tagName}}, nil
 		}
 		// Walk the image to index its content.
-		cImg, err := c.client.ImageService().Get(ctx, img.String())
-		if err != nil {
-			return nil, err
-		}
-		refs := []oci.Reference{}
-		handler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-			children, err := images.ChildrenHandler(c.client.ContentStore()).Handle(ctx, desc)
-			if errors.Is(err, errdefs.ErrNotFound) {
-				return nil, nil
-			}
-			if err != nil {
-				return nil, err
-			}
-			ref := oci.Reference{
-				Registry:   img.Registry,
-				Repository: img.Repository,
-				Digest:     desc.Digest,
-			}
-			refs = append(refs, ref)
-			return children, nil
-		})
-		err = images.Walk(ctx, handler, cImg.Target)
+		refs, err := walkImage(ctx, c.client, img)
 		if err != nil {
 			return nil, err
 		}
@@ -425,18 +361,18 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 			return nil, nil
 		}
 		// Just advertise the image if it is a tag reference.
-		if img.Digest == "" {
-			return []oci.OCIEvent{{Type: oci.DeleteEvent, Reference: img.Reference}}, nil
+		if tagName, ok := img.TagName(); ok {
+			return []store.Event{{Type: store.DeleteEvent, Reference: tagName}}, nil
 		}
 		// Advertise deletion of images content if it no longer exists.
 		refs, ok := contentIdx[img.Digest]
 		if !ok {
 			logr.FromContextOrDiscard(ctx).Info("delete event with missing content index entry")
-			return []oci.OCIEvent{{Type: oci.DeleteEvent, Reference: img.Reference}}, nil
+			return []store.Event{{Type: store.DeleteEvent, Digest: img.Digest}}, nil
 		}
 		delete(contentIdx, img.Digest)
 		// Delete events are sent before garbage collection is run.
-		err = resilient.Retry(ctx, 10, resilient.BackoffDelay(10*time.Millisecond, 100*time.Microsecond), func(ctx context.Context) error {
+		err = resilient.Retry(ctx, 10, resilient.BackoffDelay(10*time.Millisecond, 100*time.Millisecond), func(ctx context.Context) error {
 			_, err := c.client.ContentStore().Info(ctx, img.Digest)
 			if errors.Is(err, errdefs.ErrNotFound) {
 				return nil
@@ -450,7 +386,7 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 			return nil, fmt.Errorf("image manifest has not been deleted: %w", err)
 		}
 		// Create delete events for contents that has been removed.
-		events := []oci.OCIEvent{}
+		events := []store.Event{}
 		for _, ref := range refs {
 			_, err := c.client.ContentStore().Info(ctx, ref.Digest)
 			if err == nil {
@@ -459,12 +395,44 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 			if !errors.Is(err, errdefs.ErrNotFound) {
 				return nil, err
 			}
-			events = append(events, oci.OCIEvent{Type: oci.DeleteEvent, Reference: ref})
+			events = append(events, store.Event{Type: store.DeleteEvent, Digest: ref.Digest})
 		}
 		return events, nil
 	default:
 		return nil, errors.New("unsupported event type")
 	}
+}
+
+func walkImage(ctx context.Context, client *client.Client, img oci.Image) ([]oci.Reference, error) {
+	cImgs, err := client.ImageService().List(ctx, fmt.Sprintf(`target.digest==%q`, img.Digest.String()))
+	if err != nil {
+		return nil, err
+	}
+	if len(cImgs) == 0 {
+		return nil, fmt.Errorf("image %s not found", img.String())
+	}
+	refs := []oci.Reference{}
+	handler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+		_, err := client.ContentStore().Info(ctx, desc.Digest)
+		if errors.Is(err, errdefs.ErrNotFound) {
+			return nil, images.ErrSkipDesc
+		}
+		if err != nil {
+			return nil, err
+		}
+		ref := oci.Reference{
+			Registry:   img.Registry,
+			Repository: img.Repository,
+			Digest:     desc.Digest,
+		}
+		refs = append(refs, ref)
+		return nil, nil
+	})
+	err = images.Walk(ctx, images.Handlers(handler, images.ChildrenHandler(client.ContentStore())), cImgs[0].Target)
+	if err != nil {
+		return nil, err
+	}
+	return refs, nil
 }
 
 func contentLabelsToReferences(l map[string]string, dgst digest.Digest) ([]oci.Reference, error) {
