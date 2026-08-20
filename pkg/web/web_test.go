@@ -15,7 +15,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/registry"
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/routing/libp2p"
-	"github.com/spegel-org/spegel/pkg/store"
+	"github.com/spegel-org/spegel/pkg/store/storetest"
 )
 
 type imageLister struct {
@@ -31,7 +31,7 @@ func TestWeb(t *testing.T) {
 	router, err := libp2p.NewRouter(t.Context(), ":0", nil, "5000")
 	require.NoError(t, err)
 
-	reg, err := registry.NewRegistry(store.NewMemory(nil, nil), router)
+	reg, err := registry.NewRegistry(storetest.NewProvider(nil, nil), router)
 	require.NoError(t, err)
 
 	w, err := NewWeb(router, imageLister{}, reg, nil)
