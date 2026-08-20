@@ -31,8 +31,9 @@ import (
 
 var (
 	containerdVersions = []string{
-		"2.3.3",
-		"2.2.6",
+		"2.3.4",
+		"2.2.7",
+		"2.4.0-beta.0",
 	}
 	containerdNamespace = "k8s.io"
 )
