@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/containerd/containerd/v2/core/images"
-	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/spegel-org/spegel/pkg/httpx"
@@ -18,25 +17,6 @@ const (
 	// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pushing-manifests
 	ManifestMaxSize = 4 * 1024 * 1024
 )
-
-var (
-	ErrNotFound = errors.New("content not found")
-)
-
-type Store interface {
-	// Name returns the name of the store implementation.
-	Name() string
-
-	// Resolve returns the digest for the tagged image name reference.
-	// The ref is expected to be in the format `registry/name:tag`.
-	Resolve(ctx context.Context, ref string) (digest.Digest, error)
-
-	// Descriptor returns the OCI descriptor for the given digest.
-	Descriptor(ctx context.Context, dgst digest.Digest) (ocispec.Descriptor, error)
-
-	// Open returns the streamable content for the given digest.
-	Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error)
-}
 
 type ImageLister interface {
 	// ListImages returns a list of all local images.
