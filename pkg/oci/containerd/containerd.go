@@ -33,8 +33,8 @@ import (
 	"github.com/spegel-org/spegel/pkg/store"
 )
 
-var _ oci.Store = &Containerd{}
 var _ oci.ImageLister = &Containerd{}
+var _ store.Provider = &Containerd{}
 var _ store.Watcher = &Containerd{}
 
 type ContainerdConfig struct {
@@ -168,13 +168,13 @@ func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, er
 	return cImg.Target.Digest, nil
 }
 
-func (c *Containerd) Descriptor(ctx context.Context, dgst digest.Digest) (ocispec.Descriptor, error) {
+func (c *Containerd) Descriptor(ctx context.Context, dgst digest.Digest) (store.Descriptor, error) {
 	info, err := c.client.ContentStore().Info(ctx, dgst)
 	if errors.Is(err, errdefs.ErrNotFound) {
-		return ocispec.Descriptor{}, errors.Join(oci.ErrNotFound, err)
+		return store.Descriptor{}, errors.Join(store.ErrNotFound, err)
 	}
 	if err != nil {
-		return ocispec.Descriptor{}, err
+		return store.Descriptor{}, err
 	}
 
 	mt, ok := c.mediaTypeIdx.Get(dgst)
@@ -195,12 +195,12 @@ func (c *Containerd) Descriptor(ctx context.Context, dgst digest.Digest) (ocispe
 			return mt, nil
 		}()
 		if err != nil {
-			return ocispec.Descriptor{}, err
+			return store.Descriptor{}, err
 		}
 		c.mediaTypeIdx.Add(dgst, mt)
 	}
 
-	desc := ocispec.Descriptor{
+	desc := store.Descriptor{
 		Size:      info.Size,
 		Digest:    dgst,
 		MediaType: mt,
@@ -213,7 +213,7 @@ func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekC
 		path := filepath.Join(c.contentPath, "blobs", dgst.Algorithm().String(), dgst.Encoded())
 		file, err := os.Open(path)
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, errors.Join(oci.ErrNotFound, err)
+			return nil, errors.Join(store.ErrNotFound, err)
 		}
 		if err != nil {
 			return nil, err
@@ -222,7 +222,7 @@ func (c *Containerd) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekC
 	}
 	ra, err := c.client.ContentStore().ReaderAt(ctx, ocispec.Descriptor{Digest: dgst})
 	if errors.Is(err, errdefs.ErrNotFound) {
-		return nil, errors.Join(oci.ErrNotFound, err)
+		return nil, errors.Join(store.ErrNotFound, err)
 	}
 	if err != nil {
 		return nil, err
