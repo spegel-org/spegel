@@ -8,7 +8,7 @@ replace github.com/spegel-org/spegel => ../../../
 
 require (
 	github.com/containerd/containerd/v2 v2.3.4
-	github.com/go-openapi/testify/v2 v2.6.0
+	github.com/go-openapi/testify/v2 v2.6.1
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.1
