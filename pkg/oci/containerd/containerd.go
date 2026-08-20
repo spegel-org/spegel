@@ -162,6 +162,9 @@ func (c *Containerd) ListImages(ctx context.Context) ([]oci.Image, error) {
 
 func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
 	cImg, err := c.client.ImageService().Get(ctx, ref)
+	if errors.Is(err, errdefs.ErrNotFound) {
+		return "", errors.Join(store.ErrNotFound, err)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -399,7 +402,7 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		}
 		return events, nil
 	default:
-		return nil, errors.New("unsupported event type")
+		return nil, fmt.Errorf("unsupported event type %T", evt)
 	}
 }
 

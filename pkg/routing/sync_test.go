@@ -12,25 +12,8 @@ import (
 	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/pkg/store"
+	"github.com/spegel-org/spegel/pkg/store/storetest"
 )
-
-var _ store.Watcher = &watcher{}
-
-type watcher struct {
-	eventCh chan store.Event
-	initial []store.Event
-}
-
-func (w *watcher) Add(ctx context.Context, event store.Event) {
-	select {
-	case <-ctx.Done():
-	case w.eventCh <- event:
-	}
-}
-
-func (w *watcher) Watch(ctx context.Context) ([]store.Event, <-chan store.Event, error) {
-	return w.initial, w.eventCh, nil
-}
 
 func TestSync(t *testing.T) {
 	t.Parallel()
@@ -61,10 +44,7 @@ func TestSync(t *testing.T) {
 	}
 
 	synctest.Test(t, func(t *testing.T) {
-		watcher := &watcher{
-			initial: initial,
-			eventCh: make(chan store.Event),
-		}
+		watcher := storetest.NewWatcher(initial)
 
 		self := Peer{
 			Host:      "test",

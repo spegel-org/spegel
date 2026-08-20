@@ -25,7 +25,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/httpx"
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/routing"
-	"github.com/spegel-org/spegel/pkg/store"
+	"github.com/spegel-org/spegel/pkg/store/storetest"
 )
 
 func TestMain(m *testing.M) {
@@ -194,7 +194,7 @@ func TestRegistryHandler(t *testing.T) {
 
 	badPeers := []routing.Peer{}
 	for i := range 2 {
-		badReg, err := NewRegistry(store.NewMemory(nil, nil), routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
+		badReg, err := NewRegistry(storetest.NewProvider(nil, nil), routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
 		require.NoError(t, err)
 		badSvr := httptest.NewServer(badReg.Handler(logr.Discard()))
 		t.Cleanup(func() {
@@ -211,7 +211,7 @@ func TestRegistryHandler(t *testing.T) {
 		badPeers = append(badPeers, peer)
 	}
 
-	contents := []store.Content{
+	contents := []storetest.Content{
 		{MediaType: "dummy", Data: []byte("no working peers")},
 		{MediaType: "dummy", Data: []byte("first peer")},
 		{MediaType: "dummy", Data: []byte("second peer")},
@@ -219,7 +219,7 @@ func TestRegistryHandler(t *testing.T) {
 		{MediaType: "application/vnd.oci.image.index.v1+json", Data: []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`)},
 		{MediaType: "application/vnd.oci.image.layer.v1.tar+gzip", Data: []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
 	}
-	memStore := store.NewMemory(contents, nil)
+	memStore := storetest.NewProvider(contents, nil)
 	goodReg, err := NewRegistry(memStore, routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
 	require.NoError(t, err)
 	goodSvr := httptest.NewServer(goodReg.Handler(logr.Discard()))
@@ -237,11 +237,11 @@ func TestRegistryHandler(t *testing.T) {
 
 	flakyPeers := []routing.Peer{}
 	for i := range 3 {
-		contents := []store.Content{
+		contents := []storetest.Content{
 			{MediaType: "dummy", Data: []byte("Only a single peer")},
 			{MediaType: "dummy", Data: []byte("Lorem Ipsum Dolor")},
 		}
-		flakyStore := &flakyStore{Memory: store.NewMemory(contents, nil)}
+		flakyStore := &flakyStore{Provider: storetest.NewProvider(contents, nil)}
 		flakyReg, err := NewRegistry(flakyStore, routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
 		require.NoError(t, err)
 		flakySvr := httptest.NewServer(flakyReg.Handler(logr.Discard()))
@@ -278,7 +278,7 @@ func TestRegistryHandler(t *testing.T) {
 		"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0": flakyPeers,
 	}
 	router := routing.NewMemoryRouter(resolver, routing.Peer{})
-	reg, err := NewRegistry(store.NewMemory(nil, nil), router, WithRegistryFilters([]oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}}))
+	reg, err := NewRegistry(storetest.NewProvider(nil, nil), router, WithRegistryFilters([]oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}}))
 	require.NoError(t, err)
 	handler := reg.Handler(logr.Discard())
 
@@ -516,11 +516,11 @@ func TestRegistryHandler(t *testing.T) {
 }
 
 type flakyStore struct {
-	*store.Memory
+	*storetest.Provider
 }
 
 func (s *flakyStore) Open(ctx context.Context, dgst digest.Digest) (io.ReadSeekCloser, error) {
-	rc, err := s.Memory.Open(ctx, dgst)
+	rc, err := s.Provider.Open(ctx, dgst)
 	if err != nil {
 		return nil, err
 	}

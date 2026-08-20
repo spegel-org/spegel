@@ -27,6 +27,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/oci/containerd"
 	"github.com/spegel-org/spegel/pkg/store"
+	"github.com/spegel-org/spegel/pkg/store/storetest"
 )
 
 var (
@@ -157,6 +158,16 @@ func TestContainerdPull(t *testing.T) {
 				{Type: store.CreateEvent, Digest: "sha256:bdfd7f7e5bf6fc27e70b59101db21c3d8284d283884419dd5fe7020583bb79ca"},
 				{Type: store.CreateEvent, Digest: "sha256:8eb081c0ebda8c184042e9ad6ecf7ea761c9857f7d6f38cdb2d2cd95b0f2db4f"},
 			}
+
+			providerCfg := storetest.ProviderConfig{
+				Name:               "containerd",
+				NotFoundRef:        "dummy",
+				ExistingRef:        "ghcr.io/spegel-org/spegel:v0.7.4",
+				ExistingRefDigest:  expectedInitial[0].Digest,
+				NotFoundDigest:     digest.FromBytes(nil),
+				ExistingDescriptor: store.Descriptor{Digest: expectedInitial[0].Digest, Size: 2385, MediaType: ocispec.MediaTypeImageIndex},
+			}
+			storetest.ProviderConformance(t, ctrd, providerCfg)
 
 			subCtx, subCancel := context.WithCancel(t.Context())
 			initial, eventCh, err := ctrd.Watch(subCtx)
