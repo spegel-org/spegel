@@ -186,9 +186,8 @@ func NewRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortSt
 		provider.WithMaxReprovideDelay(cfg.MaxReprovideDelay),
 		provider.WithOfflineDelay(0),
 		provider.WithConnectivityCheckOnlineInterval(30 * time.Second),
-		provider.WithAddLocalRecord(func(h mh.Multihash) error {
-			//nolint: staticcheck // Need to use the context to cancel.
-			return kdht.ProviderStore().AddProvider(kdht.Context(), h, peer.AddrInfo{ID: host.ID()})
+		provider.WithAddLocalRecord(func(ctx context.Context, h mh.Multihash) error {
+			return kdht.ProviderStore().AddProvider(ctx, h, peer.AddrInfo{ID: host.ID()})
 		}),
 	}
 	prov, err := provider.New(providerOpts...)
