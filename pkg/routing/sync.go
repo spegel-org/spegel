@@ -44,20 +44,21 @@ func handleEvents(ctx context.Context, router Router, events []store.Event) erro
 	advertise := []string{}
 	withdraw := []string{}
 	for _, event := range events {
-		if event.Digest == "" {
-			return errors.New("received event with empty digest")
-		}
 		switch event.Type {
 		case store.CreateEvent:
 			if event.Reference != "" {
 				advertise = append(advertise, event.Reference)
 			}
-			advertise = append(advertise, event.Digest.String())
+			if event.Digest != "" {
+				advertise = append(advertise, event.Digest.String())
+			}
 		case store.DeleteEvent:
 			if event.Reference != "" {
 				withdraw = append(withdraw, event.Reference)
 			}
-			withdraw = append(withdraw, event.Digest.String())
+			if event.Digest != "" {
+				withdraw = append(withdraw, event.Digest.String())
+			}
 		default:
 			return fmt.Errorf("unhandled event type %s", event.Type)
 		}
