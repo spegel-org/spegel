@@ -140,7 +140,8 @@ func TestContainerdPull(t *testing.T) {
 			_, err = imageClient.PullImage(t.Context(), &runtimeapi.PullImageRequest{Image: &runtimeapi.ImageSpec{Image: "ghcr.io/spegel-org/spegel:v0.7.4"}})
 			require.NoError(t, err)
 			expectedInitial := []store.Event{
-				{Type: store.CreateEvent, Reference: "ghcr.io/spegel-org/spegel:v0.7.4", Digest: "sha256:26c60b05e08ac738e8442bc389c5780bff0e1d8153956e45d810a2f1008cf56f"},
+				{Type: store.CreateEvent, Reference: "ghcr.io/spegel-org/spegel:v0.7.4"},
+				{Type: store.CreateEvent, Digest: "sha256:26c60b05e08ac738e8442bc389c5780bff0e1d8153956e45d810a2f1008cf56f"},
 				{Type: store.CreateEvent, Digest: "sha256:cfa0b07068007bc283828f25ee6a128c81052857b9c1efc93c4dc596ed895b6a"},
 				{Type: store.CreateEvent, Digest: "sha256:e7a777e36197ea8d4ce50cb206cfb238986e3462fa5b1f3c28cbbfb5c5128431"},
 				{Type: store.CreateEvent, Digest: "sha256:1eed391ea893e6015bf4ce4ed366909975d2acdbe907670919236a8d18ea6b07"},
@@ -162,10 +163,10 @@ func TestContainerdPull(t *testing.T) {
 			providerCfg := storetest.ProviderConfig{
 				Name:               "containerd",
 				NotFoundRef:        "dummy",
-				ExistingRef:        "ghcr.io/spegel-org/spegel:v0.7.4",
-				ExistingRefDigest:  expectedInitial[0].Digest,
+				ExistingRef:        expectedInitial[0].Reference,
+				ExistingRefDigest:  expectedInitial[1].Digest,
 				NotFoundDigest:     digest.FromBytes(nil),
-				ExistingDescriptor: store.Descriptor{Digest: expectedInitial[0].Digest, Size: 2385, MediaType: ocispec.MediaTypeImageIndex},
+				ExistingDescriptor: store.Descriptor{Digest: expectedInitial[1].Digest, Size: 2385, MediaType: ocispec.MediaTypeImageIndex},
 			}
 			storetest.ProviderConformance(t, ctrd, providerCfg)
 
@@ -219,8 +220,6 @@ func TestContainerdPull(t *testing.T) {
 					require.EqualT(t, imgs[0].Digest, dgst)
 				}
 
-				time.Sleep(1 * time.Second)
-
 				t.Log("Deleting image with CRI", benchmarkImg.String())
 				_, err = imageClient.RemoveImage(t.Context(), &runtimeapi.RemoveImageRequest{Image: &runtimeapi.ImageSpec{Image: benchmarkImg.String()}})
 				require.NoError(t, err)
@@ -245,7 +244,7 @@ func TestContainerdPull(t *testing.T) {
 			missingInitial, missingCh, err := ctrd.Watch(missingCtx)
 			require.NoError(t, err)
 			require.NotEmpty(t, missingInitial)
-			require.Len(t, missingInitial, 6)
+			require.Len(t, missingInitial, 7)
 			require.NotContains(t, missingInitial, store.Event{Type: store.CreateEvent, Digest: missingDgst})
 
 			missingCancel()
