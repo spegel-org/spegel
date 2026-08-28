@@ -32,7 +32,8 @@ const (
 )
 
 type ClientConfig struct {
-	TLSClientConfig *tls.Config
+	TLSClientConfig   *tls.Config
+	DisableKeepAlives bool
 }
 
 type ClientOption = option.Option[ClientConfig]
@@ -43,6 +44,13 @@ func WithTLS(rootCAs *x509.CertPool, certificates []tls.Certificate) ClientOptio
 			RootCAs:      rootCAs,
 			Certificates: certificates,
 		}
+		return nil
+	}
+}
+
+func WithDisableKeepAlives(v bool) ClientOption {
+	return func(cfg *ClientConfig) error {
+		cfg.DisableKeepAlives = v
 		return nil
 	}
 }
@@ -67,6 +75,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	transport.MaxIdleConns = 100
 	transport.MaxConnsPerHost = 100
 	transport.MaxIdleConnsPerHost = 100
+	transport.DisableKeepAlives = cfg.DisableKeepAlives
 	httpClient.Transport = transport
 
 	ociClient := &Client{
@@ -143,11 +152,16 @@ func WithFetchUserinfo(userinfo *url.Userinfo) FetchOption {
 	}
 }
 
-type LayerWriter interface {
+type ImageWriter interface {
+	Root(ctx context.Context, img Image, desc ocispec.Descriptor) error
 	Write(ctx context.Context, desc ocispec.Descriptor, r io.Reader) error
 }
 
 type DiscardWriter struct{}
+
+func (DiscardWriter) Root(ctx context.Context, img Image, desc ocispec.Descriptor) error {
+	return nil
+}
 
 func (DiscardWriter) Write(ctx context.Context, desc ocispec.Descriptor, r io.Reader) error {
 	_, err := io.Copy(io.Discard, r)
@@ -157,7 +171,7 @@ func (DiscardWriter) Write(ctx context.Context, desc ocispec.Descriptor, r io.Re
 	return nil
 }
 
-func (c *Client) Pull(ctx context.Context, img Image, w LayerWriter, opts ...PullOption) error {
+func (c *Client) Pull(ctx context.Context, img Image, w ImageWriter, opts ...PullOption) error {
 	cfg := PullConfig{
 		Platform: platforms.DefaultSpec(),
 	}
@@ -257,6 +271,12 @@ func (c *Client) Pull(ctx context.Context, img Image, w LayerWriter, opts ...Pul
 							return err
 						}
 						queue = append(queue, nextDist)
+					}
+				}
+				if imgDist == dist {
+					err = w.Root(ctx, img, desc)
+					if err != nil {
+						return err
 					}
 				}
 			}
