@@ -1,6 +1,7 @@
 package oci
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -14,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/platforms"
@@ -143,20 +143,27 @@ func WithFetchUserinfo(userinfo *url.Userinfo) FetchOption {
 	}
 }
 
-type PullMetric struct {
-	Digest        digest.Digest
-	ContentType   string
-	ContentLength int64
-	Duration      time.Duration
+type LayerWriter interface {
+	Write(ctx context.Context, desc ocispec.Descriptor, r io.Reader) error
 }
 
-func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]PullMetric, error) {
+type DiscardWriter struct{}
+
+func (DiscardWriter) Write(ctx context.Context, desc ocispec.Descriptor, r io.Reader) error {
+	_, err := io.Copy(io.Discard, r)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) Pull(ctx context.Context, img Image, w LayerWriter, opts ...PullOption) error {
 	cfg := PullConfig{
 		Platform: platforms.DefaultSpec(),
 	}
 	err := option.Apply(&cfg, opts...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	fetchOpt := func(commonCfg *CommonConfig) error {
 		commonCfg.Mirror = cfg.Mirror
@@ -167,45 +174,46 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 
 	imgDist, err := img.DistributionPath("http", http.MethodGet)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	queue := []DistributionPath{
 		imgDist,
 	}
-	pullMetrics := []PullMetric{}
 	for len(queue) > 0 {
 		dist := queue[0]
 		queue = queue[1:]
 
-		start := time.Now()
-		desc, err := func() (ocispec.Descriptor, error) {
+		err := func() error {
 			rc, desc, err := c.Fetch(ctx, dist, fetchOpt)
 			if err != nil {
-				return ocispec.Descriptor{}, err
+				return err
 			}
 			defer httpx.DrainAndClose(rc)
 
 			switch dist.Kind {
 			case DistributionKindBlob:
-				// Right now we are just discarding the contents because we do not have a writable store.
-				_, copyErr := io.Copy(io.Discard, rc)
+				writErr := w.Write(ctx, desc, rc)
 				closeErr := rc.Close()
-				err := errors.Join(copyErr, closeErr)
+				err := errors.Join(writErr, closeErr)
 				if err != nil {
-					return ocispec.Descriptor{}, err
+					return err
 				}
 			case DistributionKindManifest:
 				b, readErr := io.ReadAll(rc)
 				closeErr := rc.Close()
 				err = errors.Join(readErr, closeErr)
 				if err != nil {
-					return ocispec.Descriptor{}, err
+					return err
+				}
+				err := w.Write(ctx, desc, bytes.NewBuffer(b))
+				if err != nil {
+					return err
 				}
 				switch desc.MediaType {
 				case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 					var idx ocispec.Index
 					if err := json.Unmarshal(b, &idx); err != nil {
-						return ocispec.Descriptor{}, err
+						return err
 					}
 					for _, m := range idx.Manifests {
 						if !platforms.Only(cfg.Platform).Match(*m.Platform) {
@@ -218,7 +226,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 						}
 						nextDist, err := NewDistributionPath(nextRef, DistributionKindManifest, dist.Scheme, http.MethodGet, nil)
 						if err != nil {
-							return ocispec.Descriptor{}, err
+							return err
 						}
 						queue = append(queue, nextDist)
 					}
@@ -226,7 +234,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 					var manifest ocispec.Manifest
 					err := json.Unmarshal(b, &manifest)
 					if err != nil {
-						return ocispec.Descriptor{}, err
+						return err
 					}
 					nextRef := Reference{
 						Registry:   dist.Registry,
@@ -235,7 +243,7 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 					}
 					nextDist, err := NewDistributionPath(nextRef, DistributionKindBlob, dist.Scheme, http.MethodGet, nil)
 					if err != nil {
-						return ocispec.Descriptor{}, err
+						return err
 					}
 					queue = append(queue, nextDist)
 					for _, layer := range manifest.Layers {
@@ -246,28 +254,19 @@ func (c *Client) Pull(ctx context.Context, img Image, opts ...PullOption) ([]Pul
 						}
 						nextDist, err := NewDistributionPath(nextRef, DistributionKindBlob, dist.Scheme, http.MethodGet, nil)
 						if err != nil {
-							return ocispec.Descriptor{}, err
+							return err
 						}
 						queue = append(queue, nextDist)
 					}
 				}
 			}
-			return desc, nil
+			return nil
 		}()
 		if err != nil {
-			return nil, err
+			return err
 		}
-
-		metric := PullMetric{
-			Digest:        desc.Digest,
-			Duration:      time.Since(start),
-			ContentType:   desc.MediaType,
-			ContentLength: desc.Size,
-		}
-		pullMetrics = append(pullMetrics, metric)
 	}
-
-	return pullMetrics, nil
+	return nil
 }
 
 func (c *Client) Fetch(ctx context.Context, dist DistributionPath, opts ...FetchOption) (io.ReadCloser, ocispec.Descriptor, error) {
