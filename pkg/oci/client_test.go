@@ -85,9 +85,8 @@ func TestClient(t *testing.T) {
 	require.NotNil(t, ociClient.httpClient)
 	mirror, err := url.Parse(srv.URL)
 	require.NoError(t, err)
-	pullResults, err := ociClient.Pull(t.Context(), img, WithPullMirror(mirror))
+	err = ociClient.Pull(t.Context(), img, DiscardWriter{}, WithPullMirror(mirror))
 	require.NoError(t, err)
-	require.Len(t, pullResults, 3)
 
 	ref := Reference{
 		Registry:   img.Registry,

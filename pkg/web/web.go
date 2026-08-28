@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"io"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/httpx"
@@ -196,13 +199,13 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	res.LookupResults = lookupRes
 
 	if len(res.LookupResults) > 0 {
-		// Pull the image and measure performance.
-		pullMetrics, err := w.ociClient.Pull(req.Context(), img, oci.WithPullMirror(w.mirror))
+		mw := &MetricWriter{}
+		err := w.ociClient.Pull(req.Context(), img, mw, oci.WithPullMirror(w.mirror))
 		if err != nil {
 			rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 			return
 		}
-		for _, metric := range pullMetrics {
+		for _, metric := range mw.Metrics() {
 			res.PullDuration += metric.Duration
 			res.PullSize += metric.ContentLength
 			res.PullResults = append(res.PullResults, pullResult{
@@ -215,4 +218,37 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 
 	httpx.RenderTemplate(rw, w.tmpls.Lookup("measure.html"), res)
+}
+
+type PullMetric struct {
+	Digest        digest.Digest
+	ContentType   string
+	ContentLength int64
+	Duration      time.Duration
+}
+
+var _ oci.LayerWriter = &MetricWriter{}
+
+type MetricWriter struct {
+	metrics []PullMetric
+}
+
+func (mw *MetricWriter) Metrics() []PullMetric {
+	return mw.metrics
+}
+
+func (mw *MetricWriter) Write(ctx context.Context, desc ocispec.Descriptor, r io.Reader) error {
+	start := time.Now()
+	_, err := io.Copy(io.Discard, r)
+	if err != nil {
+		return err
+	}
+	metric := PullMetric{
+		Digest:        desc.Digest,
+		Duration:      time.Since(start),
+		ContentType:   desc.MediaType,
+		ContentLength: desc.Size,
+	}
+	mw.metrics = append(mw.metrics, metric)
+	return nil
 }
