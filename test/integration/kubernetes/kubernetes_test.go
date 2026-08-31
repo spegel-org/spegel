@@ -53,9 +53,9 @@ import (
 
 var (
 	kubernetesVersions = []string{
+		"v1.37.0",
 		"v1.36.2",
 		"v1.35.6",
-		"v1.34.9",
 	}
 )
 
