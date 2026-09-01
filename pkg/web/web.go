@@ -227,7 +227,7 @@ type PullMetric struct {
 	Duration      time.Duration
 }
 
-var _ oci.LayerWriter = &MetricWriter{}
+var _ oci.ImageWriter = &MetricWriter{}
 
 type MetricWriter struct {
 	metrics []PullMetric
@@ -235,6 +235,9 @@ type MetricWriter struct {
 
 func (mw *MetricWriter) Metrics() []PullMetric {
 	return mw.metrics
+}
+func (*MetricWriter) Root(ctx context.Context, img oci.Image, desc ocispec.Descriptor) error {
+	return nil
 }
 
 func (mw *MetricWriter) Write(ctx context.Context, desc ocispec.Descriptor, r io.Reader) error {
