@@ -1,8 +1,7 @@
 name: release
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
 permissions:
   contents: write
   packages: write
@@ -34,14 +33,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Prepare version
-        id: prep
-        run: |
-          VERSION=sha-${GITHUB_SHA::8}
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF/refs\/tags\//}
-          fi
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 #v7.2.3
         with:
@@ -53,7 +44,7 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 #v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/spegel
-          tags: type=raw,value=${{ steps.prep.outputs.VERSION }}
+          tags: type=raw,value=${{ github.event.release.tag_name }}
       - name: Publish multi-arch image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a #v7.3.0
         id: build
@@ -63,7 +54,7 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm/v7,linux/arm64
-          tags: ghcr.io/${{ github.repository_owner }}/spegel:${{ steps.prep.outputs.VERSION }}
+          tags: ghcr.io/${{ github.repository_owner }}/spegel:${{ github.event.release.tag_name }}
           labels: ${{ steps.meta.outputs.labels }}
       - name: Sign the image with Cosign
         run: |
@@ -71,11 +62,11 @@ jobs:
       - name: Publish Helm chart to GHCR
         id: helm
         run: |
-          HELM_VERSION=${{ steps.prep.outputs.VERSION }}
+          HELM_VERSION=${{ github.event.release.tag_name }}
           HELM_VERSION=${HELM_VERSION#v}
           rm charts/spegel/artifacthub-repo.yml
           yq -i '.image.digest = "${{ steps.build.outputs.DIGEST }}"' charts/spegel/values.yaml
-          helm package --app-version ${{ steps.prep.outputs.VERSION }} --version ${HELM_VERSION} charts/spegel
+          helm package --app-version ${{ github.event.release.tag_name }} --version ${HELM_VERSION} charts/spegel
           helm push spegel-${HELM_VERSION}.tgz oci://ghcr.io/${{ github.repository_owner }}/helm-charts 2> .digest
           DIGEST=$(cat .digest | awk -F "[, ]+" '/Digest/{print $NF}')
           echo "DIGEST=${DIGEST}" >> $GITHUB_OUTPUT
