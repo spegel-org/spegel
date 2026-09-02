@@ -7,19 +7,19 @@ toolchain go1.27.0
 replace github.com/spegel-org/spegel => ../../../
 
 require (
-	github.com/fluxcd/cli-utils v1.2.2
+	github.com/fluxcd/cli-utils v1.2.3
 	github.com/go-openapi/testify/v2 v2.7.0
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
 	github.com/moby/moby/client v0.5.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
 	golang.org/x/mod v0.40.0
 	helm.sh/helm/v4 v4.2.4
-	k8s.io/api v0.36.3
-	k8s.io/apimachinery v0.36.3
-	k8s.io/cli-runtime v0.36.3
-	k8s.io/client-go v0.36.3
-	k8s.io/kubectl v0.36.3
-	sigs.k8s.io/kind v0.32.0
+	k8s.io/api v0.36.4
+	k8s.io/apimachinery v0.36.4
+	k8s.io/cli-runtime v0.36.4
+	k8s.io/client-go v0.36.4
+	k8s.io/kubectl v0.36.4
+	sigs.k8s.io/kind v0.33.0
 )
 
 require (
@@ -227,12 +227,12 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.36.1 // indirect
-	k8s.io/apiserver v0.36.1 // indirect
-	k8s.io/component-base v0.36.3 // indirect
+	k8s.io/apiextensions-apiserver v0.36.4 // indirect
+	k8s.io/apiserver v0.36.4 // indirect
+	k8s.io/component-base v0.36.4 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260319004828-5883c5ee87b9 // indirect
-	k8s.io/streaming v0.36.3 // indirect
+	k8s.io/streaming v0.36.4 // indirect
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 	oras.land/oras-go/v2 v2.6.1 // indirect
