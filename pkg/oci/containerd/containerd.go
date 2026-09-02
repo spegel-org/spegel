@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"slices"
 
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/v2/client"
@@ -128,31 +127,34 @@ func (c *Containerd) ListImages(ctx context.Context) ([]oci.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	tagDgsts := map[digest.Digest]string{}
+
+	seen := map[string]any{}
 	imgs := []oci.Image{}
+	dgstImgs := []oci.Image{}
 	for _, cImg := range cImgs {
 		img, err := oci.ParseImage(cImg.Name, oci.WithDigest(cImg.Target.Digest))
 		if err != nil {
-			return nil, err
-		}
-		if img.Tag != "" {
-			tagDgsts[img.Digest] = img.Tag
+			logr.FromContextOrDiscard(ctx).Error(err, "could not parse image name", "name", cImg.Name)
+			continue
 		}
 		if oci.MatchesFilter(img.Reference, c.filters) {
 			continue
 		}
+		if _, ok := img.TagName(); ok {
+			dgstName, _ := img.DigestName()
+			seen[dgstName] = nil
+			imgs = append(imgs, img)
+			continue
+		}
+		dgstImgs = append(dgstImgs, img)
+	}
+	for _, img := range dgstImgs {
+		dgstName, _ := img.DigestName()
+		if _, ok := seen[dgstName]; ok {
+			continue
+		}
 		imgs = append(imgs, img)
 	}
-	// Remove duplicate digest images that already have tags.
-	imgs = slices.DeleteFunc(imgs, func(img oci.Image) bool {
-		if img.Tag != "" {
-			return false
-		}
-		if _, ok := tagDgsts[img.Digest]; ok {
-			return true
-		}
-		return false
-	})
 	return imgs, nil
 }
 

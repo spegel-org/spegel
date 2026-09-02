@@ -45,6 +45,14 @@ func (i Image) TagName() (string, bool) {
 	return fmt.Sprintf("%s/%s:%s", i.Registry, i.Repository, i.Tag), true
 }
 
+// DigestName returns the full tag reference string if digest is set.
+func (i Image) DigestName() (string, bool) {
+	if i.Tag == "" {
+		return "", false
+	}
+	return fmt.Sprintf("%s/%s@%s", i.Registry, i.Repository, i.Digest), true
+}
+
 // DistributionPath returns the distribution path for the images top layer.
 func (i Image) DistributionPath(scheme, method string) (DistributionPath, error) {
 	ref := i.Reference
