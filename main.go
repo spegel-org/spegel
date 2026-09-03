@@ -49,7 +49,6 @@ type ConfigurationCmd struct {
 type BootstrapConfig struct {
 	BootstrapKind        string   `arg:"--bootstrap-kind,env:BOOTSTRAP_KIND" help:"Kind of bootsrapper to use."`
 	DNSBootstrapDomain   string   `arg:"--dns-bootstrap-domain,env:DNS_BOOTSTRAP_DOMAIN" help:"Domain to use when bootstrapping using DNS."`
-	HTTPBootstrapAddr    string   `arg:"--http-bootstrap-addr,env:HTTP_BOOTSTRAP_ADDR" help:"Address to serve for HTTP bootstrap at /id. Leave it empty to disable serving."`
 	HTTPBootstrapURL     url.URL  `arg:"--http-bootstrap-url,env:HTTP_BOOTSTRAP_URL" help:"Full URL of an HTTP bootstrap endpoint."`
 	HTTPBootstrapCertDir string   `arg:"--http-bootstrap-cert-dir,env:HTTP_BOOTSTRAP_CERT_DIR" help:"Path to directory containing CA and TLS certificate."`
 	StaticBootstrapPeers []string `arg:"--static-bootstrap-peers,env:STATIC_BOOTSTRAP_PEERS" help:"Static list of peers to bootstrap with."`
@@ -344,7 +343,7 @@ func getBootstrapper(cfg BootstrapConfig) (libp2p.Bootstrapper, error) { //nolin
 		if err != nil {
 			return nil, err
 		}
-		return libp2p.NewHTTPBootstrapper(cfg.HTTPBootstrapAddr, cfg.HTTPBootstrapURL, pool, cert)
+		return libp2p.NewHTTPBootstrapper(cfg.HTTPBootstrapURL, pool, cert)
 	case "static":
 		return libp2p.NewStaticBootstrapperFromStrings(cfg.StaticBootstrapPeers)
 	default:

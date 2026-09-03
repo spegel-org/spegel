@@ -13,21 +13,16 @@ import (
 	"net/url"
 	"slices"
 	"sync"
-	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
-
-	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/pkg/httpx"
 )
 
 // Bootstrapper resolves peers to bootstrap with for the P2P router.
 type Bootstrapper interface {
-	// Run starts the bootstrap process. Should be blocking even if not needed.
-	Run(ctx context.Context, addrInfo peer.AddrInfo) error
 	// Get returns a list of peers that should be used as bootstrap nodes.
 	// If the peer ID is empty it will be resolved.
 	// If the address is missing a port the P2P router port will be used.
@@ -59,11 +54,6 @@ func NewStaticBootstrapper(peers []peer.AddrInfo) *StaticBootstrapper {
 	}
 }
 
-func (b *StaticBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error {
-	<-ctx.Done()
-	return nil
-}
-
 func (b *StaticBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 	b.mx.RLock()
 	defer b.mx.RUnlock()
@@ -88,11 +78,6 @@ func NewDNSBootstrapper(host string) *DNSBootstrapper {
 		resolver: &net.Resolver{},
 		host:     host,
 	}
-}
-
-func (b *DNSBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error {
-	<-ctx.Done()
-	return nil
 }
 
 func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
@@ -135,12 +120,11 @@ var _ Bootstrapper = &HTTPBootstrapper{}
 // HTTPBootstrapper resolves bootstrap peers over HTTP.
 type HTTPBootstrapper struct {
 	httpClient *http.Client
-	addr       string
 	endpoint   string
 }
 
 // NewHTTPBootstrapper creates an HTTP bootstrapper.
-func NewHTTPBootstrapper(addr string, bootstrapURL url.URL, pool *x509.CertPool, cert *tls.Certificate) (*HTTPBootstrapper, error) {
+func NewHTTPBootstrapper(bootstrapURL url.URL, pool *x509.CertPool, cert *tls.Certificate) (*HTTPBootstrapper, error) {
 	transport := httpx.BaseTransport()
 	if pool != nil || cert != nil {
 		tlsConfig := &tls.Config{
@@ -157,44 +141,8 @@ func NewHTTPBootstrapper(addr string, bootstrapURL url.URL, pool *x509.CertPool,
 
 	return &HTTPBootstrapper{
 		httpClient: client,
-		addr:       addr,
 		endpoint:   bootstrapURL.String(),
 	}, nil
-}
-
-func (bs *HTTPBootstrapper) Run(ctx context.Context, addrInfo peer.AddrInfo) error {
-	if bs.addr == "" {
-		<-ctx.Done()
-		return nil
-	}
-	b, err := json.Marshal([]peer.AddrInfo{addrInfo})
-	if err != nil {
-		return err
-	}
-	group := errgroup.WithContext(ctx)
-	mux := http.NewServeMux()
-	mux.HandleFunc("/id", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		//nolint:errcheck // ignore
-		w.Write(b)
-	})
-	srv := &http.Server{
-		Addr:    bs.addr,
-		Handler: mux,
-	}
-	group.Go(func(ctx context.Context) error {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	})
-	group.Go(func(ctx context.Context) error {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return srv.Shutdown(shutdownCtx)
-	})
-	return group.Wait()
 }
 
 func (bs *HTTPBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {

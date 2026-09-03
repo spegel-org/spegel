@@ -36,8 +36,6 @@ import (
 	mh "github.com/multiformats/go-multihash"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/kvick-org/pkg/errgroup"
-
 	"github.com/spegel-org/spegel/internal/channel"
 	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/internal/resilient"
@@ -216,15 +214,7 @@ func (r *Router) Run(ctx context.Context) error {
 	log := logr.FromContextOrDiscard(ctx).WithName("p2p")
 	log.Info("starting p2p router", "id", r.host.ID())
 
-	group := errgroup.WithContext(ctx)
-	group.Go(func(ctx context.Context) error {
-		err := r.bootstrapper.Run(ctx, *host.InfoFromHost(r.host))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	group.Go(func(ctx context.Context) error {
+	err := func() error {
 		for {
 			select {
 			case <-ctx.Done():
@@ -263,10 +253,8 @@ func (r *Router) Run(ctx context.Context) error {
 				}
 			}
 		}
-	})
-
+	}()
 	errs := []error{}
-	err := group.Wait()
 	if err != nil {
 		errs = append(errs, err)
 	}

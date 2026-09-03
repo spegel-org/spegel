@@ -40,27 +40,15 @@ func TestStaticBootstrap(t *testing.T) {
 		},
 	}
 	bs := NewStaticBootstrapper(peers)
-
-	ctx, cancel := context.WithCancel(t.Context())
-	group := errgroup.WithContext(ctx)
-	group.Go(func(ctx context.Context) error {
-		return bs.Run(ctx, peer.AddrInfo{})
-	})
-
 	bsPeers, err := bs.Get(t.Context())
 	require.NoError(t, err)
 	require.ElementsMatch(t, peers, bsPeers)
-
-	cancel()
-	err = group.Wait()
-	require.NoError(t, err)
 }
 
 func TestDNSBootstrap(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(t.Context())
-	group := errgroup.WithContext(ctx)
+	group := errgroup.WithContext(t.Context())
 
 	rr, err := dns.NewRR("example.com. 30 IN A 10.1.2.3")
 	require.NoError(t, err)
@@ -95,67 +83,15 @@ func TestDNSBootstrap(t *testing.T) {
 			return net.Dial("udp", pc.LocalAddr().String())
 		},
 	}
-	group.Go(func(ctx context.Context) error {
-		return bs.Run(ctx, peer.AddrInfo{})
-	})
-	addrInfos, err := bs.Get(ctx)
+	addrInfos, err := bs.Get(t.Context())
 	require.NoError(t, err)
 	require.Len(t, addrInfos, 1)
 	require.Len(t, addrInfos[0].Addrs, 1)
 	require.EqualT(t, "{: [/ip4/10.1.2.3]}", addrInfos[0].String())
-
-	cancel()
-	err = group.Wait()
-	require.NoError(t, err)
 }
 
 func TestHTTPBootstrap(t *testing.T) {
 	t.Parallel()
-
-	//nolint:noctx // Context not important for testing.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	err = ln.Close()
-	require.NoError(t, err)
-	parentAddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4001")
-	require.NoError(t, err)
-	id, err := peer.Decode("12D3KooWAsvvigG9jqjMNWMmqXph6BvszxTus6Fg6k5UZda2iKDB")
-	require.NoError(t, err)
-	parentAddrInfo := peer.AddrInfo{
-		ID:    id,
-		Addrs: []ma.Multiaddr{parentAddr},
-	}
-	bootstrapURL, err := url.Parse("http://" + ln.Addr().String() + "/id")
-	require.NoError(t, err)
-	parentBs, err := NewHTTPBootstrapper(ln.Addr().String(), *bootstrapURL, nil, nil)
-	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(t.Context())
-	group := errgroup.WithContext(ctx)
-	group.Go(func(ctx context.Context) error {
-		return parentBs.Run(ctx, parentAddrInfo)
-	})
-
-	time.Sleep(100 * time.Millisecond)
-
-	childBs, err := NewHTTPBootstrapper("", *bootstrapURL, nil, nil)
-	require.NoError(t, err)
-	addrInfos, err := childBs.Get(t.Context())
-	require.NoError(t, err)
-	require.Len(t, addrInfos, 1)
-	require.Len(t, addrInfos[0].Addrs, 1)
-	require.EqualT(t, parentAddrInfo.ID, addrInfos[0].ID)
-	require.EqualT(t, "{12D3KooWAsvvigG9jqjMNWMmqXph6BvszxTus6Fg6k5UZda2iKDB: [/ip4/127.0.0.1/tcp/4001]}", addrInfos[0].String())
-
-	cancel()
-	err = group.Wait()
-	require.NoError(t, err)
-}
-
-func TestHTTPBootstrapEndpoint(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	group := errgroup.WithContext(ctx)
 
 	now := time.Now()
 
@@ -249,20 +185,12 @@ func TestHTTPBootstrapEndpoint(t *testing.T) {
 
 	srvUrl, err := url.Parse(srv.URL)
 	require.NoError(t, err)
-	bs, err := NewHTTPBootstrapper("", *srvUrl, pool, &clientTLSCert)
+	bs, err := NewHTTPBootstrapper(*srvUrl, pool, &clientTLSCert)
 	require.NoError(t, err)
 
-	group.Go(func(ctx context.Context) error {
-		return bs.Run(ctx, peer.AddrInfo{})
-	})
-
-	addrInfos, err := bs.Get(ctx)
+	addrInfos, err := bs.Get(t.Context())
 	require.NoError(t, err)
 	require.Len(t, addrInfos, 1)
 	require.Len(t, addrInfos[0].Addrs, 1)
 	require.Equal(t, "{: [/ip4/10.1.2.3]}", addrInfos[0].String())
-
-	cancel()
-	err = group.Wait()
-	require.NoError(t, err)
 }
