@@ -631,23 +631,15 @@ func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sDynClient dyn
 			dumpPods(t, k8sClient, pullTestNamespace, false)
 		})
 
-		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
-		for _, readyPod := range readyPods {
-			waitForStatus(t, k8sDynClient, gvr, pullTestNamespace, readyPod.Name, status.CurrentStatus)
-		}
-		require.EventuallyWith(t, func(c *assert.CollectT) {
-			pod, err := k8sClient.CoreV1().Pods(pullTestNamespace).Get(t.Context(), failedPod.Name, metav1.GetOptions{})
-			require.NoError(t, err)
-			require.Len(c, pod.Status.ContainerStatuses, 1)
-			waitingState := pod.Status.ContainerStatuses[0].State.Waiting
-			require.NotNil(c, waitingState)
-			require.SliceContainsT(t, []string{"ErrImagePull", "ImagePullBackOff"}, waitingState.Reason)
-		}, 10*time.Second, 500*time.Millisecond)
-
+		// Wait for ready pod to run.
 		podList, err := k8sClient.CoreV1().Pods(pullTestNamespace).List(t.Context(), metav1.ListOptions{})
 		require.NoError(t, err)
 		for _, pod := range podList.Items {
 			require.NotEqualT(t, kindNodes[0].String(), pod.Spec.NodeName)
+		}
+		gvr := schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
+		for _, readyPod := range readyPods {
+			waitForStatus(t, k8sDynClient, gvr, pullTestNamespace, readyPod.Name, status.CurrentStatus)
 		}
 
 		// Check OCI volume content.
@@ -679,6 +671,16 @@ func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sDynClient dyn
 			"random_file_8163815451001128425.txt",
 		}
 		require.ElementsMatchT(t, expected, files)
+
+		// Wait for failed pod to image pull error.
+		require.EventuallyWith(t, func(c *assert.CollectT) {
+			pod, err := k8sClient.CoreV1().Pods(pullTestNamespace).Get(t.Context(), failedPod.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			require.Len(c, pod.Status.ContainerStatuses, 1)
+			waitingState := pod.Status.ContainerStatuses[0].State.Waiting
+			require.NotNil(c, waitingState)
+			require.SliceContainsT(t, []string{"ErrImagePull", "ImagePullBackOff"}, waitingState.Reason)
+		}, 30*time.Second, 500*time.Millisecond)
 	})
 	require.TrueT(t, succeeded, "pull test failed")
 }
