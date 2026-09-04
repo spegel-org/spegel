@@ -16,14 +16,6 @@ Read the [getting started](https://spegel.dev/docs/getting-started/) guide to de
 | extraInitContainers | list | `[]` | Add additional initContainers *before* Spegel's own configuration init container to run additional node init configuration tasks |
 | extraVolumes | list | `[]` | Add additional volumes to the daemonset. This can be helpful when adding custom init containers that need host path mounts to different locations than the already configured ones. |
 | fullnameOverride | string | `""` | Overrides the full name of the chart. |
-| grafanaDashboard.annotations | object | `{}` | Annotations to add to the Sidecar configMap or GrafanaDashboard. |
-| grafanaDashboard.enabled | bool | `false` | If true creates a Grafana dashboard. |
-| grafanaDashboard.grafanaOperator.allowCrossNamespaceImport | bool | `true` | If true allows for a Grafana in any namespace to access this GrafanaDashboard. |
-| grafanaDashboard.grafanaOperator.folder | string | `""` | Folder to create the dashboard in. |
-| grafanaDashboard.grafanaOperator.matchLabels | object | `{}` | Selected labels for Grafana instance. |
-| grafanaDashboard.grafanaOperator.resyncPeriod | string | `"10m"` | Resync period for the Grafana operator to check for updates to the dashboard. |
-| grafanaDashboard.labels | object | `{}` | Labels to add to the Sidecar configMap or GrafanaDashboard. |
-| grafanaDashboard.mode | string | `"Sidecar"` | Mode for Grafana dashboard creation. Valid values are `Sidecar` and `GrafanaOperator`. |
 | image.digest | string | `""` | Image digest. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image Pull Policy. |
 | image.repository | string | `"ghcr.io/spegel-org/spegel"` | Image repository. |
