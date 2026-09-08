@@ -12,8 +12,8 @@ require (
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/go-openapi/testify/v2 v2.7.0
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
-	github.com/moby/moby/api v1.55.0
-	github.com/moby/moby/client v0.5.1
+	github.com/moby/moby/api v1.56.0
+	github.com/moby/moby/client v0.6.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
