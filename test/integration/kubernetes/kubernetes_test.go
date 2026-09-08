@@ -679,7 +679,7 @@ func runPullTests(t *testing.T, k8sClient kubernetes.Interface, k8sDynClient dyn
 			require.Len(c, pod.Status.ContainerStatuses, 1)
 			waitingState := pod.Status.ContainerStatuses[0].State.Waiting
 			require.NotNil(c, waitingState)
-			require.SliceContainsT(t, []string{"ErrImagePull", "ImagePullBackOff"}, waitingState.Reason)
+			require.SliceContainsT(c, []string{"ErrImagePull", "ImagePullBackOff"}, waitingState.Reason)
 		}, 30*time.Second, 500*time.Millisecond)
 	})
 	require.TrueT(t, succeeded, "pull test failed")
