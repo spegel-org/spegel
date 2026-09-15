@@ -27,8 +27,8 @@ func NewServeMux(log logr.Logger) *ServeMux {
 }
 
 func (s *ServeMux) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	h, pattern := s.mux.Handler(req)
-	if pattern == "" {
+	s.mux.ServeHTTP(rw, req)
+	if req.Pattern == "" {
 		kvs := []any{
 			"path", req.URL.Path,
 			"status", http.StatusNotFound,
@@ -39,7 +39,6 @@ func (s *ServeMux) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusNotFound)
 		return
 	}
-	h.ServeHTTP(rw, req)
 }
 
 func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
