@@ -123,7 +123,11 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 		if err != nil {
 			return err
 		}
-		err = os.WriteFile(fp, []byte(templatedHosts), 0o644)
+		mode, err := existingHostsMode(configPath, mr)
+		if err != nil {
+			return err
+		}
+		err = os.WriteFile(fp, []byte(templatedHosts), mode)
 		if err != nil {
 			return err
 		}
@@ -325,6 +329,18 @@ func existingHosts(configPath string, parsedMirrorRegistry url.URL) (string, err
 		ehs = append(ehs, eh)
 	}
 	return strings.TrimSpace(strings.Join(ehs, "\n")), nil
+}
+
+func existingHostsMode(configPath string, parsedMirrorRegistry url.URL) (fs.FileMode, error) {
+	fp := path.Join(configPath, backupDir, parsedMirrorRegistry.Host, "hosts.toml")
+	info, err := os.Stat(fp)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0o644, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return info.Mode().Perm(), nil
 }
 
 func dirExists(path string) (bool, error) {
