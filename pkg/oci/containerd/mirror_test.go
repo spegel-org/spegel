@@ -394,6 +394,63 @@ Authorization = 'Basic aGVsbG86d29ybGQ='`,
 		})
 	}
 }
+
+func TestMirrorConfigurationFileMode(t *testing.T) {
+	t.Parallel()
+
+	existingHosts := `server = 'https://foo.bar:5000'
+
+[host.'https://mirror.example.com']
+capabilities = ['pull']
+[host.'https://mirror.example.com'.header]
+Authorization = ['Basic Zm9vOmJhcg==']`
+
+	tests := []struct {
+		name            string
+		existingContent string
+		existingMode    iofs.FileMode
+		expectedMode    iofs.FileMode
+		prependExisting bool
+	}{
+		{
+			name:         "no existing hosts.toml",
+			expectedMode: 0o644,
+		},
+		{
+			name:            "existing hosts.toml with restricted mode",
+			existingContent: existingHosts,
+			existingMode:    0o600,
+			expectedMode:    0o600,
+		},
+		{
+			name:            "existing hosts.toml with restricted mode prepended",
+			existingContent: existingHosts,
+			existingMode:    0o600,
+			prependExisting: true,
+			expectedMode:    0o600,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			registryConfigPath := filepath.Join(t.TempDir(), "certs.d")
+			fp := filepath.Join(registryConfigPath, "foo.bar:5000", "hosts.toml")
+			if tt.existingContent != "" {
+				err := os.MkdirAll(filepath.Dir(fp), 0o755)
+				require.NoError(t, err)
+				err = os.WriteFile(fp, []byte(tt.existingContent), tt.existingMode)
+				require.NoError(t, err)
+			}
+			err := AddMirrorConfiguration(t.Context(), registryConfigPath, []string{"https://foo.bar:5000"}, []string{"http://127.0.0.1:5000"}, true, tt.prependExisting, nil)
+			require.NoError(t, err)
+			info, err := os.Stat(fp)
+			require.NoError(t, err)
+			require.EqualT(t, tt.expectedMode, info.Mode().Perm())
+		})
+	}
+}
+
 func TestExistingHosts(t *testing.T) {
 	t.Parallel()
 
