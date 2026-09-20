@@ -27,9 +27,12 @@ import (
 	"github.com/libp2p/go-libp2p-kad-dht/records"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/sec"
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	"github.com/libp2p/go-libp2p/x/rate"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	mc "github.com/multiformats/go-multicodec"
@@ -117,7 +120,12 @@ func NewRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortSt
 	if err != nil {
 		return nil, err
 	}
+	rm, err := newResourceManager()
+	if err != nil {
+		return nil, err
+	}
 	hostOpts := []libp2p.Option{
+		libp2p.ResourceManager(rm),
 		libp2p.ListenAddrs(listenAddrs...),
 		libp2p.DisableIdentifyAddressDiscovery(),
 		libp2p.PrometheusRegisterer(metrics.DefaultRegisterer),
@@ -629,6 +637,23 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, pro
 		}
 	}
 	return nil
+}
+
+// newResourceManager returns the default go-libp2p resource manager without
+// its per source IP connection limits. Those defaults protect a public DHT
+// node from a single source flooding it and treat a whole IPv6 /56 as one
+// source, allowing it 8 concurrent connections and 0.2 new connections per
+// second. Spegel only peers with pods in its own cluster, and clusters with
+// IPv6 pod networking place every pod in a single /56, so all peers would
+// share that budget and bootstrapping fails once a handful of pods are up.
+func newResourceManager() (network.ResourceManager, error) {
+	limits := rcmgr.DefaultLimits
+	libp2p.SetDefaultServiceLimits(&limits)
+	return rcmgr.NewResourceManager(
+		rcmgr.NewFixedLimiter(limits.AutoScale()),
+		rcmgr.WithLimitPerSubnet([]rcmgr.ConnLimitPerSubnet{}, []rcmgr.ConnLimitPerSubnet{}),
+		rcmgr.WithConnRateLimiters(&rate.Limiter{}),
+	)
 }
 
 func loadOrCreatePrivateKey(ctx context.Context, dataDir string) (crypto.PrivKey, error) {
