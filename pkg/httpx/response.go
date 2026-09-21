@@ -16,7 +16,8 @@ type ResponseWriter interface {
 	Error() error
 	Status() int
 	Size() int64
-	SetAttrs(key string, value any)
+	SetAttr(key string, value any)
+	Attrs() map[string]any
 	HeadersWritten() bool
 }
 
@@ -134,11 +135,15 @@ func (r *response) Size() int64 {
 	return r.size
 }
 
-func (r *response) SetAttrs(key string, value any) {
+func (r *response) SetAttr(key string, value any) {
 	if r.attrs == nil {
 		r.attrs = map[string]any{}
 	}
 	r.attrs[key] = value
+}
+
+func (r *response) Attrs() map[string]any {
+	return r.attrs
 }
 
 func (r *response) HeadersWritten() bool {

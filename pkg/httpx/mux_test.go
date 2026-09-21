@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-logr/logr"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -16,14 +15,14 @@ func TestServeMux(t *testing.T) {
 	t.Parallel()
 
 	registerer := prometheus.NewRegistry()
-	RegisterMetrics(registerer)
 
-	m := NewServeMux(logr.Discard())
+	m := NewServeMux()
+	m.Use(PrometheusMiddleware(registerer))
 	handlersCalled := []string{}
-	m.Handle("/exact", func(rw ResponseWriter, req *http.Request) {
+	m.HandleFunc("/exact", func(rw ResponseWriter, req *http.Request) {
 		handlersCalled = append(handlersCalled, "exact")
 	})
-	m.Handle("/prefix/", func(rw ResponseWriter, req *http.Request) {
+	m.HandleFunc("/prefix/", func(rw ResponseWriter, req *http.Request) {
 		handlersCalled = append(handlersCalled, "prefix")
 	})
 	paths := []string{"/prefix/", "/exact", "/exact/foo", "/prefix/bar"}
@@ -42,7 +41,7 @@ func TestServeMux(t *testing.T) {
 http_requests_inflight{handler="/exact"} 0
 http_requests_inflight{handler="/prefix/*"} 0
 `
-	err := testutil.CollectAndCompare(HttpRequestsInflight, strings.NewReader(expectedMetrics))
+	err := testutil.GatherAndCompare(registerer, strings.NewReader(expectedMetrics), "http_requests_inflight")
 	require.NoError(t, err)
 
 	expectedMetrics = `
@@ -75,11 +74,11 @@ http_response_size_bytes_bucket{code="200",handler="/prefix/*",method="GET",le="
 http_response_size_bytes_sum{code="200",handler="/prefix/*",method="GET"} 0
 http_response_size_bytes_count{code="200",handler="/prefix/*",method="GET"} 2
 `
-	err = testutil.CollectAndCompare(HttpResponseSizeHistogram, strings.NewReader(expectedMetrics))
+	err = testutil.GatherAndCompare(registerer, strings.NewReader(expectedMetrics), "http_response_size_bytes_bucket")
 	require.NoError(t, err)
 }
 
-func TestGetClientIP(t *testing.T) {
+func TestClientIP(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -117,7 +116,7 @@ func TestGetClientIP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ip := GetClientIP(tt.request)
+			ip := clientIP(tt.request)
 			require.EqualT(t, tt.expected, ip)
 		})
 	}

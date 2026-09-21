@@ -14,7 +14,6 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/opencontainers/go-digest"
 	"go.uber.org/goleak"
@@ -72,7 +71,7 @@ func TestProbeHandlers(t *testing.T) {
 	router := routing.NewMemoryRouter(map[string][]routing.Peer{}, self)
 	reg, err := NewRegistry(nil, router)
 	require.NoError(t, err)
-	handler := reg.Handler(logr.Discard())
+	handler := reg.Handler()
 
 	rw := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/readyz", nil)
@@ -155,7 +154,7 @@ func TestBasicAuth(t *testing.T) {
 			rw := httptest.NewRecorder()
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/v2/", nil)
 			req.SetBasicAuth(tt.reqUsername, tt.reqPassword)
-			handler := reg.Handler(logr.Discard())
+			handler := reg.Handler()
 			handler.ServeHTTP(rw, req)
 
 			require.EqualT(t, tt.expected, rw.Result().StatusCode)
@@ -196,7 +195,7 @@ func TestRegistryHandler(t *testing.T) {
 	for i := range 2 {
 		badReg, err := NewRegistry(storetest.NewProvider(nil, nil), routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
 		require.NoError(t, err)
-		badSvr := httptest.NewServer(badReg.Handler(logr.Discard()))
+		badSvr := httptest.NewServer(badReg.Handler())
 		t.Cleanup(func() {
 			badSvr.Close()
 		})
@@ -222,7 +221,7 @@ func TestRegistryHandler(t *testing.T) {
 	memStore := storetest.NewProvider(contents, nil)
 	goodReg, err := NewRegistry(memStore, routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
 	require.NoError(t, err)
-	goodSvr := httptest.NewServer(goodReg.Handler(logr.Discard()))
+	goodSvr := httptest.NewServer(goodReg.Handler())
 	t.Cleanup(func() {
 		goodSvr.Close()
 	})
@@ -244,7 +243,7 @@ func TestRegistryHandler(t *testing.T) {
 		flakyStore := &flakyStore{Provider: storetest.NewProvider(contents, nil)}
 		flakyReg, err := NewRegistry(flakyStore, routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
 		require.NoError(t, err)
-		flakySvr := httptest.NewServer(flakyReg.Handler(logr.Discard()))
+		flakySvr := httptest.NewServer(flakyReg.Handler())
 		t.Cleanup(func() {
 			flakySvr.Close()
 		})
@@ -280,7 +279,7 @@ func TestRegistryHandler(t *testing.T) {
 	router := routing.NewMemoryRouter(resolver, routing.Peer{})
 	reg, err := NewRegistry(storetest.NewProvider(nil, nil), router, WithRegistryFilters([]oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}}))
 	require.NoError(t, err)
-	handler := reg.Handler(logr.Discard())
+	handler := reg.Handler()
 
 	//nolint: govet // Prioritize readability in tests.
 	tests := []struct {

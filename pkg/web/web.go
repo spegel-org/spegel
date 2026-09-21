@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
@@ -82,12 +81,12 @@ func NewWeb(router *libp2p.Router, imgLister oci.ImageLister, reg *registry.Regi
 	}, nil
 }
 
-func (w *Web) Handler(log logr.Logger) http.Handler {
-	m := httpx.NewServeMux(log)
-	m.Handle("GET /debug/web/", w.indexHandler)
-	m.Handle("GET /debug/web/metadata", w.metaDataHandler)
-	m.Handle("GET /debug/web/stats", w.statsHandler)
-	m.Handle("GET /debug/web/measure", w.measureHandler)
+func (w *Web) Handler() *httpx.ServeMux {
+	m := httpx.NewServeMux()
+	m.HandleFunc("GET /debug/web/", w.indexHandler)
+	m.HandleFunc("GET /debug/web/metadata", w.metaDataHandler)
+	m.HandleFunc("GET /debug/web/stats", w.statsHandler)
+	m.HandleFunc("GET /debug/web/measure", w.measureHandler)
 	return m
 }
 

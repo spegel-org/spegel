@@ -59,7 +59,7 @@ func TestResponseWriter(t *testing.T) {
 	require.EqualT(t, r.Size(), rw.Size())
 
 	rw, _ = NewRecorder()
-	rw.SetAttrs("foo", "bar")
+	rw.SetAttr("foo", "bar")
 	//nolint: errcheck // No need to check unwrap.
 	require.MapEqualT(t, map[string]any{"foo": "bar"}, rw.(*response).attrs)
 }

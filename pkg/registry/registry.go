@@ -133,12 +133,12 @@ func NewRegistry(provider store.Provider, router routing.Router, opts ...Registr
 	return r, nil
 }
 
-func (r *Registry) Handler(log logr.Logger) *httpx.ServeMux {
-	m := httpx.NewServeMux(log)
-	m.Handle("GET /readyz", r.readyHandler)
-	m.Handle("GET /livez", r.livenessHandler)
-	m.Handle("GET /v2/", r.registryHandler)
-	m.Handle("HEAD /v2/", r.registryHandler)
+func (r *Registry) Handler() *httpx.ServeMux {
+	m := httpx.NewServeMux()
+	m.HandleFunc("GET /readyz", r.readyHandler)
+	m.HandleFunc("GET /livez", r.livenessHandler)
+	m.HandleFunc("GET /v2/", r.registryHandler)
+	m.HandleFunc("HEAD /v2/", r.registryHandler)
 	return m
 }
 
@@ -147,7 +147,7 @@ func (r *Registry) Stats() *Statistics {
 }
 
 func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetAttrs(HandlerAttrKey, "readyz")
+	rw.SetAttr(HandlerAttrKey, "readyz")
 
 	ok, err := r.router.Ready(req.Context())
 	if err != nil {
@@ -162,13 +162,13 @@ func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) livenessHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetAttrs(HandlerAttrKey, "livez")
+	rw.SetAttr(HandlerAttrKey, "livez")
 
 	rw.WriteHeader(http.StatusOK)
 }
 
 func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetAttrs(HandlerAttrKey, "registry")
+	rw.SetAttr(HandlerAttrKey, "registry")
 
 	// Check basic authentication
 	if r.userinfo != nil && !httpx.AuthenticateUserinfo(req.BasicAuth, *r.userinfo) {
@@ -179,7 +179,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	// Quickly return 200 for /v2 to indicate that registry supports v2.
 	if path.Clean(req.URL.Path) == "/v2" {
-		rw.SetAttrs(HandlerAttrKey, "v2")
+		rw.SetAttr(HandlerAttrKey, "v2")
 		rw.WriteHeader(http.StatusOK)
 		return
 	}
@@ -191,7 +191,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		return
 	}
 	if dist.Registry != "" {
-		rw.SetAttrs(RegistryAttrKey, dist.Registry)
+		rw.SetAttr(RegistryAttrKey, dist.Registry)
 	}
 
 	if oci.MatchesFilter(dist.Reference, r.filters) {
@@ -230,7 +230,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
-	rw.SetAttrs(HandlerAttrKey, "mirror")
+	rw.SetAttr(HandlerAttrKey, "mirror")
 
 	log := logr.FromContextOrDiscard(ctx).WithValues("ref", dist.Identifier(), "path", dist.URL().Path)
 	ctx = logr.NewContext(ctx, log)
@@ -478,7 +478,7 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 }
 
 func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
-	rw.SetAttrs(HandlerAttrKey, "manifest")
+	rw.SetAttr(HandlerAttrKey, "manifest")
 
 	if dist.Digest == "" {
 		dgst, err := r.provider.Resolve(ctx, dist.Identifier())
@@ -526,7 +526,7 @@ func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPat
 }
 
 func (r *Registry) blobHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
-	rw.SetAttrs(HandlerAttrKey, "blob")
+	rw.SetAttr(HandlerAttrKey, "blob")
 
 	desc, err := r.provider.Descriptor(ctx, dist.Digest)
 	if err != nil {

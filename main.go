@@ -248,9 +248,11 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	if err != nil {
 		return err
 	}
+	regMux := reg.Handler()
+	regMux.Use(httpx.LogrMiddleware(log, []string{"/livez", "/readyz"}))
 	regSrv := &http.Server{
 		Addr:    args.RegistryAddr,
-		Handler: reg.Handler(log),
+		Handler: regMux,
 	}
 	group.Go(func(ctx context.Context) error {
 		if err := regSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -291,7 +293,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		if err != nil {
 			return err
 		}
-		mux.Handle("/debug/web/", web.Handler(log))
+		mux.Handle("/debug/web/", web.Handler())
 	}
 	metricsSrv := &http.Server{
 		Addr:    args.MetricsAddr,
