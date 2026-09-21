@@ -40,9 +40,9 @@ import (
 
 var (
 	ctrdVersions = []string{
-		"2.3.4",
-		"2.2.7",
-		"2.4.0-beta.0",
+		"2.4.0",
+		"2.3.5",
+		"2.2.8",
 	}
 	ctrdNamespace = "k8s.io"
 )
