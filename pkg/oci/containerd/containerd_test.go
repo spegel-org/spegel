@@ -13,6 +13,7 @@ import (
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/opencontainers/go-digest"
 
+	"github.com/spegel-org/spegel/pkg/oci"
 	"github.com/spegel-org/spegel/pkg/store"
 )
 
@@ -59,4 +60,18 @@ func TestHandleEvent(t *testing.T) {
 	storeEvts, err = ctrd.handleEvent(t.Context(), events.Envelope{Event: event}, nil)
 	require.EqualError(t, err, "unsupported event type *events.ContainerCreate")
 	require.Empty(t, storeEvts)
+}
+
+func TestWithFilters(t *testing.T) {
+	t.Parallel()
+
+	filters := []oci.Filter{
+		oci.RegistryWhitelistFilter{Whitelist: []string{"example.com"}},
+	}
+	ctrd, err := NewContainerd(t.Context(), "test.sock", "", WithContentPath("foobar"), WithConnection(&net.UnixConn{}), WithFilters(filters))
+	require.NoError(t, err)
+	require.Len(t, ctrd.filters, 1)
+
+	require.True(t, oci.MatchesFilter(oci.Reference{Registry: "docker.io", Repository: "library/nginx", Tag: "latest"}, ctrd.filters))
+	require.False(t, oci.MatchesFilter(oci.Reference{Registry: "example.com", Repository: "library/nginx", Tag: "latest"}, ctrd.filters))
 }

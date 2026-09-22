@@ -106,6 +106,7 @@ func NewContainerd(ctx context.Context, socketPath, namespace string, opts ...Co
 		client:       client,
 		mediaTypeIdx: mediaTypeIdx,
 		contentPath:  contentPath,
+		filters:      cfg.Filters,
 	}
 	return c, nil
 }
