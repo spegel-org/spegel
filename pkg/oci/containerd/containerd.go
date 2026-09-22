@@ -334,6 +334,9 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		if err != nil {
 			return nil, err
 		}
+		if oci.MatchesFilter(img.Reference, c.filters) {
+			return nil, nil
+		}
 		return idx.AddImage(img), nil
 	case *eventtypes.ImageUpdate:
 		cImg, err := c.client.ImageService().Get(ctx, e.GetName())
@@ -347,6 +350,9 @@ func (c *Containerd) handleEvent(ctx context.Context, envelope events.Envelope, 
 		img, err := oci.ParseImage(e.GetName(), oci.WithDigest(cImg.Target.Digest))
 		if err != nil {
 			return nil, err
+		}
+		if oci.MatchesFilter(img.Reference, c.filters) {
+			return nil, nil
 		}
 		return idx.AddImage(img), nil
 	case *eventtypes.ImageDelete:
