@@ -61,6 +61,8 @@ linters:
           alias: tlog
         - pkg: github.com/pelletier/go-toml/v2/unstable
           alias: tomlu
+        - pkg: github.com/libp2p/go-libp2p/p2p/host/resource-manager
+          alias: rcmgr
         - pkg: github.com/multiformats/go-multiaddr/net
           alias: manet
         - pkg: github.com/multiformats/go-multiaddr
