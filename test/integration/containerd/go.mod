@@ -10,7 +10,7 @@ require (
 	github.com/containerd/containerd/v2 v2.4.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v1.0.0-rc.5
-	github.com/go-openapi/testify/v2 v2.7.0
+	github.com/go-openapi/testify/v2 v2.8.0
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
 	github.com/moby/moby/api v1.56.0
 	github.com/moby/moby/client v0.6.0
