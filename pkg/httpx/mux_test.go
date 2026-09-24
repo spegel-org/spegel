@@ -20,10 +20,10 @@ func TestServeMux(t *testing.T) {
 
 	m := NewServeMux(logr.Discard())
 	handlersCalled := []string{}
-	m.Handle("/exact", func(rw ResponseWriter, req *http.Request) {
+	m.HandleFunc("/exact", func(rw ResponseWriter, req *http.Request) {
 		handlersCalled = append(handlersCalled, "exact")
 	})
-	m.Handle("/prefix/", func(rw ResponseWriter, req *http.Request) {
+	m.HandleFunc("/prefix/", func(rw ResponseWriter, req *http.Request) {
 		handlersCalled = append(handlersCalled, "prefix")
 	})
 	paths := []string{"/prefix/", "/exact", "/exact/foo", "/prefix/bar"}
@@ -79,7 +79,7 @@ http_response_size_bytes_count{code="200",handler="/prefix/*",method="GET"} 2
 	require.NoError(t, err)
 }
 
-func TestGetClientIP(t *testing.T) {
+func TestClientIP(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -117,7 +117,7 @@ func TestGetClientIP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ip := GetClientIP(tt.request)
+			ip := clientIP(tt.request)
 			require.EqualT(t, tt.expected, ip)
 		})
 	}

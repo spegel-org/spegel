@@ -82,12 +82,12 @@ func NewWeb(router *libp2p.Router, imgLister oci.ImageLister, reg *registry.Regi
 	}, nil
 }
 
-func (w *Web) Handler(log logr.Logger) http.Handler {
+func (w *Web) Handler(log logr.Logger) *httpx.ServeMux {
 	m := httpx.NewServeMux(log)
-	m.Handle("GET /debug/web/", w.indexHandler)
-	m.Handle("GET /debug/web/metadata", w.metaDataHandler)
-	m.Handle("GET /debug/web/stats", w.statsHandler)
-	m.Handle("GET /debug/web/measure", w.measureHandler)
+	m.HandleFunc("GET /debug/web/", w.indexHandler)
+	m.HandleFunc("GET /debug/web/metadata", w.metaDataHandler)
+	m.HandleFunc("GET /debug/web/stats", w.statsHandler)
+	m.HandleFunc("GET /debug/web/measure", w.measureHandler)
 	return m
 }
 

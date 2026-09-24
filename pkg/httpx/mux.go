@@ -12,7 +12,21 @@ import (
 	"github.com/go-logr/logr"
 )
 
+type Handler interface {
+	ServeHTTP(rw ResponseWriter, req *http.Request)
+}
+
 type HandlerFunc func(rw ResponseWriter, req *http.Request)
+
+func (f HandlerFunc) ServeHTTP(rw ResponseWriter, req *http.Request) {
+	f(rw, req)
+}
+
+func StdlibHandler(handler http.Handler) Handler {
+	return HandlerFunc(func(rw ResponseWriter, req *http.Request) {
+		handler.ServeHTTP(rw, req)
+	})
+}
 
 type ServeMux struct {
 	mux *http.ServeMux
@@ -26,14 +40,18 @@ func NewServeMux(log logr.Logger) *ServeMux {
 	}
 }
 
-func (s *ServeMux) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (s *ServeMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	rw := &response{
+		ResponseWriter: w,
+		method:         req.Method,
+	}
 	s.mux.ServeHTTP(rw, req)
 	if req.Pattern == "" {
 		kvs := []any{
 			"path", req.URL.Path,
 			"status", http.StatusNotFound,
 			"method", req.Method,
-			"ip", GetClientIP(req),
+			"ip", clientIP(req),
 		}
 		s.log.Error(errors.New("page not found"), "", kvs...)
 		rw.WriteHeader(http.StatusNotFound)
@@ -41,7 +59,7 @@ func (s *ServeMux) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
+func (s *ServeMux) Handle(pattern string, handler Handler) {
 	metricsPath := metricsFriendlyPath(pattern)
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
@@ -68,7 +86,7 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 					"status", rw.Status(),
 					"method", req.Method,
 					"latency", latency.String(),
-					"ip", GetClientIP(req),
+					"ip", clientIP(req),
 				}
 				for k, v := range rw.attrs {
 					kvs = append(kvs, k, v)
@@ -81,12 +99,16 @@ func (s *ServeMux) Handle(pattern string, handler HandlerFunc) {
 			}
 		}()
 		HttpRequestsInflight.WithLabelValues(metricsPath).Add(1)
-		ctx := logr.NewContext(req.Context(), s.log)
-		handler(rw, req.WithContext(ctx))
+		//nolint: errcheck // Cannot be any other type as it is injected in ServeHttp.
+		handler.ServeHTTP(w.(ResponseWriter), req.WithContext(logr.NewContext(req.Context(), s.log)))
 	})
 }
 
-func GetClientIP(req *http.Request) string {
+func (s *ServeMux) HandleFunc(pattern string, handler func(rw ResponseWriter, req *http.Request)) {
+	s.Handle(pattern, HandlerFunc(handler))
+}
+
+func clientIP(req *http.Request) string {
 	forwardedFor := req.Header.Get(HeaderXForwardedFor)
 	if forwardedFor != "" {
 		comps := strings.Split(forwardedFor, ",")
