@@ -135,10 +135,10 @@ func NewRegistry(provider store.Provider, router routing.Router, opts ...Registr
 
 func (r *Registry) Handler(log logr.Logger) *httpx.ServeMux {
 	m := httpx.NewServeMux(log)
-	m.Handle("GET /readyz", r.readyHandler)
-	m.Handle("GET /livez", r.livenessHandler)
-	m.Handle("GET /v2/", r.registryHandler)
-	m.Handle("HEAD /v2/", r.registryHandler)
+	m.HandleFunc("GET /readyz", r.readyHandler)
+	m.HandleFunc("GET /livez", r.livenessHandler)
+	m.HandleFunc("GET /v2/", r.registryHandler)
+	m.HandleFunc("HEAD /v2/", r.registryHandler)
 	return m
 }
 
