@@ -33,6 +33,7 @@ spec:
       - name: cleanup
         image: "{{ include "spegel.image" . }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext: {{ .Values.securityContext | toYaml | nindent 10 }}
         args:
           - cleanup
           - --containerd-registry-config-path={{ .Values.spegel.containerdRegistryConfigPath }}
@@ -97,10 +98,18 @@ metadata:
     helm.sh/hook-delete-policy: "before-hook-creation, hook-succeeded"
     helm.sh/hook-weight: "1"
 spec:
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  securityContext: {{ .Values.podSecurityContext | toYaml | nindent 4 }}
+  {{- with .Values.tolerations }}
+  tolerations: {{ . | toYaml | nindent 4 }}
+  {{- end }}
   containers:
     - name: cleanup-wait
       image: "{{ include "spegel.image" . }}"
       imagePullPolicy: {{ .Values.image.pullPolicy }}
+      securityContext: {{ .Values.securityContext | toYaml | nindent 8 }}
       args:
         - cleanup-wait
         - --probe-endpoint={{ include "spegel.fullname" . }}-cleanup.{{ include "spegel.namespace" . }}.svc.{{ .Values.clusterDomain }}:{{ .Values.service.cleanup.port }}
