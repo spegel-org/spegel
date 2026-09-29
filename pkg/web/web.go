@@ -195,6 +195,7 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	lookupRes, err := w.router.Measure(lookupCtx, img.Identifier())
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
+		return
 	}
 	res.LookupResults = lookupRes
 
