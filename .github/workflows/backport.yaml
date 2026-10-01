@@ -27,7 +27,7 @@ jobs:
           token: ${{ steps.bot.outputs.token }}
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Create backport PR
-        uses: korthout/backport-action@2e830a1d0b8269505846ddd407a70876913ad1f8 # v4.6.0
+        uses: korthout/backport-action@8560fb503c275d433c56f05a2f64850093baa9f7 # v4.7.0
         with:
           github_token: ${{ steps.bot.outputs.token }}
           label_pattern: '^backport:([^ ]+)$'
