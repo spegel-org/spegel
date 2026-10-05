@@ -10,15 +10,15 @@ require (
 	github.com/fluxcd/cli-utils v1.3.0
 	github.com/go-openapi/testify/v2 v2.8.0
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
-	github.com/moby/moby/client v0.6.0
+	github.com/moby/moby/client v0.6.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
 	golang.org/x/mod v0.41.0
 	helm.sh/helm/v4 v4.3.0
-	k8s.io/api v0.37.0
-	k8s.io/apimachinery v0.37.0
-	k8s.io/cli-runtime v0.37.0
-	k8s.io/client-go v0.37.0
-	k8s.io/kubectl v0.37.0
+	k8s.io/api v0.37.1
+	k8s.io/apimachinery v0.37.1
+	k8s.io/cli-runtime v0.37.1
+	k8s.io/client-go v0.37.1
+	k8s.io/kubectl v0.37.1
 	sigs.k8s.io/kind v0.33.0
 )
 
@@ -44,7 +44,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
-	github.com/containerd/containerd/v2 v2.4.0 // indirect
+	github.com/containerd/containerd/v2 v2.4.1 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.2.0 // indirect
@@ -54,7 +54,7 @@ require (
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/go-connections v0.7.0 // indirect
+	github.com/docker/go-connections v0.8.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dunglas/httpsfv v1.1.0 // indirect
 	github.com/dylibso/observe-sdk/go v0.0.0-20240819160327-2d926c5d788a // indirect
@@ -66,7 +66,7 @@ require (
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/filecoin-project/go-clock v0.1.0 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
 	github.com/gammazero/deque v1.2.1 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
@@ -142,7 +142,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/moby/api v1.56.0 // indirect
+	github.com/moby/moby/api v1.56.1 // indirect
 	github.com/moby/spdystream v0.5.1 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -237,10 +237,10 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiextensions-apiserver v0.37.0 // indirect
 	k8s.io/apiserver v0.37.0 // indirect
-	k8s.io/component-base v0.37.0 // indirect
+	k8s.io/component-base v0.37.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
-	k8s.io/streaming v0.37.0 // indirect
+	k8s.io/streaming v0.37.1 // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 	oras.land/oras-go/v2 v2.6.2 // indirect
