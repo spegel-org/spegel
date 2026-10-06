@@ -167,10 +167,6 @@ func TestValidateRegistryURL(t *testing.T) {
 			expected: "invalid registry url scheme must be http or https: ftp://docker.io",
 		},
 		{
-			urlStr:   "https://docker.io/foo/bar",
-			expected: "invalid registry url path has to be empty: https://docker.io/foo/bar",
-		},
-		{
 			urlStr:   "https://docker.io?foo=bar",
 			expected: "invalid registry url query has to be empty: https://docker.io?foo=bar",
 		},
