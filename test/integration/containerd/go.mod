@@ -7,19 +7,19 @@ toolchain go1.27.0
 replace github.com/spegel-org/spegel => ../../../
 
 require (
-	github.com/containerd/containerd/v2 v2.4.0
+	github.com/containerd/containerd/v2 v2.4.1
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/go-openapi/testify/v2 v2.8.0
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
-	github.com/moby/moby/api v1.56.0
-	github.com/moby/moby/client v0.6.0
+	github.com/moby/moby/api v1.56.1
+	github.com/moby/moby/client v0.6.1
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spegel-org/spegel v0.0.0-00010101000000-000000000000
 	go.uber.org/goleak v1.3.0
 	google.golang.org/grpc v1.84.0
-	k8s.io/cri-api v0.37.0
+	k8s.io/cri-api v0.37.1
 )
 
 require (
@@ -39,7 +39,7 @@ require (
 	github.com/containerd/ttrpc v1.2.9 // indirect
 	github.com/containerd/typeurl/v2 v2.3.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/go-connections v0.7.0 // indirect
+	github.com/docker/go-connections v0.8.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
