@@ -13,7 +13,6 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -98,20 +97,15 @@ type Router struct {
 	lookupCache      *expirable.LRU[string, *routing.Iterator]
 	connectivityGate *channel.Gate
 	protocols        []ma.Multiaddr
-	registryPort     uint16
+	peerMetadata     routing.PeerMetadata
 }
 
-func NewRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortStr string, opts ...RouterOption) (*Router, error) {
+func NewRouter(ctx context.Context, addr string, bs Bootstrapper, peerMetadata routing.PeerMetadata, opts ...RouterOption) (*Router, error) {
 	cfg := RouterConfig{
 		AdvertiseTTL:      15 * time.Minute,
 		MaxReprovideDelay: 2 * time.Minute,
 	}
 	err := option.Apply(&cfg, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	registryPort, err := strconv.ParseUint(registryPortStr, 10, 16)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +204,7 @@ func NewRouter(ctx context.Context, addr string, bs Bootstrapper, registryPortSt
 		lookupCache:      expirable.NewLRU[string, *routing.Iterator](0, nil, lookupCacheTTL),
 		connectivityGate: connectivityGate,
 		protocols:        protocols,
-		registryPort:     uint16(registryPort),
+		peerMetadata:     peerMetadata,
 	}, nil
 }
 
@@ -329,9 +323,7 @@ func (r *Router) Lookup(ctx context.Context, key string, count int) (*routing.It
 				peer := routing.Peer{
 					Host:      addrInfo.ID.String(),
 					Addresses: ipAddrs,
-					Metadata: routing.PeerMetadata{
-						RegistryPort: r.registryPort,
-					},
+					Metadata:  r.peerMetadata,
 				}
 				iter.Add(peer)
 			}
@@ -371,9 +363,7 @@ func (r *Router) Measure(ctx context.Context, key string) ([]LookupResult, error
 			Peer: routing.Peer{
 				Host:      addrInfo.ID.String(),
 				Addresses: ipAddrs,
-				Metadata: routing.PeerMetadata{
-					RegistryPort: r.registryPort,
-				},
+				Metadata:  r.peerMetadata,
 			},
 			Duration: d,
 		}
@@ -437,9 +427,7 @@ func (r *Router) ListPeers() ([]routing.Peer, error) {
 		peer := routing.Peer{
 			Host:      id.String(),
 			Addresses: ipAddrs,
-			Metadata: routing.PeerMetadata{
-				RegistryPort: r.registryPort,
-			},
+			Metadata:  r.peerMetadata,
 		}
 		peers = append(peers, peer)
 	}

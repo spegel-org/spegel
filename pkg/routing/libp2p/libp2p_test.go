@@ -19,6 +19,7 @@ import (
 	"github.com/kvick-org/pkg/errgroup"
 
 	"github.com/spegel-org/spegel/internal/option"
+	"github.com/spegel-org/spegel/pkg/routing"
 )
 
 func TestP2PRouterOptions(t *testing.T) {
@@ -48,7 +49,7 @@ func TestP2PRouter(t *testing.T) {
 
 	// Create primary router with no peer to bootstrap with.
 	primaryBs := NewStaticBootstrapper(nil)
-	primaryRouter, err := NewRouter(t.Context(), "localhost:0", primaryBs, "9090")
+	primaryRouter, err := NewRouter(t.Context(), "localhost:0", primaryBs, routing.PeerMetadata{RegistryPort: 9090})
 	require.NoError(t, err)
 	group.Go(func(ctx context.Context) error {
 		return primaryRouter.Run(ctx)
@@ -87,7 +88,7 @@ func TestP2PRouter(t *testing.T) {
 	routers := []*Router{}
 	for range 30 {
 		bs := NewStaticBootstrapper([]peer.AddrInfo{*host.InfoFromHost(primaryRouter.host)})
-		r, err := NewRouter(t.Context(), "localhost:0", bs, "9091")
+		r, err := NewRouter(t.Context(), "localhost:0", bs, routing.PeerMetadata{RegistryPort: 9091})
 		require.NoError(t, err)
 		group.Go(func(ctx context.Context) error {
 			return r.Run(ctx)
@@ -179,7 +180,7 @@ func TestProvideTTL(t *testing.T) {
 	routers := []*Router{}
 	for range 5 {
 		bs := NewStaticBootstrapper(nil)
-		router, err := NewRouter(t.Context(), ":0", bs, "9090", WithAdvertiseTTL(5*time.Second), WithMaxReprovideDelay(1*time.Second))
+		router, err := NewRouter(t.Context(), ":0", bs, routing.PeerMetadata{RegistryPort: 9090}, WithAdvertiseTTL(5*time.Second), WithMaxReprovideDelay(1*time.Second))
 		require.NoError(t, err)
 		group.Go(func(ctx context.Context) error {
 			return router.Run(ctx)
@@ -360,7 +361,7 @@ func TestListPeers(t *testing.T) {
 	t.Parallel()
 
 	isolatedBs := NewStaticBootstrapper(nil)
-	isolatedRouter, err := NewRouter(t.Context(), "localhost:0", isolatedBs, "9090")
+	isolatedRouter, err := NewRouter(t.Context(), "localhost:0", isolatedBs, routing.PeerMetadata{RegistryPort: 9090})
 	require.NoError(t, err)
 
 	isolatedAddrs, err := isolatedRouter.ListPeers()
@@ -373,7 +374,7 @@ func TestLocalAddress(t *testing.T) {
 	t.Parallel()
 
 	bs := NewStaticBootstrapper(nil)
-	router, err := NewRouter(t.Context(), ":0", bs, "9090")
+	router, err := NewRouter(t.Context(), ":0", bs, routing.PeerMetadata{RegistryPort: 9090})
 	require.NoError(t, err)
 
 	ipAddrs, err := router.LocalAddresses()

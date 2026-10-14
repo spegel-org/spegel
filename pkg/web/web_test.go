@@ -28,7 +28,7 @@ func (i imageLister) ListImages(ctx context.Context) ([]oci.Image, error) {
 func TestWeb(t *testing.T) {
 	t.Parallel()
 
-	router, err := libp2p.NewRouter(t.Context(), ":0", nil, "5000")
+	router, err := libp2p.NewRouter(t.Context(), ":0", nil, routing.PeerMetadata{RegistryPort: 5000})
 	require.NoError(t, err)
 
 	reg, err := registry.NewRegistry(storetest.NewProvider(nil, nil), router)
