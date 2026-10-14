@@ -17,8 +17,8 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 
 	"github.com/kvick-org/pkg/errgroup"
+	"github.com/kvick-org/pkg/option"
 
-	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/pkg/routing"
 )
 

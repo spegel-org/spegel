@@ -38,8 +38,9 @@ import (
 	mh "github.com/multiformats/go-multihash"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/kvick-org/pkg/option"
+
 	"github.com/spegel-org/spegel/internal/channel"
-	"github.com/spegel-org/spegel/internal/option"
 	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/pkg/metrics"
 	"github.com/spegel-org/spegel/pkg/routing"

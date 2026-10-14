@@ -19,7 +19,8 @@ import (
 	"github.com/opencontainers/go-digest"
 	"go.uber.org/goleak"
 
-	"github.com/spegel-org/spegel/internal/option"
+	"github.com/kvick-org/pkg/option"
+
 	"github.com/spegel-org/spegel/internal/resilient"
 	"github.com/spegel-org/spegel/internal/testutil"
 	"github.com/spegel-org/spegel/pkg/httpx"

@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/spegel-org/spegel/internal/option"
+	"github.com/kvick-org/pkg/option"
 )
 
 type unrecoverableError struct {
