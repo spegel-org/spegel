@@ -9,7 +9,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.3.0
 	github.com/alexflint/go-arg v1.6.1
 	github.com/containerd/containerd/api v1.12.0
-	github.com/containerd/containerd/v2 v2.4.0
+	github.com/containerd/containerd/v2 v2.4.2
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/containerd/typeurl/v2 v2.3.0
@@ -32,6 +32,7 @@ require (
 	go.uber.org/goleak v1.3.0
 	golang.org/x/sync v0.23.0
 	google.golang.org/grpc v1.84.0
+	k8s.io/apimachinery v0.37.0
 )
 
 require (

@@ -8,6 +8,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
 
 	eventtypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/v2/client"
@@ -21,6 +24,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"google.golang.org/grpc"
+	utilversion "k8s.io/apimachinery/pkg/util/version"
 
 	"github.com/kvick-org/pkg/option"
 
@@ -109,6 +113,43 @@ func NewContainerd(ctx context.Context, socketPath, namespace string, opts ...Co
 		contentPath:  contentPath,
 	}
 	return c, nil
+}
+
+func (c *Containerd) Validate(ctx context.Context, registryConfigPath string) error {
+	ctrdVersion, err := c.client.Version(ctx)
+	if err != nil {
+		return err
+	}
+	version, err := utilversion.Parse(ctrdVersion.Version)
+	if err != nil {
+		return fmt.Errorf("could not parse version %s: %w", ctrdVersion, err)
+	}
+
+	// Check for minimum Contianerd version.
+	if !version.AtLeast(utilversion.MustParse("2.2")) {
+		return fmt.Errorf("containerd version %s is too old, version 2.2 or later is required", version.String())
+	}
+
+	// Check for required mirror configuration if exported by Contianerd.
+	if version.AtLeast(utilversion.MustParse("2.4")) {
+		criInfo, err := c.client.IntrospectionService().PluginInfo(ctx, string(plugins.CRIServicePlugin), "images", nil)
+		if err != nil {
+			return err
+		}
+		registryConfigPath := criInfo.Plugin.Exports["RegistryConfigPath"]
+		if !slices.Contains(strings.Split(registryConfigPath, ":"), registryConfigPath) {
+			return fmt.Errorf("registry config path %s does not contain configured path %s", registryConfigPath, registryConfigPath)
+		}
+		discardUnpackedLayers, err := strconv.ParseBool(criInfo.Plugin.Exports["DiscardUnpackedLayers"])
+		if err != nil {
+			return err
+		}
+		if discardUnpackedLayers {
+			return errors.New("discard unpacked layers cannot be enabled")
+		}
+	}
+
+	return nil
 }
 
 func (c *Containerd) Close() error {
