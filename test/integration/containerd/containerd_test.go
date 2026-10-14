@@ -40,9 +40,9 @@ import (
 
 var (
 	ctrdVersions = []string{
-		"2.4.0",
-		"2.3.5",
-		"2.2.8",
+		"2.4.2",
+		"2.3.7",
+		"2.2.10",
 	}
 	ctrdNamespace = "k8s.io"
 )
@@ -230,6 +230,8 @@ func TestContainerdPull(t *testing.T) {
 				t.Run(tt.name, func(t *testing.T) {
 					t.Log("Setting up Containerd store")
 					ctrd, err := containerd.NewContainerd(t.Context(), socketPath, ctrdNamespace)
+					require.NoError(t, err)
+					err = ctrd.Validate(t.Context(), "/etc/containerd/certs.d")
 					require.NoError(t, err)
 					ctrdName := ctrd.Name()
 					require.EqualT(t, "containerd", ctrdName)
