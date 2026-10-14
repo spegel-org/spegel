@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -202,7 +203,11 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	defer ctrd.Close()
 
 	// Routing and state tracking.
-	_, registryPort, err := net.SplitHostPort(args.RegistryAddr)
+	_, registryPortStr, err := net.SplitHostPort(args.RegistryAddr)
+	if err != nil {
+		return err
+	}
+	registryPort, err := strconv.ParseUint(registryPortStr, 10, 16)
 	if err != nil {
 		return err
 	}
@@ -213,7 +218,7 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	routerOpts := []libp2p.RouterOption{
 		libp2p.WithDataDir(args.DataDir),
 	}
-	router, err := libp2p.NewRouter(ctx, args.RouterAddr, bootstrapper, registryPort, routerOpts...)
+	router, err := libp2p.NewRouter(ctx, args.RouterAddr, bootstrapper, routing.PeerMetadata{RegistryPort: uint16(registryPort)}, routerOpts...)
 	if err != nil {
 		return err
 	}
