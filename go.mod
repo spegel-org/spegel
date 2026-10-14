@@ -17,6 +17,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ipfs/go-cid v0.6.2
 	github.com/kvick-org/pkg/errgroup v0.0.0-20260714201549-203456789dd7
+	github.com/kvick-org/pkg/option v0.0.0-20261012093513-132f0b122185
 	github.com/kvick-org/pkg/version v0.0.0-20260714201549-203456789dd7
 	github.com/libp2p/go-libp2p v0.50.0
 	github.com/libp2p/go-libp2p-kad-dht v0.42.2

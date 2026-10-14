@@ -9,7 +9,7 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 
-	"github.com/spegel-org/spegel/internal/option"
+	"github.com/kvick-org/pkg/option"
 )
 
 const (
