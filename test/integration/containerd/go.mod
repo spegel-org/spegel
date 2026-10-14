@@ -7,7 +7,7 @@ toolchain go1.27.0
 replace github.com/spegel-org/spegel => ../../../
 
 require (
-	github.com/containerd/containerd/v2 v2.4.0
+	github.com/containerd/containerd/v2 v2.4.1
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/go-openapi/testify/v2 v2.8.0
