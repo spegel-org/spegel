@@ -23,7 +23,7 @@ require (
 )
 
 require (
-	github.com/HdrHistogram/hdrhistogram-go v1.3.0 // indirect
+	github.com/HdrHistogram/hdrhistogram-go v1.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29 // indirect
 	github.com/Microsoft/hcsshim v0.15.0-rc.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
