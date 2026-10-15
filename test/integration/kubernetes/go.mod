@@ -2,7 +2,7 @@ module github.com/spegel-org/spegel/test/integration/kubernetes
 
 go 1.26.6
 
-toolchain go1.27.0
+toolchain go1.27.2
 
 replace github.com/spegel-org/spegel => ../../../
 
