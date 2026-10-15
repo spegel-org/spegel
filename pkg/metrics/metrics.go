@@ -29,26 +29,16 @@ var (
 		Name: "spegel_resolve_duration_seconds",
 		Help: "The duration for router to resolve a peer.",
 	}, []string{"router"})
-	AdvertisedImageTags = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "spegel_advertised_image_tags",
-		Help: "Number of image tags advertised to be available.",
-	}, []string{"registry"})
-	AdvertisedImageDigests = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "spegel_advertised_image_digests",
+	AdvertisedKeys = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "spegel_advertised_keys",
 		Help: "Number of image digests advertised to be available.",
-	}, []string{"registry"})
-	AdvertisedContentDigests = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "spegel_advertised_content_digests",
-		Help: "Number of content digests advertised to be available.",
-	}, []string{"registry"})
+	})
 )
 
 func Register() {
 	DefaultRegisterer.MustRegister(MirrorRequestsTotal)
 	DefaultRegisterer.MustRegister(MirrorLastSuccessTimestamp)
 	DefaultRegisterer.MustRegister(ResolveDurHistogram)
-	DefaultRegisterer.MustRegister(AdvertisedImageTags)
-	DefaultRegisterer.MustRegister(AdvertisedImageDigests)
-	DefaultRegisterer.MustRegister(AdvertisedContentDigests)
+	DefaultRegisterer.MustRegister(AdvertisedKeys)
 	httpx.RegisterMetrics(DefaultRegisterer)
 }

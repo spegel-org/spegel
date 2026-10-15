@@ -394,6 +394,11 @@ func (r *Router) Advertise(ctx context.Context, keys []string) error {
 	if err != nil {
 		return err
 	}
+	stats, err := r.prov.Stats(ctx)
+	if err != nil {
+		return err
+	}
+	metrics.AdvertisedKeys.Set(float64(stats.Schedule.Keys))
 	return nil
 }
 
@@ -413,6 +418,11 @@ func (r *Router) Withdraw(ctx context.Context, keys []string) error {
 	if err != nil {
 		return err
 	}
+	stats, err := r.prov.Stats(ctx)
+	if err != nil {
+		return err
+	}
+	metrics.AdvertisedKeys.Set(float64(stats.Schedule.Keys))
 	return nil
 }
 
