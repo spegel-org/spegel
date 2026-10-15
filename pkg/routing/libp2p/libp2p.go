@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -470,6 +471,7 @@ func toIPAddrs(addrs []ma.Multiaddr) ([]netip.Addr, error) {
 		}
 		ipAddrs = append(ipAddrs, ipAddr)
 	}
+	slices.SortFunc(ipAddrs, netip.Addr.Compare)
 	return ipAddrs, nil
 }
 

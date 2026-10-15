@@ -47,7 +47,7 @@ func (i Image) TagName() (string, bool) {
 
 // DigestName returns the full tag reference string if digest is set.
 func (i Image) DigestName() (string, bool) {
-	if i.Tag == "" {
+	if i.Digest == "" {
 		return "", false
 	}
 	return fmt.Sprintf("%s/%s@%s", i.Registry, i.Repository, i.Digest), true

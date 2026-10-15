@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/events"
+	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/containerd/v2/plugins"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
@@ -170,7 +171,10 @@ func (c *Containerd) ListImages(ctx context.Context) ([]oci.Image, error) {
 	if err != nil {
 		return nil, err
 	}
+	return deduplicateImages(ctx, cImgs, c.filters), nil
+}
 
+func deduplicateImages(ctx context.Context, cImgs []images.Image, filters []oci.Filter) []oci.Image {
 	seen := map[string]any{}
 	imgs := []oci.Image{}
 	dgstImgs := []oci.Image{}
@@ -180,7 +184,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]oci.Image, error) {
 			logr.FromContextOrDiscard(ctx).Error(err, "could not parse image name", "name", cImg.Name)
 			continue
 		}
-		if oci.MatchesFilter(img.Reference, c.filters) {
+		if oci.MatchesFilter(img.Reference, filters) {
 			continue
 		}
 		if _, ok := img.TagName(); ok {
@@ -198,7 +202,7 @@ func (c *Containerd) ListImages(ctx context.Context) ([]oci.Image, error) {
 		}
 		imgs = append(imgs, img)
 	}
-	return imgs, nil
+	return imgs
 }
 
 func (c *Containerd) Resolve(ctx context.Context, ref string) (digest.Digest, error) {
