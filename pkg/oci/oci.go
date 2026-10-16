@@ -50,6 +50,7 @@ func FingerprintMediaType(r io.Reader) (string, error) {
 
 	schemaVersion := 0
 	mediaType := ""
+	artifactType := ""
 
 	indexKeys := 0
 	manifestKeys := 0
@@ -108,6 +109,16 @@ func FingerprintMediaType(r io.Reader) (string, error) {
 			if err != nil {
 				return "", err
 			}
+		// OCI Artifact specific field - used by SOCI indices.
+		case "artifactType":
+			//nolint: errcheck // Allow other value types.
+			dec.Decode(&artifactType)
+		case "blobs":
+			var discard any
+			err = dec.Decode(&discard)
+			if err != nil {
+				return "", err
+			}
 		default:
 			var discard any
 			err = dec.Decode(&discard)
@@ -115,11 +126,18 @@ func FingerprintMediaType(r io.Reader) (string, error) {
 				return "", err
 			}
 		}
+	}
 
-		// Return immediately if schema version and media type is set.
-		if schemaVersion == 2 && mediaType != "" {
-			return mediaType, nil
-		}
+	if artifactType != "" && IsSOCIMediaType(artifactType) {
+		return artifactType, nil
+	}
+
+	if schemaVersion == 2 && mediaType != "" {
+		return mediaType, nil
+	}
+
+	if mediaType != "" && IsSOCIMediaType(mediaType) {
+		return mediaType, nil
 	}
 
 	if indexKeys == 1 {
@@ -139,7 +157,9 @@ func IsManifestsMediatype(mt string) bool {
 	case ocispec.MediaTypeImageIndex,
 		ocispec.MediaTypeImageManifest,
 		images.MediaTypeDockerSchema2ManifestList,
-		images.MediaTypeDockerSchema2Manifest:
+		images.MediaTypeDockerSchema2Manifest,
+		MediaTypeSOCIIndexV1,
+		MediaTypeSOCIIndexV2:
 		return true
 	default:
 		return false
