@@ -48,7 +48,8 @@ import (
 )
 
 const (
-	lookupCacheTTL = 5 * time.Second
+	lookupCacheTTL                      = 5 * time.Second
+	bootstrapPeerHedgeDelay = 3 * time.Second
 )
 
 type RouterConfig struct {
@@ -566,8 +567,11 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, pro
 	if err != nil {
 		return err
 	}
-	errs := []error{}
+	if len(addrInfos) == 0 {
+		return nil
+	}
 	self := *host.InfoFromHost(kdht.Host())
+	peers := []peer.AddrInfo{}
 	for _, addrInfo := range addrInfos {
 		// If ID is not empty and match it is self.
 		if self.ID != "" && addrInfo.ID != "" && self.ID == addrInfo.ID {
@@ -592,7 +596,10 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, pro
 		if matches {
 			continue
 		}
+		peers = append(peers, addrInfo)
+	}
 
+	err = raceBootstrapPeers(bootstrapCtx, peers, func(ctx context.Context, addrInfo peer.AddrInfo) error {
 		if addrInfo.ID == "" {
 			priv, _, err := crypto.GenerateEd25519Key(nil)
 			if err != nil {
@@ -603,25 +610,20 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, pro
 				return err
 			}
 			addrInfo.ID = id
-			err = kdht.Host().Connect(bootstrapCtx, addrInfo)
+			err = kdht.Host().Connect(ctx, addrInfo)
 			mismatchErr, ok := errors.AsType[sec.ErrPeerIDMismatch](err)
 			kdht.Host().Peerstore().ClearAddrs(addrInfo.ID)
 			kdht.Host().Peerstore().RemovePeer(addrInfo.ID)
 			if !ok {
-				errs = append(errs, err)
-				continue
+				return err
 			}
 			addrInfo.ID = mismatchErr.Actual
 		}
 
-		err := kdht.Host().Connect(bootstrapCtx, addrInfo)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-	}
-	if len(errs) == len(addrInfos) {
-		return errors.Join(errs...)
+		return kdht.Host().Connect(ctx, addrInfo)
+	})
+	if err != nil {
+		return err
 	}
 
 	// Refresh routing table.
@@ -638,6 +640,47 @@ func bootstrapPeers(ctx context.Context, bs Bootstrapper, kdht *dht.IpfsDHT, pro
 		}
 	}
 	return nil
+}
+
+func raceBootstrapPeers(ctx context.Context, peers []peer.AddrInfo, connect func(context.Context, peer.AddrInfo) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	results := make(chan error, len(peers))
+	timer := time.NewTimer(bootstrapPeerHedgeDelay)
+	defer timer.Stop()
+
+	next, pending := 0, 0
+	start := func() {
+		if next >= len(peers) {
+			return
+		}
+		addrInfo := peers[next]
+		next++
+		pending++
+		go func() {
+			results <- connect(ctx, addrInfo)
+		}()
+		timer.Reset(bootstrapPeerHedgeDelay)
+	}
+	start()
+	errList := []error{}
+	for pending > 0 {
+		select {
+		case <-ctx.Done():
+			return errors.Join(append(errList, ctx.Err())...)
+		case <-timer.C:
+			start()
+		case err := <-results:
+			pending--
+			if err == nil {
+				return nil
+			}
+			errList = append(errList, err)
+			start()
+		}
+	}
+	return errors.Join(errList...)
 }
 
 // newResourceManager returns the default go-libp2p resource manager without

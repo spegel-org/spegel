@@ -2,8 +2,10 @@ package libp2p
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -21,6 +23,105 @@ import (
 
 	"github.com/spegel-org/spegel/pkg/routing"
 )
+
+func TestRaceBootstrapPeers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("starts second peer after delay and cancels first when second succeeds", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			started := make(chan peer.ID, 2)
+			firstCanceled := make(chan struct{})
+			done := make(chan error, 1)
+			go func() {
+				done <- raceBootstrapPeers(t.Context(), []peer.AddrInfo{{ID: "first"}, {ID: "second"}}, func(ctx context.Context, addrInfo peer.AddrInfo) error {
+					started <- addrInfo.ID
+					if addrInfo.ID == "first" {
+						<-ctx.Done()
+						close(firstCanceled)
+						return ctx.Err()
+					}
+					return nil
+				})
+			}()
+
+			require.EqualT(t, peer.ID("first"), <-started)
+
+			// The first attempt has started; verify its hedge does not start before the delay.
+			time.Sleep(bootstrapPeerHedgeDelay - time.Nanosecond)
+			synctest.Wait()
+			require.Empty(t, started)
+
+			// The second attempt should start after the delay.
+			time.Sleep(time.Nanosecond)
+			synctest.Wait()
+			require.Len(t, started, 1)
+			require.EqualT(t, peer.ID("second"), <-started)
+
+			require.NoError(t, <-done)
+			select {
+			case <-firstCanceled:
+			default:
+				require.FailNow(t, "first peer was not canceled")
+			}
+		})
+	})
+
+	t.Run("first peer succeeds after second peer fails", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			start := time.Now()
+			err := raceBootstrapPeers(t.Context(), []peer.AddrInfo{{ID: "first"}, {ID: "second"}}, func(ctx context.Context, addrInfo peer.AddrInfo) error {
+				if addrInfo.ID == "second" {
+					return errors.New("connection refused")
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(4 * time.Second):
+					return nil
+				}
+			})
+			require.NoError(t, err)
+			require.EqualT(t, 4*time.Second, time.Since(start))
+		})
+	})
+
+	t.Run("failures try next peer immediately and are returned", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			start := time.Now()
+			attempts := make(chan peer.ID, 2)
+			firstErr := errors.New("first peer failed")
+			secondErr := errors.New("second peer failed")
+			err := raceBootstrapPeers(t.Context(), []peer.AddrInfo{{ID: "first"}, {ID: "second"}}, func(ctx context.Context, addrInfo peer.AddrInfo) error {
+				attempts <- addrInfo.ID
+				if addrInfo.ID == "first" {
+					return firstErr
+				}
+				return secondErr
+			})
+			require.EqualT(t, peer.ID("first"), <-attempts)
+			require.EqualT(t, peer.ID("second"), <-attempts)
+			require.EqualT(t, time.Duration(0), time.Since(start))
+			require.ErrorIs(t, err, firstErr)
+			require.ErrorIs(t, err, secondErr)
+		})
+	})
+
+	t.Run("deadline cancels pending peers", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			canceled := make(chan peer.ID, 2)
+			err := raceBootstrapPeers(ctx, []peer.AddrInfo{{ID: "first"}, {ID: "second"}}, func(ctx context.Context, addrInfo peer.AddrInfo) error {
+				<-ctx.Done()
+				canceled <- addrInfo.ID
+				return ctx.Err()
+			})
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+			synctest.Wait()
+			require.Len(t, canceled, 2)
+		})
+	})
+}
 
 func TestP2PRouterOptions(t *testing.T) {
 	t.Parallel()
