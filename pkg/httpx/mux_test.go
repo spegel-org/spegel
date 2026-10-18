@@ -22,6 +22,7 @@ func TestServeMux(t *testing.T) {
 	handlersCalled := []string{}
 	m.HandleFunc("/exact", func(rw ResponseWriter, req *http.Request) {
 		handlersCalled = append(handlersCalled, "exact")
+		_, _ = rw.Write([]byte("exact"))
 	})
 	m.HandleFunc("/prefix/", func(rw ResponseWriter, req *http.Request) {
 		handlersCalled = append(handlersCalled, "prefix")
@@ -59,7 +60,7 @@ http_response_size_bytes_bucket{code="200",handler="/exact",method="GET",le="8e+
 http_response_size_bytes_bucket{code="200",handler="/exact",method="GET",le="4e+08"} 1
 http_response_size_bytes_bucket{code="200",handler="/exact",method="GET",le="2e+09"} 1
 http_response_size_bytes_bucket{code="200",handler="/exact",method="GET",le="+Inf"} 1
-http_response_size_bytes_sum{code="200",handler="/exact",method="GET"} 0
+http_response_size_bytes_sum{code="200",handler="/exact",method="GET"} 5
 http_response_size_bytes_count{code="200",handler="/exact",method="GET"} 1
 http_response_size_bytes_bucket{code="200",handler="/prefix/*",method="GET",le="1024"} 2
 http_response_size_bytes_bucket{code="200",handler="/prefix/*",method="GET",le="5120"} 2
