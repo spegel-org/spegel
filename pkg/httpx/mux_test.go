@@ -22,6 +22,7 @@ func TestServeMux(t *testing.T) {
 	handlersCalled := []string{}
 	m.HandleFunc("/exact", func(rw ResponseWriter, req *http.Request) {
 		handlersCalled = append(handlersCalled, "exact")
+		//nolint: errcheck // No need to check in test.
 		_, _ = rw.Write([]byte("exact"))
 	})
 	m.HandleFunc("/prefix/", func(rw ResponseWriter, req *http.Request) {
