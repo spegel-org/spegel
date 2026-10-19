@@ -9,6 +9,7 @@ import (
 )
 
 func TestCheck(t *testing.T) {
+	t.Setenv(KubernetesEnvVar, "")
 	versionInfo := version.Info{
 		Runtime: version.Runtime{
 			OS:     "linux",
