@@ -17,7 +17,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/go-openapi/testify/v2/require"
 	"github.com/opencontainers/go-digest"
-	"go.uber.org/goleak"
 
 	"github.com/kvick-org/pkg/option"
 
@@ -28,10 +27,6 @@ import (
 	"github.com/spegel-org/spegel/pkg/routing"
 	"github.com/spegel-org/spegel/pkg/store/storetest"
 )
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
-}
 
 func TestRegistryOptions(t *testing.T) {
 	t.Parallel()
@@ -167,353 +162,348 @@ func TestBasicAuth(t *testing.T) {
 func TestRegistryHandler(t *testing.T) {
 	t.Parallel()
 
-	unreachablePeer := routing.Peer{
-		Host:      "unreachable",
-		Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
-		Metadata: routing.PeerMetadata{
-			RegistryPort: 0,
-		},
-	}
-
-	silentPeers := []routing.Peer{}
-	for i := range 2 {
-		silentListener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-		require.NoError(t, err)
-		t.Cleanup(func() {
-			silentListener.Close()
-		})
-		addrPort := netip.MustParseAddrPort(silentListener.Addr().String())
-		silentPeer := routing.Peer{
-			Host:      fmt.Sprintf("silent-%d", i),
-			Addresses: []netip.Addr{addrPort.Addr()},
+	require.NoGoRoutineLeak(t, func() {
+		unreachablePeer := routing.Peer{
+			Host:      "unreachable",
+			Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
 			Metadata: routing.PeerMetadata{
-				RegistryPort: addrPort.Port(),
+				RegistryPort: 0,
 			},
 		}
-		silentPeers = append(silentPeers, silentPeer)
-	}
 
-	badPeers := []routing.Peer{}
-	for i := range 2 {
-		badReg, err := NewRegistry(storetest.NewProvider(nil, nil), routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
-		require.NoError(t, err)
-		badSvr := httptest.NewServer(badReg.Handler(logr.Discard()))
-		t.Cleanup(func() {
-			badSvr.Close()
-		})
-		addrPort := netip.MustParseAddrPort(badSvr.Listener.Addr().String())
-		peer := routing.Peer{
-			Host:      fmt.Sprintf("bad-%d", i),
-			Addresses: []netip.Addr{addrPort.Addr()},
-			Metadata: routing.PeerMetadata{
-				RegistryPort: addrPort.Port(),
-			},
+		silentPeers := []routing.Peer{}
+		for i := range 2 {
+			silentListener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+			require.NoError(t, err)
+			//nolint: gocritic // Called at end of test as expected.
+			defer silentListener.Close()
+			addrPort := netip.MustParseAddrPort(silentListener.Addr().String())
+			silentPeer := routing.Peer{
+				Host:      fmt.Sprintf("silent-%d", i),
+				Addresses: []netip.Addr{addrPort.Addr()},
+				Metadata: routing.PeerMetadata{
+					RegistryPort: addrPort.Port(),
+				},
+			}
+			silentPeers = append(silentPeers, silentPeer)
 		}
-		badPeers = append(badPeers, peer)
-	}
 
-	contents := []storetest.Content{
-		{MediaType: "dummy", Data: []byte("no working peers")},
-		{MediaType: "dummy", Data: []byte("first peer")},
-		{MediaType: "dummy", Data: []byte("second peer")},
-		{MediaType: "dummy", Data: []byte("last peer working")},
-		{MediaType: "application/vnd.oci.image.index.v1+json", Data: []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`)},
-		{MediaType: "application/vnd.oci.image.layer.v1.tar+gzip", Data: []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
-	}
-	memStore := storetest.NewProvider(contents, nil)
-	goodReg, err := NewRegistry(memStore, routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
-	require.NoError(t, err)
-	goodSvr := httptest.NewServer(goodReg.Handler(logr.Discard()))
-	t.Cleanup(func() {
-		goodSvr.Close()
-	})
-	addrPort := netip.MustParseAddrPort(goodSvr.Listener.Addr().String())
-	goodPeer := routing.Peer{
-		Host:      "good",
-		Addresses: []netip.Addr{addrPort.Addr()},
-		Metadata: routing.PeerMetadata{
-			RegistryPort: addrPort.Port(),
-		},
-	}
+		badPeers := []routing.Peer{}
+		for i := range 2 {
+			badReg, err := NewRegistry(storetest.NewProvider(nil, nil), routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
+			require.NoError(t, err)
+			badSvr := httptest.NewServer(badReg.Handler(logr.Discard()))
+			//nolint: gocritic // Called at end of test as expected.
+			defer badSvr.Close()
+			addrPort := netip.MustParseAddrPort(badSvr.Listener.Addr().String())
+			peer := routing.Peer{
+				Host:      fmt.Sprintf("bad-%d", i),
+				Addresses: []netip.Addr{addrPort.Addr()},
+				Metadata: routing.PeerMetadata{
+					RegistryPort: addrPort.Port(),
+				},
+			}
+			badPeers = append(badPeers, peer)
+		}
 
-	flakyPeers := []routing.Peer{}
-	for i := range 3 {
 		contents := []storetest.Content{
-			{MediaType: "dummy", Data: []byte("Only a single peer")},
-			{MediaType: "dummy", Data: []byte("Lorem Ipsum Dolor")},
+			{MediaType: "dummy", Data: []byte("no working peers")},
+			{MediaType: "dummy", Data: []byte("first peer")},
+			{MediaType: "dummy", Data: []byte("second peer")},
+			{MediaType: "dummy", Data: []byte("last peer working")},
+			{MediaType: "application/vnd.oci.image.index.v1+json", Data: []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`)},
+			{MediaType: "application/vnd.oci.image.layer.v1.tar+gzip", Data: []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
 		}
-		flakyStore := &flakyStore{Provider: storetest.NewProvider(contents, nil)}
-		flakyReg, err := NewRegistry(flakyStore, routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
+		memStore := storetest.NewProvider(contents, nil)
+		goodReg, err := NewRegistry(memStore, routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
 		require.NoError(t, err)
-		flakySvr := httptest.NewServer(flakyReg.Handler(logr.Discard()))
-		t.Cleanup(func() {
-			flakySvr.Close()
-		})
-		addrPort := netip.MustParseAddrPort(flakySvr.Listener.Addr().String())
-		peer := routing.Peer{
-			Host:      fmt.Sprintf("flaky-%d", i),
+		goodSvr := httptest.NewServer(goodReg.Handler(logr.Discard()))
+		defer goodSvr.Close()
+		addrPort := netip.MustParseAddrPort(goodSvr.Listener.Addr().String())
+		goodPeer := routing.Peer{
+			Host:      "good",
 			Addresses: []netip.Addr{addrPort.Addr()},
 			Metadata: routing.PeerMetadata{
 				RegistryPort: addrPort.Port(),
 			},
 		}
-		flakyPeers = append(flakyPeers, peer)
-	}
 
-	resolver := map[string][]routing.Peer{
-		// No working peers.
-		"sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6": {badPeers[0], unreachablePeer, badPeers[1]},
-		// No responding peers.
-		"sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8": {silentPeers[0], silentPeers[1]},
-		// First peer.
-		"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67": {goodPeer, badPeers[0], badPeers[1]},
-		// Second peer.
-		"sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2": {unreachablePeer, goodPeer},
-		// Last peer working.
-		"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba": {badPeers[0], badPeers[1], goodPeer},
-		// Valid manifest and blob.
-		"sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2": {goodPeer},
-		"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83": {goodPeer},
-		// Flaky content.
-		"sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd": {flakyPeers[0]},
-		"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0": flakyPeers,
-	}
-	router := routing.NewMemoryRouter(resolver, routing.Peer{})
-	reg, err := NewRegistry(storetest.NewProvider(nil, nil), router, WithRegistryFilters([]oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}}))
-	require.NoError(t, err)
-	handler := reg.Handler(logr.Discard())
-
-	//nolint: govet // Prioritize readability in tests.
-	tests := []struct {
-		name             string
-		key              string
-		distributionKind oci.DistributionKind
-		rng              *httpx.Range
-		expectedStatus   int
-		expectedHeaders  http.Header
-		expectedBody     []byte
-	}{
-		{
-			name:             "request should timeout when no peers exists",
-			key:              "sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":0},"message":"could not find peer for sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591"}]}`),
-			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"168"},
-			},
-		},
-		{
-			name:             "request should timeout when no peers responds",
-			key:              "sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":2},"message":"waited too long for inflight dials to complete for sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8"}]}`),
-			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"195"},
-			},
-		},
-		{
-			name:             "request should not timeout and give 404 if all peers fail",
-			key:              "sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":3},"message":"all request retries exhausted for sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6"}]}`),
-			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"178"},
-			},
-		},
-		{
-			name:             "request should work when first peer responds",
-			key:              "sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusOK,
-			expectedBody:     []byte("first peer"),
-			expectedHeaders: http.Header{
-				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
-				httpx.HeaderContentType:   {"dummy"},
-				httpx.HeaderContentLength: {"10"},
-				oci.HeaderDockerDigest:    {"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67"},
-			},
-		},
-		{
-			name:             "second peer should respond when first gives error",
-			key:              "sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusOK,
-			expectedBody:     []byte("second peer"),
-			expectedHeaders: http.Header{
-				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
-				httpx.HeaderContentType:   {"dummy"},
-				httpx.HeaderContentLength: {"11"},
-				oci.HeaderDockerDigest:    {"sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2"},
-			},
-		},
-		{
-			name:             "last peer should respond when two first fail",
-			key:              "sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusOK,
-			expectedBody:     []byte("last peer working"),
-			expectedHeaders: http.Header{
-				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
-				httpx.HeaderContentType:   {"dummy"},
-				httpx.HeaderContentLength: {"17"},
-				oci.HeaderDockerDigest:    {"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba"},
-			},
-		},
-		{
-			name:             "latest tag is supposed to be filtered",
-			key:              "latest",
-			distributionKind: oci.DistributionKindManifest,
-			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte{},
-			expectedHeaders: http.Header{
-				httpx.HeaderContentLength: {"0"},
-			},
-		},
-		{
-			name:             "path is invalid and cant be parsed",
-			key:              "sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba",
-			distributionKind: "invalid",
-			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte{},
-			expectedHeaders: http.Header{
-				httpx.HeaderContentLength: {"0"},
-			},
-		},
-		{
-			name:             "manifest requested as blob should not be found",
-			key:              "sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":1},"message":"all request retries exhausted for sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2"}]}`),
-			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"178"},
-			},
-		},
-		{
-			name:             "existing manifest should be found",
-			key:              "sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2",
-			distributionKind: oci.DistributionKindManifest,
-			expectedStatus:   http.StatusOK,
-			expectedBody:     []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`),
-			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {"application/vnd.oci.image.index.v1+json"},
-				httpx.HeaderContentLength: {"88"},
-				oci.HeaderDockerDigest:    {"sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2"},
-			},
-		},
-		{
-			name:             "blob requested as manifest should not be found",
-			key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
-			distributionKind: oci.DistributionKindManifest,
-			expectedStatus:   http.StatusNotFound,
-			expectedBody:     []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":1},"message":"all request retries exhausted for sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"}]}`),
-			expectedHeaders: http.Header{
-				httpx.HeaderContentType:   {httpx.ContentTypeJSON},
-				httpx.HeaderContentLength: {"182"},
-			},
-		},
-		{
-			name:             "blob request with range",
-			key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
-			distributionKind: oci.DistributionKindBlob,
-			rng:              &httpx.Range{Start: new(int64(1)), End: new(int64(3))},
-			expectedStatus:   http.StatusPartialContent,
-			expectedBody:     []byte{0x8b, 0x8, 0x0},
-			expectedHeaders: http.Header{
-				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
-				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
-				httpx.HeaderContentLength: {"3"},
-				httpx.HeaderContentRange:  {"bytes 1-3/20"},
-				oci.HeaderDockerDigest:    {"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"},
-			},
-		},
-		{
-			name:             "flaky reader with one peer should keep retrying",
-			key:              "sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusOK,
-			expectedBody:     []byte("Only a single peer"),
-			expectedHeaders: http.Header{
-				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
-				httpx.HeaderContentType:   {"dummy"},
-				httpx.HeaderContentLength: {"18"},
-				oci.HeaderDockerDigest:    {"sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd"},
-			},
-		},
-		{
-			name:             "flaky reader with multiple peers should resume with next peer",
-			key:              "sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0",
-			distributionKind: oci.DistributionKindBlob,
-			expectedStatus:   http.StatusOK,
-			expectedBody:     []byte("Lorem Ipsum Dolor"),
-			expectedHeaders: http.Header{
-				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
-				httpx.HeaderContentType:   {"dummy"},
-				httpx.HeaderContentLength: {"17"},
-				oci.HeaderDockerDigest:    {"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0"},
-			},
-		},
-		{
-			name:             "flaky reader with range should return partial",
-			key:              "sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0",
-			distributionKind: oci.DistributionKindBlob,
-			rng:              &httpx.Range{Start: new(int64(2)), End: new(int64(15))},
-			expectedStatus:   http.StatusPartialContent,
-			expectedBody:     []byte("rem Ipsum Dolo"),
-			expectedHeaders: http.Header{
-				httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
-				httpx.HeaderContentType:   {httpx.ContentTypeBinary},
-				httpx.HeaderContentLength: {"14"},
-				httpx.HeaderContentRange:  {"bytes 2-15/17"},
-				oci.HeaderDockerDigest:    {"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0"},
-			},
-		},
-	}
-	for _, tt := range tests {
-		for _, method := range []string{http.MethodGet, http.MethodHead} {
-			t.Run(fmt.Sprintf("%s-%s", method, tt.name), func(t *testing.T) {
-				t.Parallel()
-
-				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-				defer cancel()
-
-				target := fmt.Sprintf("http://example.com/v2/foo/bar/%s/%s?ns=docker.io", tt.distributionKind, tt.key)
-				rw := httptest.NewRecorder()
-				req := httptest.NewRequestWithContext(ctx, method, target, nil)
-				if tt.rng != nil {
-					req.Header.Set(httpx.HeaderRange, tt.rng.String())
-				}
-				handler.ServeHTTP(rw, req)
-
-				resp := rw.Result()
-				defer httpx.DrainAndClose(resp.Body)
-				b, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-				require.EqualT(t, tt.expectedStatus, resp.StatusCode)
-
-				switch method {
-				case http.MethodGet:
-					require.SliceEqualT(t, tt.expectedBody, b)
-				case http.MethodHead:
-					require.Empty(t, b)
-				default:
-					t.FailNow()
-				}
-
-				if tt.expectedHeaders == nil {
-					require.Empty(t, resp.Header)
-				}
-				require.Equal(t, tt.expectedHeaders, resp.Header)
-			})
+		flakyPeers := []routing.Peer{}
+		for i := range 3 {
+			contents := []storetest.Content{
+				{MediaType: "dummy", Data: []byte("Only a single peer")},
+				{MediaType: "dummy", Data: []byte("Lorem Ipsum Dolor")},
+			}
+			flakyStore := &flakyStore{Provider: storetest.NewProvider(contents, nil)}
+			flakyReg, err := NewRegistry(flakyStore, routing.NewMemoryRouter(map[string][]routing.Peer{}, routing.Peer{}))
+			require.NoError(t, err)
+			flakySvr := httptest.NewServer(flakyReg.Handler(logr.Discard()))
+			//nolint: gocritic // Called at end of test as expected.
+			defer flakySvr.Close()
+			addrPort := netip.MustParseAddrPort(flakySvr.Listener.Addr().String())
+			peer := routing.Peer{
+				Host:      fmt.Sprintf("flaky-%d", i),
+				Addresses: []netip.Addr{addrPort.Addr()},
+				Metadata: routing.PeerMetadata{
+					RegistryPort: addrPort.Port(),
+				},
+			}
+			flakyPeers = append(flakyPeers, peer)
 		}
-	}
+
+		resolver := map[string][]routing.Peer{
+			// No working peers.
+			"sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6": {badPeers[0], unreachablePeer, badPeers[1]},
+			// No responding peers.
+			"sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8": {silentPeers[0], silentPeers[1]},
+			// First peer.
+			"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67": {goodPeer, badPeers[0], badPeers[1]},
+			// Second peer.
+			"sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2": {unreachablePeer, goodPeer},
+			// Last peer working.
+			"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba": {badPeers[0], badPeers[1], goodPeer},
+			// Valid manifest and blob.
+			"sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2": {goodPeer},
+			"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83": {goodPeer},
+			// Flaky content.
+			"sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd": {flakyPeers[0]},
+			"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0": flakyPeers,
+		}
+		router := routing.NewMemoryRouter(resolver, routing.Peer{})
+		reg, err := NewRegistry(storetest.NewProvider(nil, nil), router, WithRegistryFilters([]oci.Filter{oci.RegexFilter{Regex: regexp.MustCompile(`:latest$`)}}))
+		require.NoError(t, err)
+		handler := reg.Handler(logr.Discard())
+
+		//nolint: govet // Prioritize readability in tests.
+		tests := []struct {
+			name             string
+			key              string
+			distributionKind oci.DistributionKind
+			rng              *httpx.Range
+			expectedStatus   int
+			expectedHeaders  http.Header
+			expectedBody     []byte
+		}{
+			{
+				name:             "request should timeout when no peers exists",
+				key:              "sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusNotFound,
+				expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":0},"message":"could not find peer for sha256:03ffdf45276dd38ffac79b0e9c6c14d89d9113ad783d5922580f4c66a3305591"}]}`),
+				expectedHeaders: http.Header{
+					httpx.HeaderContentType:   {httpx.ContentTypeJSON},
+					httpx.HeaderContentLength: {"168"},
+				},
+			},
+			{
+				name:             "request should timeout when no peers responds",
+				key:              "sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusNotFound,
+				expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":2},"message":"waited too long for inflight dials to complete for sha256:3cd9b6cd0c4cdf1b9ab934a5a8b61f419b74261829c2d2a69c227594333e38e8"}]}`),
+				expectedHeaders: http.Header{
+					httpx.HeaderContentType:   {httpx.ContentTypeJSON},
+					httpx.HeaderContentLength: {"195"},
+				},
+			},
+			{
+				name:             "request should not timeout and give 404 if all peers fail",
+				key:              "sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusNotFound,
+				expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":3},"message":"all request retries exhausted for sha256:18ca1296b9cc90d29b51b4a8724d97aa055102c3d74e53a8eafb3904c079c0c6"}]}`),
+				expectedHeaders: http.Header{
+					httpx.HeaderContentType:   {httpx.ContentTypeJSON},
+					httpx.HeaderContentLength: {"178"},
+				},
+			},
+			{
+				name:             "request should work when first peer responds",
+				key:              "sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusOK,
+				expectedBody:     []byte("first peer"),
+				expectedHeaders: http.Header{
+					httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+					httpx.HeaderContentType:   {"dummy"},
+					httpx.HeaderContentLength: {"10"},
+					oci.HeaderDockerDigest:    {"sha256:0b7e0ac6364af64af017531f137a95f3a5b12ea38be0e74a860004d3e5760a67"},
+				},
+			},
+			{
+				name:             "second peer should respond when first gives error",
+				key:              "sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusOK,
+				expectedBody:     []byte("second peer"),
+				expectedHeaders: http.Header{
+					httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+					httpx.HeaderContentType:   {"dummy"},
+					httpx.HeaderContentLength: {"11"},
+					oci.HeaderDockerDigest:    {"sha256:431491e49ba5fa61930417a46b24c03b6df0b426b90009405457741ac52f44b2"},
+				},
+			},
+			{
+				name:             "last peer should respond when two first fail",
+				key:              "sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusOK,
+				expectedBody:     []byte("last peer working"),
+				expectedHeaders: http.Header{
+					httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+					httpx.HeaderContentType:   {"dummy"},
+					httpx.HeaderContentLength: {"17"},
+					oci.HeaderDockerDigest:    {"sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba"},
+				},
+			},
+			{
+				name:             "latest tag is supposed to be filtered",
+				key:              "latest",
+				distributionKind: oci.DistributionKindManifest,
+				expectedStatus:   http.StatusNotFound,
+				expectedBody:     []byte{},
+				expectedHeaders: http.Header{
+					httpx.HeaderContentLength: {"0"},
+				},
+			},
+			{
+				name:             "path is invalid and cant be parsed",
+				key:              "sha256:7d66cda2ba857d07e5530e53565b7d56b10ab80d16b6883fff8478327a49b4ba",
+				distributionKind: "invalid",
+				expectedStatus:   http.StatusNotFound,
+				expectedBody:     []byte{},
+				expectedHeaders: http.Header{
+					httpx.HeaderContentLength: {"0"},
+				},
+			},
+			{
+				name:             "manifest requested as blob should not be found",
+				key:              "sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusNotFound,
+				expectedBody:     []byte(`{"errors":[{"code":"BLOB_UNKNOWN","detail":{"attempts":1},"message":"all request retries exhausted for sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2"}]}`),
+				expectedHeaders: http.Header{
+					httpx.HeaderContentType:   {httpx.ContentTypeJSON},
+					httpx.HeaderContentLength: {"178"},
+				},
+			},
+			{
+				name:             "existing manifest should be found",
+				key:              "sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2",
+				distributionKind: oci.DistributionKindManifest,
+				expectedStatus:   http.StatusOK,
+				expectedBody:     []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}`),
+				expectedHeaders: http.Header{
+					httpx.HeaderContentType:   {"application/vnd.oci.image.index.v1+json"},
+					httpx.HeaderContentLength: {"88"},
+					oci.HeaderDockerDigest:    {"sha256:dff9de10919148711140d349bf03f1a99eb06f94b03e51715ccebfa7cdc518e2"},
+				},
+			},
+			{
+				name:             "blob requested as manifest should not be found",
+				key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
+				distributionKind: oci.DistributionKindManifest,
+				expectedStatus:   http.StatusNotFound,
+				expectedBody:     []byte(`{"errors":[{"code":"MANIFEST_UNKNOWN","detail":{"attempts":1},"message":"all request retries exhausted for sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"}]}`),
+				expectedHeaders: http.Header{
+					httpx.HeaderContentType:   {httpx.ContentTypeJSON},
+					httpx.HeaderContentLength: {"182"},
+				},
+			},
+			{
+				name:             "blob request with range",
+				key:              "sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83",
+				distributionKind: oci.DistributionKindBlob,
+				rng:              &httpx.Range{Start: new(int64(1)), End: new(int64(3))},
+				expectedStatus:   http.StatusPartialContent,
+				expectedBody:     []byte{0x8b, 0x8, 0x0},
+				expectedHeaders: http.Header{
+					httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+					httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+					httpx.HeaderContentLength: {"3"},
+					httpx.HeaderContentRange:  {"bytes 1-3/20"},
+					oci.HeaderDockerDigest:    {"sha256:ac73670af3abed54ac6fb4695131f4099be9fbe39d6076c5d0264a6bbdae9d83"},
+				},
+			},
+			{
+				name:             "flaky reader with one peer should keep retrying",
+				key:              "sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusOK,
+				expectedBody:     []byte("Only a single peer"),
+				expectedHeaders: http.Header{
+					httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+					httpx.HeaderContentType:   {"dummy"},
+					httpx.HeaderContentLength: {"18"},
+					oci.HeaderDockerDigest:    {"sha256:68a2f9c5f175c838c5e9433dfe7b9d3a73caade76b2185a8d9164405c5286edd"},
+				},
+			},
+			{
+				name:             "flaky reader with multiple peers should resume with next peer",
+				key:              "sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0",
+				distributionKind: oci.DistributionKindBlob,
+				expectedStatus:   http.StatusOK,
+				expectedBody:     []byte("Lorem Ipsum Dolor"),
+				expectedHeaders: http.Header{
+					httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+					httpx.HeaderContentType:   {"dummy"},
+					httpx.HeaderContentLength: {"17"},
+					oci.HeaderDockerDigest:    {"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0"},
+				},
+			},
+			{
+				name:             "flaky reader with range should return partial",
+				key:              "sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0",
+				distributionKind: oci.DistributionKindBlob,
+				rng:              &httpx.Range{Start: new(int64(2)), End: new(int64(15))},
+				expectedStatus:   http.StatusPartialContent,
+				expectedBody:     []byte("rem Ipsum Dolo"),
+				expectedHeaders: http.Header{
+					httpx.HeaderAcceptRanges:  {httpx.RangeUnit},
+					httpx.HeaderContentType:   {httpx.ContentTypeBinary},
+					httpx.HeaderContentLength: {"14"},
+					httpx.HeaderContentRange:  {"bytes 2-15/17"},
+					oci.HeaderDockerDigest:    {"sha256:c8dc81dabe7ad5e801191aade7c87fb806d0ef9ce9b699d2e9598337f57f14d0"},
+				},
+			},
+		}
+		for _, tt := range tests {
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				t.Run(fmt.Sprintf("%s-%s", method, tt.name), func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+					defer cancel()
+
+					target := fmt.Sprintf("http://example.com/v2/foo/bar/%s/%s?ns=docker.io", tt.distributionKind, tt.key)
+					rw := httptest.NewRecorder()
+					req := httptest.NewRequestWithContext(ctx, method, target, nil)
+					if tt.rng != nil {
+						req.Header.Set(httpx.HeaderRange, tt.rng.String())
+					}
+					handler.ServeHTTP(rw, req)
+
+					resp := rw.Result()
+					defer httpx.DrainAndClose(resp.Body)
+					b, err := io.ReadAll(resp.Body)
+					require.NoError(t, err)
+					require.EqualT(t, tt.expectedStatus, resp.StatusCode)
+
+					switch method {
+					case http.MethodGet:
+						require.SliceEqualT(t, tt.expectedBody, b)
+					case http.MethodHead:
+						require.Empty(t, b)
+					default:
+						t.FailNow()
+					}
+
+					if tt.expectedHeaders == nil {
+						require.Empty(t, resp.Header)
+					}
+					require.Equal(t, tt.expectedHeaders, resp.Header)
+				})
+			}
+		}
+	})
 }
 
 type flakyStore struct {
@@ -564,55 +554,57 @@ func (f *flakyReadSeekCloser) Read(p []byte) (int, error) {
 func TestFetchChannel(t *testing.T) {
 	t.Parallel()
 
-	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
+	require.NoGoRoutineLeak(t, func() {
+		synctest.Test(t, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 
-		hedger := resilient.NewHedger([]float64{50, 90, 99}, time.Second)
+			hedger := resilient.NewHedger([]float64{50, 90, 99}, time.Second)
 
-		iterator := routing.NewIterator()
-		iterator.Add(routing.Peer{Host: "foo"})
+			iterator := routing.NewIterator()
+			iterator.Add(routing.Peer{Host: "foo"})
 
-		// Fetch triggers immediately and after a fixed time.
-		fetchCh, _ := fetchChannel(ctx, hedger, iterator)
+			// Fetch triggers immediately and after a fixed time.
+			fetchCh, _ := fetchChannel(ctx, hedger, iterator)
 
-		start := time.Now()
-		synctest.Wait()
-		testutil.RequireChannelReceive(t, fetchCh)
-		require.Zero(t, time.Since(start))
+			start := time.Now()
+			synctest.Wait()
+			testutil.RequireChannelReceive(t, fetchCh)
+			require.Zero(t, time.Since(start))
 
-		for range 3 {
+			for range 3 {
+				start = time.Now()
+				synctest.Wait()
+				time.Sleep(1 * time.Second)
+				synctest.Wait()
+				testutil.RequireChannelReceive(t, fetchCh)
+				require.EqualT(t, time.Second, time.Since(start))
+			}
+
+			// Fetch skips hedges when immediate are called.
+			fetchCh, immediateCh := fetchChannel(ctx, hedger, iterator)
+			immediateCh <- true
+			immediateCh <- true
+			immediateCh <- false
+
+			for range 4 {
+				start = time.Now()
+				synctest.Wait()
+				testutil.RequireChannelReceive(t, fetchCh)
+				require.Zero(t, time.Since(start))
+			}
+
 			start = time.Now()
 			synctest.Wait()
 			time.Sleep(1 * time.Second)
 			synctest.Wait()
 			testutil.RequireChannelReceive(t, fetchCh)
 			require.EqualT(t, time.Second, time.Since(start))
-		}
 
-		// Fetch skips hedges when immediate are called.
-		fetchCh, immediateCh := fetchChannel(ctx, hedger, iterator)
-		immediateCh <- true
-		immediateCh <- true
-		immediateCh <- false
-
-		for range 4 {
-			start = time.Now()
 			synctest.Wait()
-			testutil.RequireChannelReceive(t, fetchCh)
-			require.Zero(t, time.Since(start))
-		}
-
-		start = time.Now()
-		synctest.Wait()
-		time.Sleep(1 * time.Second)
-		synctest.Wait()
-		testutil.RequireChannelReceive(t, fetchCh)
-		require.EqualT(t, time.Second, time.Since(start))
-
-		synctest.Wait()
-		time.Sleep(1 * time.Second)
-		synctest.Wait()
-		testutil.RequireChannelOpen(t, fetchCh)
+			time.Sleep(1 * time.Second)
+			synctest.Wait()
+			testutil.RequireChannelOpen(t, fetchCh)
+		})
 	})
 }

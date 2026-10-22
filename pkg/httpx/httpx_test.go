@@ -8,12 +8,7 @@ import (
 	"time"
 
 	"github.com/go-openapi/testify/v2/require"
-	"go.uber.org/goleak"
 )
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
-}
 
 func TestBaseClient(t *testing.T) {
 	t.Parallel()
