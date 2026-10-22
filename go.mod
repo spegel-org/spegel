@@ -29,7 +29,6 @@ require (
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/prometheus/client_golang v1.25.0
-	go.uber.org/goleak v1.3.0
 	golang.org/x/sync v0.24.0
 	google.golang.org/grpc v1.84.0
 	k8s.io/apimachinery v0.37.1
