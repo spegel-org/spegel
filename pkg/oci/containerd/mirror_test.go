@@ -282,6 +282,50 @@ dial_timeout = '200ms'`,
 			},
 		},
 		{
+			name:                "prepend to existing configuration with conflicting host",
+			resolveTags:         true,
+			mirroredRegistries:  []string{"https://docker.io"},
+			mirrorTargets:       []string{"http://127.0.0.1:5000", "http://127.0.0.1:5001"},
+			createConfigPathDir: true,
+			prependExisting:     true,
+			existingFiles: map[string]string{
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://example.com:30020']
+capabilities = ['pull', 'resolve']
+
+[host.'http://127.0.0.1:5001/']
+capabilities = ['pull']`,
+			},
+			expectedFiles: map[string]string{
+				"_backup/docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+
+[host.'http://example.com:30020']
+capabilities = ['pull', 'resolve']
+
+[host.'http://127.0.0.1:5001/']
+capabilities = ['pull']`,
+				"docker.io/hosts.toml": `server = 'https://registry-1.docker.io'
+
+[host.'http://127.0.0.1:5000']
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
+
+[host.'http://127.0.0.1:5001']
+capabilities = ['pull', 'resolve']
+dial_timeout = '200ms'
+
+[host.'http://example.com:30020']
+capabilities = ['pull', 'resolve']`,
+			},
+		},
+		{
 			name:                "prepend existing disabled",
 			resolveTags:         true,
 			mirroredRegistries:  []string{"https://docker.io", "http://foo.bar:5000"},
@@ -458,7 +502,7 @@ func TestExistingHosts(t *testing.T) {
 	u, err := url.Parse("https://ghcr.io")
 	require.NoError(t, err)
 
-	eh, err := existingHosts(configPath, *u)
+	eh, err := existingHosts(logr.Discard(), configPath, *u, nil)
 	require.NoError(t, err)
 	require.Empty(t, eh)
 
@@ -500,7 +544,7 @@ func TestExistingHosts(t *testing.T) {
 	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(configPath, backupDir, u.Host, "hosts.toml"), []byte(tomlHosts), 0o644)
 	require.NoError(t, err)
-	eh, err = existingHosts(configPath, *u)
+	eh, err = existingHosts(logr.Discard(), configPath, *u, nil)
 	require.NoError(t, err)
 	expected := `[host.'https://mirror.registry']
 ca = '/etc/certs/mirror.pem'
