@@ -63,10 +63,8 @@ func (s *ServeMux) Handle(pattern string, handler Handler) {
 	metricsPath := metricsFriendlyPath(pattern)
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		rw := &response{
-			ResponseWriter: w,
-			method:         req.Method,
-		}
+		//nolint: errcheck // Cannot be any other type as it is injected in ServeHttp.
+		rw := w.(*response)
 		defer func() {
 			latency := time.Since(start)
 			statusCode := strconv.FormatInt(int64(rw.Status()), 10)
@@ -99,8 +97,7 @@ func (s *ServeMux) Handle(pattern string, handler Handler) {
 			}
 		}()
 		HttpRequestsInflight.WithLabelValues(metricsPath).Add(1)
-		//nolint: errcheck // Cannot be any other type as it is injected in ServeHttp.
-		handler.ServeHTTP(w.(ResponseWriter), req.WithContext(logr.NewContext(req.Context(), s.log)))
+		handler.ServeHTTP(rw, req.WithContext(logr.NewContext(req.Context(), s.log)))
 	})
 }
 
