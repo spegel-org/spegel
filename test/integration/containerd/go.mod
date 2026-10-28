@@ -2,7 +2,7 @@ module github.com/spegel-org/spegel/test/integration/containerd
 
 go 1.26.6
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 replace github.com/spegel-org/spegel => ../../../
 
