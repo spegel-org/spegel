@@ -67,7 +67,7 @@ func AddMirrorConfiguration(ctx context.Context, configPath string, mirroredRegi
 			return err
 		}
 		if prependExisting {
-			existingHosts, err := existingHosts(configPath, mr)
+			existingHosts, err := existingHosts(log, configPath, mr, parsedMirrorTargets)
 			if err != nil {
 				return err
 			}
@@ -273,7 +273,7 @@ Authorization = '{{ $authorization }}'
 	return strings.TrimSpace(buf.String()), nil
 }
 
-func existingHosts(configPath string, parsedMirrorRegistry url.URL) (string, error) {
+func existingHosts(log logr.Logger, configPath string, parsedMirrorRegistry url.URL, parsedMirrorTargets []url.URL) (string, error) {
 	fp := path.Join(configPath, backupDir, parsedMirrorRegistry.Host, "hosts.toml")
 	b, err := os.ReadFile(fp)
 	if errors.Is(err, os.ErrNotExist) {
@@ -314,8 +314,18 @@ func existingHosts(configPath string, parsedMirrorRegistry url.URL) (string, err
 		}
 	}
 
+	mirrorTargets := map[string]struct{}{}
+	for _, mt := range parsedMirrorTargets {
+		mirrorTargets[strings.TrimSuffix(mt.String(), "/")] = struct{}{}
+	}
+
 	ehs := []string{}
 	for _, h := range hosts {
+		// Existing hosts that conflict with a mirror target would result in duplicate tables.
+		if _, ok := mirrorTargets[strings.TrimSuffix(h, "/")]; ok {
+			log.Info("removing existing containerd mirror host that conflicts with mirror target", "registry", parsedMirrorRegistry.String(), "host", h)
+			continue
+		}
 		data := hostFile{
 			Hosts: map[string]any{
 				h: hf.Hosts[h],
