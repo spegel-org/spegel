@@ -75,6 +75,67 @@ func TestFingerprintMediaType(t *testing.T) {
 
 	_, err = FingerprintMediaType(strings.NewReader("{\"unexpected\":\"value\"}"))
 	require.EqualError(t, err, "could not determine media type")
+
+	// Test SOCI V1 index with explicit mediaType
+	sociIndexV1Explicit := `{
+		"schemaVersion": 2,
+		"mediaType": "application/vnd.amazon.soci.index.v1+json",
+		"blobs": []
+	}`
+	mt, err = FingerprintMediaType(strings.NewReader(sociIndexV1Explicit))
+	require.NoError(t, err)
+	require.Equal(t, MediaTypeSOCIIndexV1, mt)
+
+	// Test SOCI V2 index with explicit mediaType
+	sociIndexV2Explicit := `{
+		"schemaVersion": 2,
+		"mediaType": "application/vnd.amazon.soci.index.v2+json",
+		"blobs": []
+	}`
+	mt, err = FingerprintMediaType(strings.NewReader(sociIndexV2Explicit))
+	require.NoError(t, err)
+	require.Equal(t, MediaTypeSOCIIndexV2, mt)
+
+	// Test SOCI V1 index as OCI artifact (standard mediaType with SOCI artifactType)
+	sociIndexV1OCIArtifact := `{
+		"schemaVersion": 2,
+		"mediaType": "application/vnd.oci.image.manifest.v1+json",
+		"artifactType": "application/vnd.amazon.soci.index.v1+json",
+		"config": {
+			"mediaType": "application/vnd.oci.empty.v1+json",
+			"digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"size": 2
+		},
+		"layers": []
+	}`
+	mt, err = FingerprintMediaType(strings.NewReader(sociIndexV1OCIArtifact))
+	require.NoError(t, err)
+	require.Equal(t, MediaTypeSOCIIndexV1, mt)
+
+	// Test SOCI V2 index as OCI artifact (standard mediaType with SOCI artifactType)
+	sociIndexV2OCIArtifact := `{
+		"schemaVersion": 2,
+		"mediaType": "application/vnd.oci.image.manifest.v1+json",
+		"artifactType": "application/vnd.amazon.soci.index.v2+json",
+		"config": {
+			"mediaType": "application/vnd.oci.empty.v1+json",
+			"digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+			"size": 2
+		},
+		"layers": []
+	}`
+	mt, err = FingerprintMediaType(strings.NewReader(sociIndexV2OCIArtifact))
+	require.NoError(t, err)
+	require.Equal(t, MediaTypeSOCIIndexV2, mt)
+
+	// Test SOCI zTOC with explicit mediaType
+	sociZtoc := `{
+		"schemaVersion": 2,
+		"mediaType": "application/vnd.amazon.soci.ztoc.v1+json"
+	}`
+	mt, err = FingerprintMediaType(strings.NewReader(sociZtoc))
+	require.NoError(t, err)
+	require.Equal(t, MediaTypeSOCIzTOC, mt)
 }
 
 func TestIsManifestMediatype(t *testing.T) {
