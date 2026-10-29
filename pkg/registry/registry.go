@@ -173,8 +173,8 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	// Check basic authentication
 	if r.userinfo != nil && !httpx.AuthenticateUserinfo(req.BasicAuth, *r.userinfo) {
-		respErr := oci.NewDistributionError(oci.ErrCodeUnauthorized, "invalid credentials", nil)
-		rw.WriteError(http.StatusUnauthorized, respErr)
+		rw.Header().Set(httpx.HeaderWWWAuthenticate, `Basic realm="Spegel"`)
+		rw.WriteError(http.StatusUnauthorized, oci.NewDistributionError(oci.ErrCodeUnauthorized, "invalid credentials", nil))
 		return
 	}
 
@@ -415,7 +415,6 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 					fetchOpts := []oci.FetchOption{
 						oci.WithFetchHeader(HeaderSpegelMirrored, "true"),
 						oci.WithFetchMirror(mirror),
-						oci.WithFetchUserinfo(r.userinfo),
 					}
 					rc, desc, err := r.ociClient.Fetch(ctx, dist, fetchOpts...)
 					if err != nil {

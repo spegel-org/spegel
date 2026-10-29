@@ -60,5 +60,5 @@ func getErrorMessage(resp *http.Response) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(b), err
+	return string(b), nil
 }

@@ -178,7 +178,15 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 		return err
 	}
 
-	ociClient, err := oci.NewClient()
+	userinfo, err := httpx.LoadUserinfo("/etc/secrets/basic-auth")
+	if err != nil {
+		return err
+	}
+	ociClientOpts := []oci.ClientOption{}
+	if userinfo != nil {
+		ociClientOpts = append(ociClientOpts, oci.WithCredentialProviders(oci.NewBasicAuthCredentialProvider(*userinfo)))
+	}
+	ociClient, err := oci.NewClient(ociClientOpts...)
 	if err != nil {
 		return err
 	}
@@ -243,10 +251,6 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	})
 
 	// OCI registry.
-	userinfo, err := httpx.LoadUserinfo("/etc/secrets/basic-auth")
-	if err != nil {
-		return err
-	}
 	registryOpts := []registry.RegistryOption{
 		registry.WithRegistryFilters(filters),
 		registry.WithResolveRetries(args.MirrorResolveRetries),

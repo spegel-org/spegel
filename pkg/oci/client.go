@@ -14,7 +14,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/platforms"
@@ -33,8 +32,9 @@ const (
 )
 
 type ClientConfig struct {
-	TLSClientConfig   *tls.Config
-	DisableKeepAlives bool
+	TLSClientConfig     *tls.Config
+	CredentialProviders []CredentialProvider
+	DisableKeepAlives   bool
 }
 
 type ClientOption = option.Option[ClientConfig]
@@ -56,9 +56,16 @@ func WithDisableKeepAlives(v bool) ClientOption {
 	}
 }
 
+func WithCredentialProviders(cps ...CredentialProvider) ClientOption {
+	return func(cfg *ClientConfig) error {
+		cfg.CredentialProviders = cps
+		return nil
+	}
+}
+
 type Client struct {
 	httpClient *http.Client
-	tokenCache sync.Map
+	auth       *Authenticator
 }
 
 func NewClient(opts ...ClientOption) (*Client, error) {
@@ -81,15 +88,14 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 
 	ociClient := &Client{
 		httpClient: httpClient,
-		tokenCache: sync.Map{},
+		auth:       NewAuthenticator(httpClient, cfg.CredentialProviders),
 	}
 	return ociClient, nil
 }
 
 type CommonConfig struct {
-	Mirror   *url.URL
-	Header   http.Header
-	Userinfo *url.Userinfo
+	Mirror *url.URL
+	Header http.Header
 }
 
 type PullConfig struct {
@@ -109,13 +115,6 @@ func WithPullMirror(mirror *url.URL) PullOption {
 func WithPullHeader(header http.Header) PullOption {
 	return func(cfg *PullConfig) error {
 		cfg.Header = header
-		return nil
-	}
-}
-
-func WithPullUserinfo(userinfo *url.Userinfo) PullOption {
-	return func(cfg *PullConfig) error {
-		cfg.Userinfo = userinfo
 		return nil
 	}
 }
@@ -142,13 +141,6 @@ func WithFetchHeader(k, v string) FetchOption {
 			cfg.Header = http.Header{}
 		}
 		cfg.Header.Set(k, v)
-		return nil
-	}
-}
-
-func WithFetchUserinfo(userinfo *url.Userinfo) FetchOption {
-	return func(cfg *CommonConfig) error {
-		cfg.Userinfo = userinfo
 		return nil
 	}
 }
@@ -183,7 +175,6 @@ func (c *Client) Pull(ctx context.Context, img Image, w ImageWriter, opts ...Pul
 	fetchOpt := func(commonCfg *CommonConfig) error {
 		commonCfg.Mirror = cfg.Mirror
 		commonCfg.Header = cfg.Header
-		commonCfg.Userinfo = cfg.Userinfo
 		return nil
 	}
 
@@ -301,8 +292,6 @@ func (c *Client) Fetch(ctx context.Context, dist DistributionPath, opts ...Fetch
 		return nil, ocispec.Descriptor{}, err
 	}
 
-	tcKey := dist.Registry + dist.Repository
-
 	u := dist.URL()
 	if cfg.Mirror != nil {
 		u.Scheme = cfg.Mirror.Scheme
@@ -326,35 +315,27 @@ func (c *Client) Fetch(ctx context.Context, dist DistributionPath, opts ...Fetch
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2Manifest)
 		req.Header.Add(httpx.HeaderAccept, ocispec.MediaTypeImageIndex)
 		req.Header.Add(httpx.HeaderAccept, images.MediaTypeDockerSchema2ManifestList)
-		if cfg.Userinfo != nil {
-			req.Header.Set(httpx.HeaderAuthorization, httpx.UserinfoHeaderValue(*cfg.Userinfo))
-		}
 		if dist.Range != nil {
 			req.Header.Add(httpx.HeaderRange, dist.Range.String())
 		}
-		token, ok := c.tokenCache.Load(tcKey)
-		if ok {
-			//nolint: errcheck // We know it will be a string.
-			req.Header.Set(httpx.HeaderAuthorization, "Bearer "+token.(string))
-		}
+		c.auth.Authorize(req, u.Host, dist.Repository)
+
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			return resilient.Unrecoverable(err)
 		}
-		if resp.StatusCode == http.StatusUnauthorized {
-			c.tokenCache.Delete(tcKey)
-			wwwAuth := resp.Header.Get(httpx.HeaderWWWAuthenticate)
-			token, err = getBearerToken(ctx, c.httpClient, dist.Repository, wwwAuth)
-			if err != nil {
-				return resilient.Unrecoverable(err)
-			}
-			c.tokenCache.Store(tcKey, token)
-			return errors.New("token refresh")
-		}
-		err = httpx.CheckResponseStatus(resp, http.StatusOK, http.StatusPartialContent)
-		if err != nil {
+		statusErr := httpx.CheckResponseStatus(resp, http.StatusOK, http.StatusPartialContent)
+		if statusErr != nil {
 			httpx.DrainAndClose(resp.Body)
-			return resilient.Unrecoverable(err)
+			if resp.StatusCode == http.StatusUnauthorized {
+				wwwAuth := resp.Header.Values(httpx.HeaderWWWAuthenticate)
+				err := c.auth.HandleChallenge(ctx, u.Host, dist.Repository, req.Header.Get(httpx.HeaderAuthorization), wwwAuth)
+				if err != nil {
+					return resilient.Unrecoverable(err)
+				}
+				return statusErr
+			}
+			return resilient.Unrecoverable(statusErr)
 		}
 
 		// Handle optional headers for blobs.
@@ -380,61 +361,6 @@ func (c *Client) Fetch(ctx context.Context, dist DistributionPath, opts ...Fetch
 		return nil, ocispec.Descriptor{}, err
 	}
 	return body, desc, nil
-}
-
-func getBearerToken(ctx context.Context, client *http.Client, repository, wwwAuth string) (string, error) {
-	if !strings.HasPrefix(wwwAuth, "Bearer ") {
-		return "", errors.New("unsupported auth scheme")
-	}
-
-	params := map[string]string{}
-	for part := range strings.SplitSeq(wwwAuth[len("Bearer "):], ",") {
-		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
-		if len(kv) == 2 {
-			params[kv[0]] = strings.Trim(kv[1], `"`)
-		}
-	}
-	authURL, err := url.Parse(params["realm"])
-	if err != nil {
-		return "", err
-	}
-	q := authURL.Query()
-	if service, ok := params["service"]; ok {
-		q.Set("service", service)
-	}
-	if scope, ok := params["scope"]; ok {
-		if authURL.Host == "ghcr.io" {
-			scope = strings.ReplaceAll(scope, "user/image", repository)
-		}
-		q.Set("scope", scope)
-	}
-	authURL.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, authURL.String(), nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer httpx.DrainAndClose(resp.Body)
-	err = httpx.CheckResponseStatus(resp, http.StatusOK)
-	if err != nil {
-		return "", err
-	}
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	tokenResp := struct {
-		Token string `json:"token"`
-	}{}
-	err = json.Unmarshal(b, &tokenResp)
-	if err != nil {
-		return "", err
-	}
-	return tokenResp.Token, nil
 }
 
 func DescriptorFromHeader(header http.Header) (ocispec.Descriptor, error) {

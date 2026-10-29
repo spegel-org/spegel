@@ -3,6 +3,7 @@ package oci
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -100,6 +101,54 @@ func TestClient(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualT(t, dist.Digest, desc.Digest)
 	require.EqualT(t, httpx.ContentTypeBinary, desc.MediaType)
+}
+
+func TestUpstreamRegistries(t *testing.T) {
+	t.Parallel()
+
+	if os.Getenv("SPEGEL_TEST_UPSTREAM_REGISTRIES") == "" {
+		t.Skip()
+	}
+
+	ociClient, err := NewClient()
+	require.NoError(t, err)
+
+	imgs := []Image{}
+	img, err := ParseImage("docker.io/library/alpine:3.24.3", AllowTagOnly())
+	require.NoError(t, err)
+	imgs = append(imgs, img)
+	img, err = ParseImage("ghcr.io/spegel-org/benchmark:v1-1GB-4", AllowTagOnly())
+	require.NoError(t, err)
+	imgs = append(imgs, img)
+
+	expectedDescs := []ocispec.Descriptor{
+		{
+			MediaType: "application/vnd.oci.image.index.v1+json",
+			Digest:    "sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a",
+			Size:      9218,
+		},
+		{
+			MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+			Digest:    "sha256:57b379d3985b3477e80b49770026254dbb604ebf1cf8783e5da37b812e356878",
+			Size:      1379,
+		},
+	}
+
+	for i, img := range imgs {
+		t.Run(img.String(), func(t *testing.T) {
+			t.Parallel()
+
+			dist, err := img.DistributionPath("https", http.MethodGet)
+			require.NoError(t, err)
+			rc, desc, err := ociClient.Fetch(t.Context(), dist)
+			require.NoError(t, err)
+			defer rc.Close()
+			b, err := io.ReadAll(rc)
+			require.NoError(t, err)
+			require.EqualT(t, expectedDescs[i].Size, int64(len(b)))
+			require.Equal(t, expectedDescs[i], desc)
+		})
+	}
 }
 
 func TestDescriptorHeader(t *testing.T) {

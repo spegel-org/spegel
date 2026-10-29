@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -93,68 +94,87 @@ func TestProbeHandlers(t *testing.T) {
 func TestBasicAuth(t *testing.T) {
 	t.Parallel()
 
+	//nolint: govet // Prioritize readability in tests.
 	tests := []struct {
-		name        string
-		userinfo    *url.Userinfo
-		reqUsername string
-		reqPassword string
-		expected    int
+		name       string
+		regAuth    *url.Userinfo
+		clientAuth *url.Userinfo
+		expected   error
 	}{
 		{
 			name:     "no registry authentication",
-			expected: http.StatusOK,
+			expected: nil,
 		},
 		{
-			name:        "unnecessary authentication",
-			reqUsername: "foo",
-			reqPassword: "bar",
-			expected:    http.StatusOK,
+			name:       "unnecessary authentication",
+			clientAuth: url.UserPassword("foo", "bar"),
+			expected:   nil,
 		},
 		{
-			name:        "correct authentication",
-			userinfo:    url.UserPassword("foo", "bar"),
-			reqUsername: "foo",
-			reqPassword: "bar",
-			expected:    http.StatusOK,
+			name:       "correct authentication",
+			regAuth:    url.UserPassword("foo", "bar"),
+			clientAuth: url.UserPassword("foo", "bar"),
+			expected:   nil,
 		},
 		{
-			name:        "invalid username",
-			userinfo:    url.UserPassword("foo", "bar"),
-			reqUsername: "wrong",
-			reqPassword: "bar",
-			expected:    http.StatusUnauthorized,
+			name:       "invalid username",
+			regAuth:    url.UserPassword("foo", "bar"),
+			clientAuth: url.UserPassword("wrong", "bar"),
+			expected:   &httpx.StatusError{ExpectedCodes: []int{http.StatusOK, http.StatusPartialContent}, StatusCode: http.StatusUnauthorized},
 		},
 		{
-			name:        "invalid password",
-			userinfo:    url.UserPassword("foo", "bar"),
-			reqUsername: "foo",
-			reqPassword: "wrong",
-			expected:    http.StatusUnauthorized,
+			name:       "invalid password",
+			regAuth:    url.UserPassword("foo", "bar"),
+			clientAuth: url.UserPassword("foo", "wrong"),
+			expected:   &httpx.StatusError{ExpectedCodes: []int{http.StatusOK, http.StatusPartialContent}, StatusCode: http.StatusUnauthorized},
 		},
 		{
 			name:     "missing authentication",
-			userinfo: url.UserPassword("foo", "bar"),
-			expected: http.StatusUnauthorized,
-		},
-		{
-			name:     "missing authentication",
-			userinfo: url.UserPassword("foo", "bar"),
-			expected: http.StatusUnauthorized,
+			regAuth:  url.UserPassword("foo", "bar"),
+			expected: errors.New("basic challenge and no credentials"),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			reg, err := NewRegistry(nil, nil, WithUserinfo(tt.userinfo))
+			contents := []storetest.Content{
+				{
+					MediaType: httpx.ContentTypeText,
+					Data:      []byte("Hello World"),
+				},
+			}
+			prov := storetest.NewProvider(contents, nil)
+			reg, err := NewRegistry(prov, nil, WithUserinfo(tt.regAuth))
 			require.NoError(t, err)
-			rw := httptest.NewRecorder()
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://localhost/v2/", nil)
-			req.SetBasicAuth(tt.reqUsername, tt.reqPassword)
-			handler := reg.Handler(logr.Discard())
-			handler.ServeHTTP(rw, req)
+			srv := httptest.NewServer(reg.Handler(logr.Discard()))
+			defer srv.Close()
 
-			require.EqualT(t, tt.expected, rw.Result().StatusCode)
+			clientOpts := []oci.ClientOption{}
+			if tt.clientAuth != nil {
+				clientOpts = append(clientOpts, oci.WithCredentialProviders(oci.NewBasicAuthCredentialProvider(*tt.clientAuth)))
+			}
+			ociClient, err := oci.NewClient(clientOpts...)
+			require.NoError(t, err)
+			ref := oci.Reference{
+				Registry:   srv.Listener.Addr().String(),
+				Repository: "foo",
+				Digest:     contents[0].Digest(),
+			}
+			dist, err := oci.NewDistributionPath(ref, oci.DistributionKindBlob, "http", http.MethodHead, nil)
+			require.NoError(t, err)
+			_, desc, err := ociClient.Fetch(t.Context(), dist)
+			if tt.expected == nil {
+				require.EqualT(t, ref.Digest, desc.Digest)
+				require.NoError(t, err)
+			} else {
+				require.Empty(t, desc.Digest)
+				if statusErr, ok := errors.AsType[*httpx.StatusError](err); ok {
+					require.Equal(t, tt.expected, statusErr)
+				} else {
+					require.EqualError(t, err, tt.expected.Error())
+				}
+			}
 		})
 	}
 }
