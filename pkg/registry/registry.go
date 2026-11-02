@@ -148,7 +148,7 @@ func (r *Registry) Stats() *Statistics {
 }
 
 func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetAttrs(HandlerAttrKey, "readyz")
+	rw.SetAttribute(HandlerAttrKey, "readyz")
 
 	ok, err := r.router.Ready(req.Context())
 	if err != nil {
@@ -163,13 +163,13 @@ func (r *Registry) readyHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) livenessHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetAttrs(HandlerAttrKey, "livez")
+	rw.SetAttribute(HandlerAttrKey, "livez")
 
 	rw.WriteHeader(http.StatusOK)
 }
 
 func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
-	rw.SetAttrs(HandlerAttrKey, "registry")
+	rw.SetAttribute(HandlerAttrKey, "registry")
 
 	// Check basic authentication
 	if r.userinfo != nil && !httpx.AuthenticateUserinfo(req.BasicAuth, *r.userinfo) {
@@ -180,7 +180,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 
 	// Quickly return 200 for /v2 to indicate that registry supports v2.
 	if path.Clean(req.URL.Path) == "/v2" {
-		rw.SetAttrs(HandlerAttrKey, "v2")
+		rw.SetAttribute(HandlerAttrKey, "v2")
 		rw.WriteHeader(http.StatusOK)
 		return
 	}
@@ -192,7 +192,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 		return
 	}
 	if dist.Registry != "" {
-		rw.SetAttrs(RegistryAttrKey, dist.Registry)
+		rw.SetAttribute(RegistryAttrKey, dist.Registry)
 	}
 
 	if oci.MatchesFilter(dist.Reference, r.filters) {
@@ -231,7 +231,7 @@ func (r *Registry) registryHandler(rw httpx.ResponseWriter, req *http.Request) {
 }
 
 func (r *Registry) mirrorHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
-	rw.SetAttrs(HandlerAttrKey, "mirror")
+	rw.SetAttribute(HandlerAttrKey, "mirror")
 
 	log := logr.FromContextOrDiscard(ctx).WithValues("ref", dist.Identifier(), "path", dist.URL().Path)
 	ctx = logr.NewContext(ctx, log)
@@ -478,7 +478,7 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 }
 
 func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
-	rw.SetAttrs(HandlerAttrKey, "manifest")
+	rw.SetAttribute(HandlerAttrKey, "manifest")
 
 	if dist.Digest == "" {
 		dgst, err := r.provider.Resolve(ctx, dist.Identifier())
@@ -526,7 +526,7 @@ func (r *Registry) manifestHandler(ctx context.Context, dist oci.DistributionPat
 }
 
 func (r *Registry) blobHandler(ctx context.Context, dist oci.DistributionPath, rw httpx.ResponseWriter) {
-	rw.SetAttrs(HandlerAttrKey, "blob")
+	rw.SetAttribute(HandlerAttrKey, "blob")
 
 	desc, err := r.provider.Descriptor(ctx, dist.Digest)
 	if err != nil {
