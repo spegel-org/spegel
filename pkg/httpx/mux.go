@@ -41,9 +41,12 @@ func NewServeMux(log logr.Logger) *ServeMux {
 }
 
 func (s *ServeMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	rw := &response{
-		ResponseWriter: w,
-		method:         req.Method,
+	rw, ok := UnwrapResponseWriter(w)
+	if !ok {
+		rw = &response{
+			ResponseWriter: w,
+			method:         req.Method,
+		}
 	}
 	s.mux.ServeHTTP(rw, req)
 	if req.Pattern == "" {
@@ -63,8 +66,11 @@ func (s *ServeMux) Handle(pattern string, handler Handler) {
 	metricsPath := metricsFriendlyPath(pattern)
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		//nolint: errcheck // Cannot be any other type as it is injected in ServeHttp.
-		rw := w.(*response)
+
+		rw, ok := UnwrapResponseWriter(w)
+		if !ok {
+			panic("could not unwrap response writer")
+		}
 		defer func() {
 			latency := time.Since(start)
 			statusCode := strconv.FormatInt(int64(rw.Status()), 10)
@@ -86,7 +92,7 @@ func (s *ServeMux) Handle(pattern string, handler Handler) {
 					"latency", latency.String(),
 					"ip", clientIP(req),
 				}
-				for k, v := range rw.attrs {
+				for k, v := range rw.Attributes() {
 					kvs = append(kvs, k, v)
 				}
 				if rw.Status() >= 200 && rw.Status() < 400 {

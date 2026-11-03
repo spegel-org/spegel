@@ -12,12 +12,27 @@ import (
 
 type ResponseWriter interface {
 	http.ResponseWriter
+
 	WriteError(statusCode int, err error)
 	Error() error
 	Status() int
 	Size() int64
-	SetAttrs(key string, value any)
 	HeadersWritten() bool
+	SetAttribute(key string, value any)
+	Attributes() map[string]any
+}
+
+func UnwrapResponseWriter(w http.ResponseWriter) (ResponseWriter, bool) {
+	for {
+		switch t := w.(type) {
+		case ResponseWriter:
+			return t, true
+		case interface{ Unwrap() ResponseWriter }:
+			w = t.Unwrap()
+		default:
+			return nil, false
+		}
+	}
 }
 
 var (
@@ -30,6 +45,7 @@ var (
 
 type response struct {
 	http.ResponseWriter
+
 	error       error
 	attrs       map[string]any
 	method      string
@@ -134,15 +150,19 @@ func (r *response) Size() int64 {
 	return r.size
 }
 
-func (r *response) SetAttrs(key string, value any) {
+func (r *response) HeadersWritten() bool {
+	return r.wroteHeader
+}
+
+func (r *response) SetAttribute(key string, value any) {
 	if r.attrs == nil {
 		r.attrs = map[string]any{}
 	}
 	r.attrs[key] = value
 }
 
-func (r *response) HeadersWritten() bool {
-	return r.wroteHeader
+func (r *response) Attributes() map[string]any {
+	return r.attrs
 }
 
 // NewRecorder returns a response writer using a recorder along with the recorder.
