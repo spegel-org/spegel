@@ -13,6 +13,7 @@ const (
 	HeaderAuthorization   = "Authorization"
 	HeaderWWWAuthenticate = "WWW-Authenticate"
 	HeaderXForwardedFor   = "X-Forwarded-For"
+	HeaderEtag            = "Etag"
 )
 
 const (
