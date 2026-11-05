@@ -31,7 +31,7 @@ require (
 	github.com/prometheus/client_golang v1.25.0
 	golang.org/x/sync v0.24.0
 	google.golang.org/grpc v1.84.0
-	k8s.io/apimachinery v0.37.1
+	k8s.io/apimachinery v0.37.2
 )
 
 require (
