@@ -293,7 +293,7 @@ func (r *Router) Lookup(ctx context.Context, key string, count int) (*routing.It
 		iter, ok := r.lookupCache.Get(c.String())
 		if ok {
 			// Do not refresh if recently run or count is already met.
-			if iter.TimeSinceUpdate() < lookupCacheTTL/2 || iter.Count() >= count {
+			if iter.TimeSinceUpdate() < lookupCacheTTL/2 || len(iter.Peers()) >= count {
 				return iter, nil
 			}
 
@@ -337,41 +337,6 @@ func (r *Router) Lookup(ctx context.Context, key string, count int) (*routing.It
 	}
 	//nolint: errcheck // Impossible to be another type.
 	return res.(*routing.Iterator), nil
-}
-
-type LookupResult struct {
-	Peer     routing.Peer
-	Duration time.Duration
-}
-
-// Measure returns a list of time results containing the time it took to find each peer.
-func (r *Router) Measure(ctx context.Context, key string) ([]LookupResult, error) {
-	c, err := createCid(key)
-	if err != nil {
-		return nil, err
-	}
-
-	addrInfoCh := r.kdht.FindProvidersAsync(ctx, c, 0)
-
-	lookupStart := time.Now()
-	results := []LookupResult{}
-	for addrInfo := range addrInfoCh {
-		d := time.Since(lookupStart)
-		ipAddrs, err := toIPAddrs(addrInfo.Addrs)
-		if err != nil {
-			return nil, err
-		}
-		res := LookupResult{
-			Peer: routing.Peer{
-				Host:      addrInfo.ID.String(),
-				Addresses: ipAddrs,
-				Metadata:  r.peerMetadata,
-			},
-			Duration: d,
-		}
-		results = append(results, res)
-	}
-	return results, nil
 }
 
 func (r *Router) Advertise(ctx context.Context, keys []string) error {
