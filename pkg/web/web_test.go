@@ -18,8 +18,7 @@ import (
 	"github.com/spegel-org/spegel/pkg/store/storetest"
 )
 
-type imageLister struct {
-}
+type imageLister struct{}
 
 func (i imageLister) ListImages(ctx context.Context) ([]oci.Image, error) {
 	return nil, nil
@@ -76,7 +75,7 @@ func TestWeb(t *testing.T) {
 	require.EqualT(t, http.StatusOK, resp.StatusCode)
 
 	measure := measureResult{
-		LookupResults: []libp2p.LookupResult{{}},
+		LookupResults: []lookupResult{{}},
 		PullResults:   []pullResult{{}},
 	}
 	rw, rec = httpx.NewRecorder()
