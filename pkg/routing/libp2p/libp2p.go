@@ -161,6 +161,8 @@ func NewRouter(ctx context.Context, addr string, bs Bootstrapper, peerMetadata r
 			records.ProvideValidity(cfg.AdvertiseTTL+(2*cfg.MaxReprovideDelay)),
 			records.ProviderAddrTTL(1*time.Hour),
 		),
+		dht.RoutingTablePersistence(0),
+		dht.BootstrapOrder(dht.BootstrapFirst),
 	}
 	kdht, err := dht.New(host, dhtOpts...)
 	if err != nil {
