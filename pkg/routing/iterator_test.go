@@ -18,7 +18,7 @@ func TestIterator(t *testing.T) {
 	require.Empty(t, iter.peers)
 	require.Empty(t, iter.acquired)
 	require.FalseT(t, iter.closed)
-	require.EqualT(t, 0, iter.Count())
+	require.Empty(t, iter.Peers())
 	testutil.RequireChannelOpen(t, iter.Ready())
 	testutil.RequireChannelOpen(t, iter.Exhausted())
 	_, ok := iter.Acquire()
