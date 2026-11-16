@@ -2,6 +2,7 @@ package routing
 
 import (
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
 )
@@ -23,7 +24,9 @@ type Iterator struct {
 	acquired    map[string]any
 	peers       map[string]Peer
 	usage       map[string]int
+	watcherChs  []chan []Peer
 	exhaustedCh chan any
+	closedCh    chan any
 	readyCh     chan any
 	lastUpdate  time.Time
 	mx          sync.RWMutex
@@ -35,7 +38,9 @@ func NewIterator() *Iterator {
 		acquired:    map[string]any{},
 		peers:       map[string]Peer{},
 		usage:       map[string]int{},
+		watcherChs:  []chan []Peer{},
 		exhaustedCh: make(chan any),
+		closedCh:    make(chan any),
 		readyCh:     make(chan any),
 		lastUpdate:  time.Now(),
 		closed:      false,
@@ -50,12 +55,16 @@ func (it *Iterator) TimeSinceUpdate() time.Duration {
 	return time.Since(it.lastUpdate)
 }
 
-// Count returns the amount of peers in the iterator.
-func (it *Iterator) Count() int {
+// Peers returns all the peers in the iterator.
+func (it *Iterator) Peers() []Peer {
 	it.mx.RLock()
 	defer it.mx.RUnlock()
 
-	return len(it.peers)
+	peers := []Peer{}
+	for _, peer := range it.peers {
+		peers = append(peers, peer)
+	}
+	return peers
 }
 
 // Add adds a peer to the iterator.
@@ -71,6 +80,18 @@ func (it *Iterator) Add(peer Peer) {
 		if it.closed {
 			it.exhaustedCh = make(chan any)
 		}
+	}
+
+	peers := []Peer{}
+	for _, peer := range it.peers {
+		peers = append(peers, peer)
+	}
+	for _, ch := range it.watcherChs {
+		select {
+		case <-ch:
+		default:
+		}
+		ch <- peers
 	}
 }
 
@@ -89,6 +110,18 @@ func (it *Iterator) Remove(peer Peer) {
 		if it.closed {
 			close(it.exhaustedCh)
 		}
+	}
+
+	peers := []Peer{}
+	for _, peer := range it.peers {
+		peers = append(peers, peer)
+	}
+	for _, ch := range it.watcherChs {
+		select {
+		case <-ch:
+		default:
+		}
+		ch <- peers
 	}
 }
 
@@ -148,6 +181,7 @@ func (it *Iterator) Open() {
 	}
 	it.lastUpdate = time.Now()
 	it.closed = false
+	it.closedCh = make(chan any)
 	it.exhaustedCh = make(chan any)
 }
 
@@ -162,6 +196,7 @@ func (it *Iterator) Close() {
 	}
 
 	it.closed = true
+	close(it.closedCh)
 	if len(it.peers) == 0 {
 		close(it.exhaustedCh)
 	}
@@ -181,4 +216,32 @@ func (it *Iterator) Exhausted() chan any {
 	defer it.mx.RUnlock()
 
 	return it.exhaustedCh
+}
+
+func (it *Iterator) Closed() chan any {
+	it.mx.RLock()
+	defer it.mx.RUnlock()
+
+	return it.closedCh
+}
+
+// Watch returns a bufered channel containing the latest list of peers.
+// The stop function must be called to remove the watcher.
+func (it *Iterator) Watch() (<-chan []Peer, func()) {
+	ch := make(chan []Peer, 1)
+	ch <- it.Peers()
+
+	it.mx.Lock()
+	it.watcherChs = append(it.watcherChs, ch)
+	it.mx.Unlock()
+
+	stop := func() {
+		it.mx.Lock()
+		it.watcherChs = slices.DeleteFunc(it.watcherChs, func(a chan []Peer) bool {
+			return a == ch
+		})
+		it.mx.Unlock()
+	}
+
+	return ch, stop
 }
