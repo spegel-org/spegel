@@ -33,6 +33,10 @@ const (
 	RegistryAttrKey      = "registry"
 )
 
+type PeerMetadata struct {
+	Port uint16 `json:"port"`
+}
+
 type RegistryConfig struct {
 	OCIClient      *oci.Client
 	Userinfo       *url.Userinfo
@@ -398,6 +402,13 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 				immediateCh <- false
 				continue
 			}
+			peerMetadata, ok := peer.Metadata.(PeerMetadata)
+			if !ok {
+				log.Error(errors.New("unexpected metadata type"), "metadata needs to be of type PeerMetadata")
+				iterator.Release(peer)
+				immediateCh <- false
+				continue
+			}
 
 			errDetails.Attempts += 1
 
@@ -407,10 +418,11 @@ func (r *Registry) raceFetch(ctx context.Context, iterator *routing.Iterator, di
 
 			go func() {
 				start := time.Now()
+
 				res, err := httpx.HappyEyeballs(fetchCtx, peer.Addresses, func(ctx context.Context, ipAddr netip.Addr) (fetchResponse, error) {
 					mirror := &url.URL{
 						Scheme: dist.Scheme,
-						Host:   netip.AddrPortFrom(ipAddr, peer.Metadata.RegistryPort).String(),
+						Host:   netip.AddrPortFrom(ipAddr, peerMetadata.Port).String(),
 					}
 					fetchOpts := []oci.FetchOption{
 						oci.WithFetchHeader(HeaderSpegelMirrored, "true"),

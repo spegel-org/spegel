@@ -52,6 +52,7 @@ const (
 )
 
 type RouterConfig struct {
+	PeerMetadata      any
 	DataDir           string
 	Libp2pOpts        []libp2p.Option
 	AdvertiseTTL      time.Duration
@@ -88,21 +89,28 @@ func WithMaxReprovideDelay(delay time.Duration) RouterOption {
 	}
 }
 
+func WithPeerMetadata(peerMetadata any) RouterOption {
+	return func(cfg *RouterConfig) error {
+		cfg.PeerMetadata = peerMetadata
+		return nil
+	}
+}
+
 var _ routing.Router = &Router{}
 
 type Router struct {
 	bootstrapper     Bootstrapper
 	host             host.Host
+	peerMetadata     any
 	kdht             *dht.IpfsDHT
 	prov             *provider.SweepingProvider
 	lookupGroup      *singleflight.Group
 	lookupCache      *expirable.LRU[string, *routing.Iterator]
 	connectivityGate *channel.Gate
 	protocols        []ma.Multiaddr
-	peerMetadata     routing.PeerMetadata
 }
 
-func NewRouter(ctx context.Context, addr string, bs Bootstrapper, peerMetadata routing.PeerMetadata, opts ...RouterOption) (*Router, error) {
+func NewRouter(ctx context.Context, addr string, bs Bootstrapper, opts ...RouterOption) (*Router, error) {
 	cfg := RouterConfig{
 		AdvertiseTTL:      15 * time.Minute,
 		MaxReprovideDelay: 2 * time.Minute,
@@ -208,7 +216,7 @@ func NewRouter(ctx context.Context, addr string, bs Bootstrapper, peerMetadata r
 		lookupCache:      expirable.NewLRU[string, *routing.Iterator](0, nil, lookupCacheTTL),
 		connectivityGate: connectivityGate,
 		protocols:        protocols,
-		peerMetadata:     peerMetadata,
+		peerMetadata:     cfg.PeerMetadata,
 	}, nil
 }
 

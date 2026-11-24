@@ -62,9 +62,6 @@ func TestProbeHandlers(t *testing.T) {
 	self := routing.Peer{
 		Host:      "test",
 		Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
-		Metadata: routing.PeerMetadata{
-			RegistryPort: 8080,
-		},
 	}
 	router := routing.NewMemoryRouter(map[string][]routing.Peer{}, self)
 	reg, err := NewRegistry(nil, router)
@@ -186,9 +183,7 @@ func TestRegistryHandler(t *testing.T) {
 		unreachablePeer := routing.Peer{
 			Host:      "unreachable",
 			Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
-			Metadata: routing.PeerMetadata{
-				RegistryPort: 0,
-			},
+			Metadata:  PeerMetadata{Port: 0},
 		}
 
 		silentPeers := []routing.Peer{}
@@ -201,9 +196,7 @@ func TestRegistryHandler(t *testing.T) {
 			silentPeer := routing.Peer{
 				Host:      fmt.Sprintf("silent-%d", i),
 				Addresses: []netip.Addr{addrPort.Addr()},
-				Metadata: routing.PeerMetadata{
-					RegistryPort: addrPort.Port(),
-				},
+				Metadata:  PeerMetadata{Port: addrPort.Port()},
 			}
 			silentPeers = append(silentPeers, silentPeer)
 		}
@@ -219,9 +212,7 @@ func TestRegistryHandler(t *testing.T) {
 			peer := routing.Peer{
 				Host:      fmt.Sprintf("bad-%d", i),
 				Addresses: []netip.Addr{addrPort.Addr()},
-				Metadata: routing.PeerMetadata{
-					RegistryPort: addrPort.Port(),
-				},
+				Metadata:  PeerMetadata{Port: addrPort.Port()},
 			}
 			badPeers = append(badPeers, peer)
 		}
@@ -243,9 +234,7 @@ func TestRegistryHandler(t *testing.T) {
 		goodPeer := routing.Peer{
 			Host:      "good",
 			Addresses: []netip.Addr{addrPort.Addr()},
-			Metadata: routing.PeerMetadata{
-				RegistryPort: addrPort.Port(),
-			},
+			Metadata:  PeerMetadata{Port: addrPort.Port()},
 		}
 
 		flakyPeers := []routing.Peer{}
@@ -264,9 +253,7 @@ func TestRegistryHandler(t *testing.T) {
 			peer := routing.Peer{
 				Host:      fmt.Sprintf("flaky-%d", i),
 				Addresses: []netip.Addr{addrPort.Addr()},
-				Metadata: routing.PeerMetadata{
-					RegistryPort: addrPort.Port(),
-				},
+				Metadata:  PeerMetadata{Port: addrPort.Port()},
 			}
 			flakyPeers = append(flakyPeers, peer)
 		}

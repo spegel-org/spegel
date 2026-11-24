@@ -49,9 +49,9 @@ func TestSync(t *testing.T) {
 		self := Peer{
 			Host:      "test",
 			Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
-			Metadata: PeerMetadata{
-				RegistryPort: 5000,
-			},
+			// Metadata: PeerMetadata{
+			// 	RegistryPort: 5000,
+			// },
 		}
 		router := NewMemoryRouter(map[string][]Peer{}, self)
 

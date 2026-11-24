@@ -8,14 +8,9 @@ import (
 
 // Peer represents a host reachable at one or more addresses.
 type Peer struct {
-	Host      string
-	Addresses []netip.Addr
-	Metadata  PeerMetadata
-}
-
-// PeerMetadata contains additional information for the peer.
-type PeerMetadata struct {
-	RegistryPort uint16
+	Metadata  any          `json:"metadata"`
+	Host      string       `json:"host"`
+	Addresses []netip.Addr `json:"addresses"`
 }
 
 // Iterator maintains track of peers for a given lookup.
