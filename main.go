@@ -230,8 +230,9 @@ func registryCommand(ctx context.Context, args *RegistryCmd) error {
 	}
 	routerOpts := []libp2p.RouterOption{
 		libp2p.WithDataDir(args.DataDir),
+		libp2p.WithPeerMetadata(registry.PeerMetadata{Port: uint16(registryPort)}),
 	}
-	router, err := libp2p.NewRouter(ctx, args.RouterAddr, bootstrapper, routing.PeerMetadata{RegistryPort: uint16(registryPort)}, routerOpts...)
+	router, err := libp2p.NewRouter(ctx, args.RouterAddr, bootstrapper, routerOpts...)
 	if err != nil {
 		return err
 	}

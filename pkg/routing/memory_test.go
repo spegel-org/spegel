@@ -26,9 +26,6 @@ func TestMemoryRouter(t *testing.T) {
 	addPeer := Peer{
 		Host:      "test",
 		Addresses: []netip.Addr{netip.MustParseAddr("127.0.0.1")},
-		Metadata: PeerMetadata{
-			RegistryPort: 9090,
-		},
 	}
 	r.Add("foo", addPeer)
 	iter, err := r.Lookup(t.Context(), "foo", 2)
