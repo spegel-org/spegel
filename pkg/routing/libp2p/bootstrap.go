@@ -9,9 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
-	"slices"
 	"sync"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -94,9 +92,6 @@ func (b *DNSBootstrapper) Get(ctx context.Context) ([]peer.AddrInfo, error) {
 		if len(ipAddrs) == 0 {
 			continue
 		}
-		slices.SortFunc(ipAddrs, func(a, b netip.Addr) int {
-			return a.Compare(b)
-		})
 		for _, ipAddr := range ipAddrs[:min(len(ipAddrs), limit)] {
 			addr, err := manet.FromIPAndZone(ipAddr.AsSlice(), ipAddr.Zone())
 			if err != nil {
