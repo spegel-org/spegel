@@ -162,6 +162,11 @@ func (w *Web) statsHandler(rw httpx.ResponseWriter, req *http.Request) {
 	httpx.RenderTemplate(rw, w.tmpls.Lookup("stats.html"), data)
 }
 
+type lookupResult struct {
+	Peer     routing.Peer
+	Duration time.Duration
+}
+
 type pullResult struct {
 	Identifier string
 	Type       string
@@ -170,7 +175,7 @@ type pullResult struct {
 }
 
 type measureResult struct {
-	LookupResults []libp2p.LookupResult
+	LookupResults []lookupResult
 	PullResults   []pullResult
 	PeerDuration  time.Duration
 	PullDuration  time.Duration
@@ -191,14 +196,36 @@ func (w *Web) measureHandler(rw httpx.ResponseWriter, req *http.Request) {
 	}
 
 	res := measureResult{}
+	lookupStart := time.Now()
 	lookupCtx, lookupCancel := context.WithTimeout(req.Context(), 3*time.Second)
 	defer lookupCancel()
-	lookupRes, err := w.router.Measure(lookupCtx, img.Identifier())
+	iter, err := w.router.Lookup(lookupCtx, img.Identifier(), 25)
 	if err != nil {
 		rw.WriteError(http.StatusInternalServerError, NewHTMLResponseError(err))
 		return
 	}
-	res.LookupResults = lookupRes
+	seen := map[string]any{}
+	watchCh, stop := iter.Watch()
+	func() {
+		defer stop()
+
+		for {
+			select {
+			case <-lookupCtx.Done():
+				return
+			case <-iter.Closed():
+				return
+			case peers := <-watchCh:
+				for _, peer := range peers {
+					if _, ok := seen[peer.Host]; ok {
+						continue
+					}
+					seen[peer.Host] = nil
+					res.LookupResults = append(res.LookupResults, lookupResult{Peer: peer, Duration: time.Since(lookupStart)})
+				}
+			}
+		}
+	}()
 
 	if len(res.LookupResults) > 0 {
 		mw := &MetricWriter{}
